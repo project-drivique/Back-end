@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: drivique-api
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  servlet:
+    context-path: /api
+  error:
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+info:
+  app:
+    name: Drivique API
+    description: API REST para la plataforma de alquiler de vehiculos Drivique
