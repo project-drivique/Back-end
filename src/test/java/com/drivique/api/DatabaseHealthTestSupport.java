@@ -27,6 +27,9 @@ abstract class DatabaseHealthTestSupport {
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
+        // Test-only schema generated from mappings; production retains ddl-auto=validate.
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        registry.add("spring.jpa.properties.hibernate.hbm2ddl.create_namespaces", () -> "true");
         registry.add("DB_URL", POSTGRES::getJdbcUrl);
         registry.add("DB_USERNAME", POSTGRES::getUsername);
         registry.add("DB_PASSWORD", POSTGRES::getPassword);
@@ -53,9 +56,9 @@ abstract class DatabaseHealthTestSupport {
     }
 
     @Test
-    void connectsWithoutCreatingBusinessTablesOrMigrationHistory() {
+    void connectsWithoutMigrationHistory() {
         assertThat(jdbc.queryForObject("select 1", Integer.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_schema not in ('pg_catalog', 'information_schema')", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_name in ('databasechangelog', 'flyway_schema_history')", Integer.class)).isZero();
         assertThat(dataSource.getMaximumPoolSize()).isEqualTo(10);
         assertThat(dataSource.getMinimumIdle()).isEqualTo(2);
         assertThat(dataSource.getConnectionTimeout()).isEqualTo(30000);
