@@ -1,4 +1,8 @@
 spring:
+  web:
+    error:
+      include-message: never
+      include-stacktrace: never
   application:
     name: drivique-api
   profiles:
@@ -24,9 +28,6 @@ spring:
 server:
   servlet:
     context-path: /api
-  error:
-    include-message: never
-    include-stacktrace: never
 
 management:
   endpoints:
@@ -54,3 +55,8 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     disable-swagger-default-url: true
+
+catalog:
+  exchange-rates:
+    base-url: ${FRANKFURTER_BASE_URL:https://api.frankfurter.dev}
+    timeout-ms: ${FRANKFURTER_TIMEOUT_MS:5000}
