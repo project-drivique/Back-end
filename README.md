@@ -1,55 +1,89 @@
-# Back-end Drivique
+# Drivique Backend
 
-API REST unica para los clientes web y movil de Drivique. La logica de negocio,
-seguridad y acceso a PostgreSQL pertenecen al backend.
+API REST compartida por web y móvil: Java 21, Spring Boot 4.0.8, PostgreSQL 17,
+Spring Data JPA, Spring Security y Actuator.
 
-## Tecnologia
+## HU-BE-01: configuración y conexión
 
-- Java 21
-- Spring Boot 4.0.8
-- Maven Wrapper
-- PostgreSQL, Spring Data JPA y Flyway
-- Spring Security, validacion, OpenAPI/Swagger y Actuator
-- Docker Compose para PostgreSQL local
+Los perfiles `dev`, `qa` y `main` comparten la configuración segura del datasource.
+`dev` es el predeterminado; `main` corresponde a producción. Se requieren
+`DB_USERNAME`, `DB_PASSWORD` y una de estas alternativas:
 
-## Perfiles
+- `DB_URL`: URL JDBC completa, sin credenciales embebidas.
+- `DB_HOST`, `DB_PORT` y `DB_NAME`: componentes de la conexión.
 
-| Perfil | Uso | Configuracion de base de datos |
-| --- | --- | --- |
-| `dev` | Desarrollo local | Valores locales configurables con variables de entorno |
-| `qa` | Pruebas de calidad | Todas las credenciales son obligatorias como variables de entorno |
-| `main` | Produccion | Todas las credenciales son obligatorias como variables de entorno |
+No hay contraseñas predeterminadas. `.env.example` documenta las variables;
+Spring Boot no carga un archivo `.env` automáticamente. Docker Compose sí lo
+utiliza, pero las variables deben exportarse también para ejecutar Maven.
 
-Nunca se versionan secretos. Copie `.env.example` para documentar sus valores
-locales, pero exporte las variables antes de ejecutar la aplicacion.
-
-## Ejecucion local
+Desde PowerShell, para una base local nueva:
 
 ```powershell
+$env:SPRING_PROFILES_ACTIVE = 'dev'
+$env:DB_HOST = 'localhost'
+$env:DB_PORT = '5432'
+$env:DB_NAME = 'drivique_dev'
+$env:DB_USERNAME = 'drivique'
+$secret = Read-Host 'Contraseña de PostgreSQL local' -AsSecureString
+$env:DB_PASSWORD = [System.Net.NetworkCredential]::new('', $secret).Password
 docker compose up -d postgres
-$env:DB_PASSWORD = "drivique"
 .\mvnw.cmd spring-boot:run
 ```
 
-La salud de la aplicacion queda disponible en `GET /api/actuator/health`.
-La documentacion OpenAPI queda disponible en `/api/swagger-ui.html`.
+Si existe `DB_URL` en el entorno, esa variable tiene prioridad sobre host/puerto/nombre.
+En QA/producción, el entorno de despliegue suministra las mismas variables y
+`SPRING_PROFILES_ACTIVE`. No ejecutar Compose sobre datos existentes esperando
+que cambie automáticamente la contraseña del volumen.
 
-## Migraciones
+## Responsabilidad de la base de datos
 
-Todo cambio de esquema se agrega como una migracion versionada en
-`src/main/resources/db/migration`. Hibernate valida el modelo; no crea ni
-modifica tablas automaticamente.
+El repositorio [database](https://github.com/project-drivique/database) es el único
+responsable del SQL, los changelogs, las migraciones Liquibase y los datos semilla.
+Este backend no incluye, empaqueta, descarga ni ejecuta esos archivos.
 
-## Flujo de ramas
+Antes de integrar funcionalidades con persistencia, aplicar desde `database` las
+migraciones correspondientes al ambiente y configurar aquí la conexión. Hibernate
+usa `ddl-auto: validate`: valida las entidades que estén implementadas y no crea
+ni actualiza tablas. Actualmente no hay entidades de negocio, por lo que el estado
+`UP` de `db` acredita conectividad, no la existencia de todos los módulos del esquema.
 
-Las ramas padre son `dev`, `qa` y `main`. El trabajo se realiza en ramas hijas
-creadas desde su padre y con el sufijo del ambiente:
+El criterio original de HU-BE-01 «Liquibase valida al iniciar la aplicación» se
+reemplaza por la separación de responsabilidades acordada. La
+validación de migraciones corresponde al flujo de `database`, previo al backend.
 
-```text
-dev  -> feature/HU-XX-descripcion-dev  -> PR a dev
-qa   -> fix/HU-XX-descripcion-qa       -> PR a qa
-main -> hotfix/HU-XX-descripcion-main  -> PR a main
+## Pool HikariCP
+
+| Variable | Valor predeterminado |
+| --- | --- |
+| `DB_POOL_MAX_SIZE` | 10 |
+| `DB_POOL_MIN_IDLE` | 2 |
+| `DB_CONNECTION_TIMEOUT_MS` | 30000 |
+| `DB_VALIDATION_TIMEOUT_MS` | 5000 |
+| `DB_IDLE_TIMEOUT_MS` | 600000 |
+| `DB_MAX_LIFETIME_MS` | 1800000 |
+
+## Verificación
+
+- `GET /api/actuator/health`: estado general y componentes, incluido `db`, sin
+  detalles de conexión, consultas ni credenciales.
+- `GET /api/actuator/info`: nombre y versión de la API obtenida de Maven.
+- Swagger UI: `/api/swagger-ui.html`.
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/actuator/health
+Invoke-RestMethod http://localhost:8080/api/actuator/info
+.\mvnw.cmd clean verify
 ```
 
-No se crean PR entre ramas padre. La primera estructura se publica en
-`chore/bootstrap-structure-dev`, hija de `dev`, para que su PR apunte a `dev`.
+Las pruebas necesitan Docker activo. Testcontainers crea un PostgreSQL 17 temporal,
+prueba los tres perfiles y los endpoints reales,
+la configuración HikariCP y que el backend no cree tablas ni historial de migraciones.
+No utiliza la base local del equipo ni H2. GitHub Actions ejecuta el mismo comando
+en PR hacia `dev`, `qa` y `main`.
+
+## Ramas
+
+`HU-BE-01-dev` nace de `dev`; su PR apunta a `dev`. Para promover, crear
+`HU-BE-01-qa` desde `qa`, integrar la hija `-dev` y abrir PR hacia `qa`.
+Luego crear `HU-BE-01-main` desde `main`, integrar la hija `-qa` y abrir PR hacia
+`main`. No se fusionan directamente las ramas padre.
