@@ -77,7 +77,9 @@ Invoke-RestMethod http://localhost:8080/api/actuator/info
 
 Las pruebas necesitan Docker activo. Testcontainers crea un PostgreSQL 17 temporal,
 prueba los tres perfiles y los endpoints reales,
-la configuración HikariCP y que el backend no cree tablas ni historial de migraciones.
+la configuración HikariCP y la ausencia de motores de migración. Desde HU-BE-03,
+solo las pruebas generan sus tablas en el contenedor mediante Hibernate create-drop;
+los perfiles de ejecución conservan validate y no crean tablas.
 No utiliza la base local del equipo ni H2. GitHub Actions ejecuta el mismo comando
 en PR hacia `dev`, `qa` y `main`.
 
@@ -91,3 +93,7 @@ Luego crear `HU-BE-01-main` desde `main`, integrar la hija `-qa` y abrir PR haci
 ## Contrato de API y errores
 
 Consultar [HU-BE-02](docs/HU-BE-02.md) para Swagger, OpenAPI y el contrato Problem Details.
+
+## Catálogos del sistema
+
+Consultar [HU-BE-03](docs/HU-BE-03.md) para idiomas, monedas, tasas, caché y pendientes de integración.
