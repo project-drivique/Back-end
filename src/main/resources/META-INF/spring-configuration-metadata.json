@@ -1,0 +1,20 @@
+{
+  "groups": [
+    { "name": "catalog", "type": "java.lang.Object" },
+    { "name": "catalog.exchange-rates", "type": "java.lang.Object" }
+  ],
+  "properties": [
+    {
+      "name": "catalog.exchange-rates.base-url",
+      "type": "java.lang.String",
+      "description": "Base URL of the Frankfurter v2 exchange rate provider.",
+      "defaultValue": "https://api.frankfurter.dev"
+    },
+    {
+      "name": "catalog.exchange-rates.timeout-ms",
+      "type": "java.lang.Integer",
+      "description": "Connection and read timeout per provider request, in milliseconds.",
+      "defaultValue": 5000
+    }
+  ]
+}
