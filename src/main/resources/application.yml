@@ -3,18 +3,30 @@ spring:
     name: drivique-api
   profiles:
     default: dev
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      pool-name: DriviquePool
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT_MS:5000}
+      idle-timeout: ${DB_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:1800000}
   jpa:
     open-in-view: false
+    show-sql: false
     hibernate:
       ddl-auto: validate
-  flyway:
-    enabled: true
 
 server:
   servlet:
     context-path: /api
   error:
     include-message: never
+    include-stacktrace: never
 
 management:
   endpoints:
@@ -23,10 +35,15 @@ management:
         include: health,info
   endpoint:
     health:
+      show-components: always
+      show-details: never
       probes:
         enabled: true
+  info:
+    env:
+      enabled: true
 
 info:
   app:
     name: Drivique API
-    description: API REST para la plataforma de alquiler de vehiculos Drivique
+    version: '@project.version@'
