@@ -87,3 +87,7 @@ en PR hacia `dev`, `qa` y `main`.
 `HU-BE-01-qa` desde `qa`, integrar la hija `-dev` y abrir PR hacia `qa`.
 Luego crear `HU-BE-01-main` desde `main`, integrar la hija `-qa` y abrir PR hacia
 `main`. No se fusionan directamente las ramas padre.
+
+## Contrato de API y errores
+
+Consultar [HU-BE-02](docs/HU-BE-02.md) para Swagger, OpenAPI y el contrato Problem Details.
