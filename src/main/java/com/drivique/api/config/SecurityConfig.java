@@ -27,7 +27,8 @@ public class SecurityConfig {
                                 "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/v1/languages", "/v1/currencies", "/v1/exchange-rates/latest").permitAll()
+                                "/v1/languages", "/v1/currencies", "/v1/exchange-rates/latest",
+                                "/v1/brand-configurations/active", "/v1/security-configurations").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(problems).accessDeniedHandler(problems))
                 .httpBasic(AbstractHttpConfigurer::disable)
