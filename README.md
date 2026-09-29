@@ -99,3 +99,5 @@ Consultar [HU-BE-02](docs/HU-BE-02.md) para Swagger, OpenAPI y el contrato Probl
 Consultar [HU-BE-03](docs/HU-BE-03.md) para idiomas, monedas, tasas, caché y pendientes de integración.
 
 Consultar [HU-BE-04](docs/HU-BE-04.md) para configuración de marca, tema y parámetros públicos.
+
+Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.
