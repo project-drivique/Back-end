@@ -1,8 +1,10 @@
 package com.drivique.api;
 
-import com.drivique.api.catalog.ExchangeRateProvider;
-import com.drivique.api.catalog.Language;
-import com.drivique.api.catalog.LanguageRepository;
+import com.drivique.api.system.entity.Currency;
+import com.drivique.api.system.integration.ExchangeRateProvider;
+import com.drivique.api.system.repository.LanguageRepository;
+
+import com.drivique.api.system.entity.Language;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -119,7 +121,7 @@ class CatalogIntegrationTests extends DatabaseHealthTestSupport {
         mvc.perform(get("/api/v1/exchange-rates/latest").contextPath("/api"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
         when(provider.name()).thenReturn("TEST_ONLY");
-        when(provider.fetch()).thenReturn(List.of(
+        when(provider.fetch(anyList())).thenReturn(List.of(
                 new ExchangeRateProvider.Quote("USD", "COP", new BigDecimal("4100.123456"), Instant.parse("2026-09-28T12:00:00Z")),
                 new ExchangeRateProvider.Quote("USD", "COP", new BigDecimal("4200.654321"), Instant.parse("2026-09-28T13:00:00Z"))));
         mvc.perform(post("/api/v1/exchange-rates/sync").contextPath("/api"))
@@ -138,7 +140,7 @@ class CatalogIntegrationTests extends DatabaseHealthTestSupport {
         currency("COP", true);
         currency("USD", true);
         when(provider.name()).thenReturn("TEST_ONLY");
-        when(provider.fetch()).thenReturn(List.of(
+        when(provider.fetch(anyList())).thenReturn(List.of(
                 new ExchangeRateProvider.Quote("USD", "COP", BigDecimal.ONE, Instant.now()),
                 new ExchangeRateProvider.Quote("COP", "USD", BigDecimal.ZERO, Instant.now())));
         mvc.perform(post("/api/v1/exchange-rates/sync").contextPath("/api"))
@@ -153,13 +155,13 @@ class CatalogIntegrationTests extends DatabaseHealthTestSupport {
         currency("COP", true);
         currency("USD", true);
         when(provider.name()).thenReturn("Frankfurter v2");
-        when(provider.fetch()).thenReturn(List.of(new ExchangeRateProvider.Quote(
+        when(provider.fetch(anyList())).thenReturn(List.of(new ExchangeRateProvider.Quote(
                 "USD", "COP", new BigDecimal("4200.654321"), Instant.now())));
         mvc.perform(post("/api/v1/exchange-rates/sync").contextPath("/api"))
                 .andExpect(status().isOk());
         mvc.perform(get("/api/v1/exchange-rates/latest").contextPath("/api"))
                 .andExpect(jsonPath("$[0].rate").value(4200.654321));
-        when(provider.fetch()).thenThrow(new IllegalStateException("upstream unavailable"));
+        when(provider.fetch(anyList())).thenThrow(new IllegalStateException("upstream unavailable"));
         assertThat(jdbc.queryForObject("select count(*) from core.exchange_rates", Integer.class)).isEqualTo(1);
         mvc.perform(post("/api/v1/exchange-rates/sync").contextPath("/api"))
                 .andExpect(status().isServiceUnavailable())
@@ -174,7 +176,7 @@ class CatalogIntegrationTests extends DatabaseHealthTestSupport {
         currency("COP", true);
         currency("USD", true);
         when(provider.name()).thenReturn("Frankfurter v2");
-        when(provider.fetch()).thenReturn(List.of(new ExchangeRateProvider.Quote(
+        when(provider.fetch(anyList())).thenReturn(List.of(new ExchangeRateProvider.Quote(
                 "COP", "USD", new BigDecimal("0.000303237"), Instant.now())));
         mvc.perform(post("/api/v1/exchange-rates/sync").contextPath("/api"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].rate").value(0.000303));
