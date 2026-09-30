@@ -42,7 +42,7 @@ public class AuthService {
         this.passwordValidatorService = passwordValidatorService;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class})
     public AuthResponseDTO login(LoginRequestDTO request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas."));

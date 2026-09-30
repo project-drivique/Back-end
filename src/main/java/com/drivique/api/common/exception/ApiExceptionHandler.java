@@ -74,6 +74,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(ApiProblem.of(HttpStatus.LOCKED, request.getRequestURI(), message, List.of()));
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    ResponseEntity<Object> badRequest(IllegalArgumentException ex, HttpServletRequest request) {
+        return response(HttpStatus.BAD_REQUEST, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> unexpected(Exception ex, HttpServletRequest request) {
         LOG.error("Unexpected API error", ex);
