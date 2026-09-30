@@ -157,7 +157,7 @@ public class UserDocumentService {
 
     private DocumentStatus getOrCreateStatus(String code, String defaultName) {
         return documentStatusRepository.findByCode(code)
-                .orElseGet(() -> documentStatusRepository.save(new DocumentStatus(UUID.randomUUID(), code, defaultName, defaultName)));
+                .orElseGet(() -> documentStatusRepository.save(new DocumentStatus(code, defaultName, defaultName)));
     }
 
     private void updateUserProfileCompletion(User user) {
