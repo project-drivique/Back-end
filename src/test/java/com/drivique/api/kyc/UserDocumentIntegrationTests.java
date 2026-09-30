@@ -71,12 +71,11 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
     void setUp() {
         resetIamTables();
 
-        pendingStatus = documentStatusRepository.save(new DocumentStatus(UUID.randomUUID(), "PENDING", "Pendiente", "Pendiente de revisión"));
-        approvedStatus = documentStatusRepository.save(new DocumentStatus(UUID.randomUUID(), "APPROVED", "Aprobado", "Aprobado"));
-        documentStatusRepository.save(new DocumentStatus(UUID.randomUUID(), "REJECTED", "Rechazado", "Rechazado"));
+        pendingStatus = documentStatusRepository.save(new DocumentStatus("PENDING", "Pendiente", "Pendiente de revisión"));
+        approvedStatus = documentStatusRepository.save(new DocumentStatus("APPROVED", "Aprobado", "Aprobado"));
+        documentStatusRepository.save(new DocumentStatus("REJECTED", "Rechazado", "Rechazado"));
 
         ccDocType = documentTypeRepository.save(new DocumentType(
-                UUID.randomUUID(),
                 "CC",
                 "Cédula de Ciudadanía",
                 "Documento de identidad",
@@ -85,8 +84,8 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
                 true
         ));
 
-        Role customerRole = roleRepository.save(new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer", true));
-        Role employeeRole = roleRepository.save(new Role(UUID.randomUUID(), "EMPLOYEE", "Employee", "Employee", true));
+        Role customerRole = roleRepository.save(new Role("CUSTOMER", "Customer", "Customer", true));
+        Role employeeRole = roleRepository.save(new Role("EMPLOYEE", "Employee", "Employee", true));
 
         customerUser = new User("Customer", "User", "customer.kyc@drivique.com", passwordEncoder.encode("Pass1234!"));
         customerUser.setRoles(Set.of(customerRole));
