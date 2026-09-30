@@ -55,9 +55,7 @@ class RbacIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setUp() {
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
-        permissionRepository.deleteAll();
+        resetIamTables();
 
         Permission readPerm = permissionRepository.save(new Permission(
                 UUID.randomUUID(),
