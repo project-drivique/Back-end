@@ -69,11 +69,7 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setUp() {
-        userDocumentRepository.deleteAll();
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
-        documentTypeRepository.deleteAll();
-        documentStatusRepository.deleteAll();
+        resetIamTables();
 
         pendingStatus = documentStatusRepository.save(new DocumentStatus(UUID.randomUUID(), "PENDING", "Pendiente", "Pendiente de revisión"));
         approvedStatus = documentStatusRepository.save(new DocumentStatus(UUID.randomUUID(), "APPROVED", "Aprobado", "Aprobado"));

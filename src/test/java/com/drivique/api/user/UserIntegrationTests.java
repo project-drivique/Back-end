@@ -52,9 +52,7 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setUp() {
-        preferenceRepository.deleteAll();
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
+        resetIamTables();
 
         Role customerRole = roleRepository.save(new Role(
                 UUID.randomUUID(),
