@@ -23,6 +23,7 @@ public record ApiProblem(
             case FORBIDDEN -> "No tiene permiso para realizar esta operación.";
             case NOT_FOUND -> "El recurso solicitado no existe.";
             case CONFLICT -> "La operación entra en conflicto con el estado actual del recurso.";
+            case LOCKED -> "La cuenta se encuentra temporalmente bloqueada.";
             case METHOD_NOT_ALLOWED -> "El método HTTP no está permitido para este recurso.";
             case UNSUPPORTED_MEDIA_TYPE -> "El tipo de contenido no es compatible.";
             case NOT_ACCEPTABLE -> "No se puede generar el formato solicitado.";
@@ -30,6 +31,10 @@ public record ApiProblem(
                     ? "Ocurrió un error interno. Intente nuevamente más tarde."
                     : "No se pudo procesar la solicitud.";
         };
+        return of(status, instance, detail, errors);
+    }
+
+    public static ApiProblem of(HttpStatus status, String instance, String detail, List<ValidationError> errors) {
         return new ApiProblem("about:blank", status.getReasonPhrase(), status.value(), detail,
                 instance, Instant.now().toString(), List.copyOf(errors));
     }
