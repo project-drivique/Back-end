@@ -22,10 +22,16 @@ public class UserController {
 
     private final UserService userService;
     private final UserPreferenceService preferenceService;
+    private final com.drivique.api.auth.service.RbacService rbacService;
 
-    public UserController(UserService userService, UserPreferenceService preferenceService) {
+    public UserController(
+            UserService userService,
+            UserPreferenceService preferenceService,
+            com.drivique.api.auth.service.RbacService rbacService
+    ) {
         this.userService = userService;
         this.preferenceService = preferenceService;
+        this.rbacService = rbacService;
     }
 
     @GetMapping("/me")
@@ -70,5 +76,20 @@ public class UserController {
             Authentication authentication
     ) {
         return preferenceService.updatePreferences(authentication.getName(), request);
+    }
+
+    @PostMapping("/{id}/roles")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('roles:assign')")
+    @Operation(summary = "Asignar roles a usuario", description = "Asigna uno o más roles a un usuario específico. Requiere autoridad roles:assign o SUPER_ADMIN.")
+    @ApiResponse(responseCode = "200", description = "Roles asignados exitosamente")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "403", description = "No autorizado")
+    @ApiResponse(responseCode = "404", description = "Usuario o rol no encontrado")
+    public com.drivique.api.auth.dto.UserRolesResponseDTO assignRoles(
+            @PathVariable java.util.UUID id,
+            @Valid @RequestBody com.drivique.api.auth.dto.AssignRolesRequestDTO request
+    ) {
+        return rbacService.assignRolesToUser(id, request);
     }
 }
