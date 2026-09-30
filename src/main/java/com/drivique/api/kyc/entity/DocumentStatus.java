@@ -22,6 +22,10 @@ public class DocumentStatus {
 
     protected DocumentStatus() {}
 
+    public DocumentStatus(String code, String name, String description) {
+        this(null, code, name, description);
+    }
+
     public DocumentStatus(UUID id, String code, String name, String description) {
         this.id = id;
         this.code = code;
