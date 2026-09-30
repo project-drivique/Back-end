@@ -55,10 +55,7 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setUp() {
-        verificationCodeRepository.deleteAll();
-        sessionRepository.deleteAll();
-        userRepository.deleteAll();
-        roleRepository.deleteAll();
+        resetIamTables();
 
         jdbc.execute("DELETE FROM iam.password_policies");
         jdbc.execute("INSERT INTO iam.password_policies (id, min_length, require_uppercase, require_number, require_symbol, is_active) VALUES ('" + UUID.randomUUID() + "', 8, true, true, true, true)");
