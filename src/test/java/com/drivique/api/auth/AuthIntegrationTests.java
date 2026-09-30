@@ -42,6 +42,12 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
     private UserSessionRepository sessionRepository;
 
     @Autowired
+    private com.drivique.api.auth.repository.VerificationCodeRepository verificationCodeRepository;
+
+    @Autowired
+    private com.drivique.api.auth.service.VerificationCodeService verificationCodeService;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private User testUser;
@@ -49,9 +55,13 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setUp() {
+        verificationCodeRepository.deleteAll();
         sessionRepository.deleteAll();
         userRepository.deleteAll();
         roleRepository.deleteAll();
+
+        jdbc.execute("DELETE FROM iam.password_policies");
+        jdbc.execute("INSERT INTO iam.password_policies (id, min_length, require_uppercase, require_number, require_symbol, is_active) VALUES ('" + UUID.randomUUID() + "', 8, true, true, true, true)");
 
         customerRole = roleRepository.save(new Role(
                 UUID.randomUUID(),
@@ -292,5 +302,129 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                         .content(brandBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.companyName").value("Drivique Updated"));
+    }
+
+    @Test
+    void verifyEmailSuccessWithValidOtp() throws Exception {
+        String otp = verificationCodeService.createVerificationCode(testUser, "ACCOUNT_VERIFICATION", 15);
+
+        String requestBody = String.format("""
+                {
+                    "email": "%s",
+                    "code": "%s"
+                }
+                """, testUser.getEmail(), otp);
+
+        mvc.perform(post("/api/v1/auth/verify-email")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Correo electrónico verificado exitosamente."));
+
+        User verifiedUser = userRepository.findById(testUser.getId()).orElseThrow();
+        assertThat(verifiedUser.getEmailVerifiedAt()).isNotNull();
+    }
+
+    @Test
+    void verifyEmailWithInvalidOtpFails400() throws Exception {
+        String requestBody = String.format("""
+                {
+                    "email": "%s",
+                    "code": "000000"
+                }
+                """, testUser.getEmail());
+
+        mvc.perform(post("/api/v1/auth/verify-email")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void forgotPasswordGeneratesOtpSuccessfully() throws Exception {
+        String requestBody = String.format("""
+                {
+                    "email": "%s"
+                }
+                """, testUser.getEmail());
+
+        mvc.perform(post("/api/v1/auth/forgot-password")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Si el correo está registrado, se ha enviado un código de verificación."));
+
+        var codes = verificationCodeRepository.findAll();
+        assertThat(codes).hasSize(1);
+        assertThat(codes.getFirst().getPurpose()).isEqualTo("PASSWORD_RESET");
+    }
+
+    @Test
+    void resetPasswordWithValidOtpUpdatesPasswordAndRevokesSessions() throws Exception {
+        // 1. First login to create an active session
+        String loginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "SecureP@ssw0rd123"
+                }
+                """;
+
+        MvcResult loginResult = mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String refreshToken = JsonPath.read(loginResult.getResponse().getContentAsString(), "$.refreshToken");
+
+        // 2. Generate OTP for password reset
+        String otp = verificationCodeService.createVerificationCode(testUser, "PASSWORD_RESET", 15);
+
+        // 3. Reset password
+        String resetBody = String.format("""
+                {
+                    "email": "%s",
+                    "code": "%s",
+                    "newPassword": "NewSecurePassword456$"
+                }
+                """, testUser.getEmail(), otp);
+
+        mvc.perform(post("/api/v1/auth/reset-password")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(resetBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Contraseña restablecida exitosamente. Todas las sesiones activas han sido invalidadas."));
+
+        // 4. Old refresh token should now be rejected as session was revoked
+        String refreshBody = String.format("""
+                {
+                    "refreshToken": "%s"
+                }
+                """, refreshToken);
+
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isUnauthorized());
+
+        // 5. Login with new password works
+        String newLoginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "NewSecurePassword456$"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(newLoginBody))
+                .andExpect(status().isOk());
     }
 }

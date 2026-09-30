@@ -23,17 +23,23 @@ public class AuthService {
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final VerificationCodeService verificationCodeService;
+    private final PasswordValidatorService passwordValidatorService;
 
     public AuthService(
             UserRepository userRepository,
             UserSessionRepository sessionRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService
+            JwtService jwtService,
+            VerificationCodeService verificationCodeService,
+            PasswordValidatorService passwordValidatorService
     ) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.verificationCodeService = verificationCodeService;
+        this.passwordValidatorService = passwordValidatorService;
     }
 
     @Transactional
@@ -148,5 +154,46 @@ public class AuthService {
                 sessionRepository.save(session);
             });
         }
+    }
+
+    @Transactional
+    public MessageResponseDTO verifyEmail(VerifyEmailRequestDTO request) {
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Usuario no encontrado."));
+
+        verificationCodeService.validateAndConsume(user, "ACCOUNT_VERIFICATION", request.code());
+        user.setEmailVerifiedAt(Instant.now());
+        user.setAccountStatus("ACTIVE");
+        userRepository.save(user);
+
+        return MessageResponseDTO.of("Correo electrónico verificado exitosamente.");
+    }
+
+    @Transactional
+    public MessageResponseDTO forgotPassword(ForgotPasswordRequestDTO request) {
+        userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).ifPresent(user -> {
+            verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
+        });
+
+        return MessageResponseDTO.of("Si el correo está registrado, se ha enviado un código de verificación.");
+    }
+
+    @Transactional
+    public MessageResponseDTO resetPassword(ResetPasswordRequestDTO request) {
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "Código de verificación inválido o expirado."));
+
+        verificationCodeService.validateAndConsume(user, "PASSWORD_RESET", request.code());
+        passwordValidatorService.validate(request.newPassword());
+
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.resetFailedAttempts();
+        userRepository.save(user);
+
+        sessionRepository.revokeAllActiveSessionsForUser(user, Instant.now());
+
+        return MessageResponseDTO.of("Contraseña restablecida exitosamente. Todas las sesiones activas han sido invalidadas.");
     }
 }
