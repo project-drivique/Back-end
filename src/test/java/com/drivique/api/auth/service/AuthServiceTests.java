@@ -46,13 +46,26 @@ class AuthServiceTests {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private VerificationCodeService verificationCodeService;
+
+    @Mock
+    private PasswordValidatorService passwordValidatorService;
+
     private AuthService authService;
     private User testUser;
     private Role customerRole;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, sessionRepository, passwordEncoder, jwtService);
+        authService = new AuthService(
+                userRepository,
+                sessionRepository,
+                passwordEncoder,
+                jwtService,
+                verificationCodeService,
+                passwordValidatorService
+        );
 
         customerRole = new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer role", true);
         testUser = new User("Carlos", "Gomez", "carlos@drivique.com", "$2a$12$hashedPassword");
@@ -190,5 +203,71 @@ class AuthServiceTests {
 
         assertThat(session.getRevokedAt()).isNotNull();
         verify(sessionRepository, times(1)).save(session);
+    }
+
+    @Test
+    void verifyEmailSuccessActivatesUser() {
+        com.drivique.api.auth.dto.VerifyEmailRequestDTO request =
+                new com.drivique.api.auth.dto.VerifyEmailRequestDTO("carlos@drivique.com", "123456");
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        doNothing().when(verificationCodeService).validateAndConsume(testUser, "ACCOUNT_VERIFICATION", "123456");
+
+        var response = authService.verifyEmail(request);
+
+        assertThat(response.message()).contains("exitosamente");
+        assertThat(testUser.getEmailVerifiedAt()).isNotNull();
+        assertThat(testUser.getAccountStatus()).isEqualTo("ACTIVE");
+        verify(userRepository, times(1)).save(testUser);
+        verify(verificationCodeService, times(1)).validateAndConsume(testUser, "ACCOUNT_VERIFICATION", "123456");
+    }
+
+    @Test
+    void forgotPasswordGeneratesOtpIfUserExists() {
+        com.drivique.api.auth.dto.ForgotPasswordRequestDTO request =
+                new com.drivique.api.auth.dto.ForgotPasswordRequestDTO("carlos@drivique.com");
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+
+        var response = authService.forgotPassword(request);
+
+        assertThat(response.message()).contains("se ha enviado un código");
+        verify(verificationCodeService, times(1)).createVerificationCode(testUser, "PASSWORD_RESET", 15);
+    }
+
+    @Test
+    void forgotPasswordSafeWhenUserDoesNotExist() {
+        com.drivique.api.auth.dto.ForgotPasswordRequestDTO request =
+                new com.drivique.api.auth.dto.ForgotPasswordRequestDTO("unknown@drivique.com");
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("unknown@drivique.com"))
+                .thenReturn(Optional.empty());
+
+        var response = authService.forgotPassword(request);
+
+        assertThat(response.message()).contains("se ha enviado un código");
+        verify(verificationCodeService, never()).createVerificationCode(any(), any(), anyInt());
+    }
+
+    @Test
+    void resetPasswordSuccessUpdatesPasswordAndRevokesAllSessions() {
+        com.drivique.api.auth.dto.ResetPasswordRequestDTO request =
+                new com.drivique.api.auth.dto.ResetPasswordRequestDTO("carlos@drivique.com", "654321", "NewSecureP@ss123");
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        doNothing().when(verificationCodeService).validateAndConsume(testUser, "PASSWORD_RESET", "654321");
+        doNothing().when(passwordValidatorService).validate("NewSecureP@ss123");
+        when(passwordEncoder.encode("NewSecureP@ss123")).thenReturn("$2a$12$newHashedPassword");
+
+        var response = authService.resetPassword(request);
+
+        assertThat(response.message()).contains("restablecida exitosamente");
+        assertThat(testUser.getPasswordHash()).isEqualTo("$2a$12$newHashedPassword");
+        assertThat(testUser.getFailedLoginAttempts()).isZero();
+        verify(userRepository, times(1)).save(testUser);
+        verify(sessionRepository, times(1)).revokeAllActiveSessionsForUser(eq(testUser), any(Instant.class));
     }
 }
