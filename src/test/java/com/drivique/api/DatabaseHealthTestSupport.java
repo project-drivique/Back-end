@@ -18,9 +18,9 @@ import java.net.http.HttpResponse;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-abstract class DatabaseHealthTestSupport {
+public abstract class DatabaseHealthTestSupport {
     // Shared only within the test JVM; Ryuk removes this temporary database afterward.
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
+    public static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
     static {
         POSTGRES.start();
     }
