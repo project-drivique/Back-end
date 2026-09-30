@@ -29,6 +29,15 @@ public class Role {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "role_permissions",
+            schema = "iam",
+            joinColumns = @JoinColumn(name = "role_id"),
+            inverseJoinColumns = @JoinColumn(name = "permission_id")
+    )
+    private java.util.Set<Permission> permissions = new java.util.HashSet<>();
+
     protected Role() {}
 
     public Role(UUID id, String code, String name, String description, boolean active) {
@@ -46,4 +55,6 @@ public class Role {
     public String getName() { return name; }
     public String getDescription() { return description; }
     public boolean isActive() { return active; }
+    public java.util.Set<Permission> getPermissions() { return permissions; }
+    public void setPermissions(java.util.Set<Permission> permissions) { this.permissions = permissions; }
 }
