@@ -35,9 +35,9 @@ public abstract class DatabaseHealthTestSupport {
         registry.add("DB_PASSWORD", POSTGRES::getPassword);
     }
 
-    @Value("${local.server.port}") int port;
-    @Autowired JdbcTemplate jdbc;
-    @Autowired HikariDataSource dataSource;
+    @Value("${local.server.port}") protected int port;
+    @Autowired protected JdbcTemplate jdbc;
+    @Autowired protected HikariDataSource dataSource;
 
     @Test
     void healthReportsDatabaseUpWithoutConnectionDetails() throws Exception {
