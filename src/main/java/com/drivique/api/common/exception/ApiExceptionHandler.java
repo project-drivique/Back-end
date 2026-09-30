@@ -63,6 +63,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return response(HttpStatus.UNAUTHORIZED, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
+    @ExceptionHandler(AccountLockedException.class)
+    ResponseEntity<Object> locked(AccountLockedException ex, HttpServletRequest request) {
+        long minutes = ex.getRemainingMinutes();
+        String message = minutes > 0
+                ? "Cuenta temporalmente bloqueada. Intente de nuevo en " + minutes + " minuto(s)."
+                : "Cuenta temporalmente bloqueada por seguridad.";
+        return ResponseEntity.status(HttpStatus.LOCKED)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(HttpStatus.LOCKED, request.getRequestURI(), message, List.of()));
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> unexpected(Exception ex, HttpServletRequest request) {
         LOG.error("Unexpected API error", ex);
