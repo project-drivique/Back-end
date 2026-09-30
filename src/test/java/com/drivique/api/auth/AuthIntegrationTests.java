@@ -61,7 +61,6 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
         jdbc.execute("INSERT INTO iam.password_policies (id, min_length, require_uppercase, require_number, require_symbol, is_active) VALUES ('" + UUID.randomUUID() + "', 8, true, true, true, true)");
 
         customerRole = roleRepository.save(new Role(
-                UUID.randomUUID(),
                 "CUSTOMER",
                 "Customer",
                 "Customer role",
@@ -69,7 +68,6 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
         ));
 
         Role superAdminRole = roleRepository.save(new Role(
-                UUID.randomUUID(),
                 "SUPER_ADMIN",
                 "Super Admin",
                 "Super Admin role",
