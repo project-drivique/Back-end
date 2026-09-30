@@ -1,0 +1,296 @@
+package com.drivique.api.auth;
+
+import com.drivique.api.DatabaseHealthTestSupport;
+import com.drivique.api.auth.entity.Role;
+import com.drivique.api.auth.entity.User;
+import com.drivique.api.auth.repository.RoleRepository;
+import com.drivique.api.auth.repository.UserRepository;
+import com.drivique.api.auth.repository.UserSessionRepository;
+import com.jayway.jsonpath.JsonPath;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.util.Set;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@ActiveProfiles("dev")
+@AutoConfigureMockMvc
+class AuthIntegrationTests extends DatabaseHealthTestSupport {
+
+    @Autowired
+    private MockMvc mvc;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
+
+    @Autowired
+    private UserSessionRepository sessionRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    private User testUser;
+    private Role customerRole;
+
+    @BeforeEach
+    void setUp() {
+        sessionRepository.deleteAll();
+        userRepository.deleteAll();
+        roleRepository.deleteAll();
+
+        customerRole = roleRepository.save(new Role(
+                UUID.randomUUID(),
+                "CUSTOMER",
+                "Customer",
+                "Customer role",
+                true
+        ));
+
+        Role superAdminRole = roleRepository.save(new Role(
+                UUID.randomUUID(),
+                "SUPER_ADMIN",
+                "Super Admin",
+                "Super Admin role",
+                true
+        ));
+
+        testUser = new User("Juan", "Perez", "juan.perez@drivique.com", passwordEncoder.encode("SecureP@ssw0rd123"));
+        testUser.setRoles(Set.of(customerRole));
+        testUser = userRepository.save(testUser);
+    }
+
+    @Test
+    void loginSuccessfulReturnsTokensAndProfile() throws Exception {
+        String loginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "SecureP@ssw0rd123",
+                    "deviceInfo": "Test Browser"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.userProfile.email").value("juan.perez@drivique.com"))
+                .andExpect(jsonPath("$.userProfile.firstName").value("Juan"))
+                .andExpect(jsonPath("$.userProfile.roles[0]").value("CUSTOMER"));
+    }
+
+    @Test
+    void loginWithBadCredentialsFailsAndIncrementsAttempts() throws Exception {
+        String badLoginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "WrongPassword999!"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(badLoginBody))
+                .andExpect(status().isUnauthorized());
+
+        User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
+        assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo((short) 1);
+        assertThat(updatedUser.isLocked()).isFalse();
+    }
+
+    @Test
+    void loginLockoutAfterFiveFailedAttemptsReturns423Locked() throws Exception {
+        String badLoginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "WrongPassword!"
+                }
+                """;
+
+        // Attempts 1 to 4 -> 401 Unauthorized
+        for (int i = 1; i <= 4; i++) {
+            mvc.perform(post("/api/v1/auth/login")
+                            .contextPath("/api")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(badLoginBody))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        // 5th attempt -> 423 Locked
+        mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(badLoginBody))
+                .andExpect(status().isLocked())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(423))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("bloqueada")));
+
+        // 6th attempt (even with right password) -> still 423 Locked
+        String correctLoginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "SecureP@ssw0rd123"
+                }
+                """;
+
+        mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(correctLoginBody))
+                .andExpect(status().isLocked());
+    }
+
+    @Test
+    void refreshTokenRotationAndReplayRejection() throws Exception {
+        // 1. Initial Login
+        String loginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "SecureP@ssw0rd123"
+                }
+                """;
+
+        MvcResult loginResult = mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String responseJson = loginResult.getResponse().getContentAsString();
+        String initialRefreshToken = JsonPath.read(responseJson, "$.refreshToken");
+
+        // 2. Perform Refresh
+        String refreshBody = String.format("""
+                {
+                    "refreshToken": "%s"
+                }
+                """, initialRefreshToken);
+
+        MvcResult refreshResult = mvc.perform(post("/api/v1/auth/refresh")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andReturn();
+
+        String newRefreshToken = JsonPath.read(refreshResult.getResponse().getContentAsString(), "$.refreshToken");
+        assertThat(newRefreshToken).isNotEqualTo(initialRefreshToken);
+
+        // 3. Replay attack attempt with old refresh token must be rejected with 401
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(refreshBody))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logoutRevokesRefreshToken() throws Exception {
+        String loginBody = """
+                {
+                    "email": "juan.perez@drivique.com",
+                    "password": "SecureP@ssw0rd123"
+                }
+                """;
+
+        MvcResult loginResult = mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String refreshToken = JsonPath.read(loginResult.getResponse().getContentAsString(), "$.refreshToken");
+
+        // Logout
+        String logoutBody = String.format("""
+                {
+                    "refreshToken": "%s"
+                }
+                """, refreshToken);
+
+        mvc.perform(post("/api/v1/auth/logout")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(logoutBody))
+                .andExpect(status().isNoContent());
+
+        // Refresh with logged-out token must fail
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(logoutBody))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void jwtTokenAuthenticatesProtectedEndpoints() throws Exception {
+        // Create an admin user
+        Role adminRole = roleRepository.findByCode("SUPER_ADMIN").orElseThrow();
+        User admin = new User("Admin", "User", "admin@drivique.com", passwordEncoder.encode("Admin123$Secure"));
+        admin.setRoles(Set.of(adminRole));
+        userRepository.save(admin);
+
+        // Login as admin
+        String loginBody = """
+                {
+                    "email": "admin@drivique.com",
+                    "password": "Admin123$Secure"
+                }
+                """;
+
+        MvcResult loginResult = mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String accessToken = JsonPath.read(loginResult.getResponse().getContentAsString(), "$.accessToken");
+
+        // Access protected endpoint with Bearer token
+        String brandBody = """
+                {
+                    "companyName": "Drivique Updated",
+                    "logoUrl": "https://example.com/logo.png",
+                    "faviconUrl": null,
+                    "primaryColor": "#112233",
+                    "secondaryColor": "#445566",
+                    "accentColor": "#778899",
+                    "defaultTheme": "LIGHT"
+                }
+                """;
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/brand-configurations")
+                        .contextPath("/api")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(brandBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.companyName").value("Drivique Updated"));
+    }
+}
