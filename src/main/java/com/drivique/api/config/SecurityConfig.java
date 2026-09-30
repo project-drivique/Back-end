@@ -35,6 +35,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
+                                "/v1/auth/register",
                                 "/v1/auth/login",
                                 "/v1/auth/refresh",
                                 "/v1/auth/logout",
@@ -47,7 +48,8 @@ public class SecurityConfig {
                                 "/v1/currencies",
                                 "/v1/exchange-rates/latest",
                                 "/v1/brand-configurations/active",
-                                "/v1/security-configurations"
+                                "/v1/security-configurations",
+                                "/v1/kyc/document-types"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
