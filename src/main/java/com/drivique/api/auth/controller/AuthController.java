@@ -1,8 +1,6 @@
 package com.drivique.api.auth.controller;
 
-import com.drivique.api.auth.dto.AuthResponseDTO;
-import com.drivique.api.auth.dto.LoginRequestDTO;
-import com.drivique.api.auth.dto.RefreshTokenRequestDTO;
+import com.drivique.api.auth.dto.*;
 import com.drivique.api.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -54,6 +52,31 @@ public class AuthController {
             authService.logout(request.refreshToken());
         }
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/verify-email")
+    @Operation(summary = "Verificar correo electrónico", description = "Valida el código OTP de 6 dígitos para verificar el correo de la cuenta.")
+    @ApiResponse(responseCode = "200", description = "Correo verificado exitosamente")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
+    @ApiResponse(responseCode = "404", description = "Usuario no encontrado")
+    public MessageResponseDTO verifyEmail(@Valid @RequestBody VerifyEmailRequestDTO request) {
+        return authService.verifyEmail(request);
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Solicitar recuperación de contraseña", description = "Emite un código OTP de 6 dígitos con vigencia de 15 minutos si el correo existe.")
+    @ApiResponse(responseCode = "200", description = "Solicitud procesada exitosamente")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
+    public MessageResponseDTO forgotPassword(@Valid @RequestBody ForgotPasswordRequestDTO request) {
+        return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Restablecer contraseña", description = "Valida el código OTP, comprueba la política de contraseña, actualiza el hash e invalida las sesiones activas.")
+    @ApiResponse(responseCode = "200", description = "Contraseña restablecida exitosamente")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
+    public MessageResponseDTO resetPassword(@Valid @RequestBody ResetPasswordRequestDTO request) {
+        return authService.resetPassword(request);
     }
 
     private String extractIp(HttpServletRequest request) {

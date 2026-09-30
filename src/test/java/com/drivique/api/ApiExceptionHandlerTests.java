@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ApiExceptionHandlerTests.FailureController.class)
 @Import({ApiExceptionHandlerTests.FailureController.class, ApiExceptionHandler.class,
-        SecurityConfig.class, ProblemSecurityHandler.class})
+        SecurityConfig.class, ProblemSecurityHandler.class, com.drivique.api.auth.service.JwtService.class})
 class ApiExceptionHandlerTests {
     @Autowired MockMvc mvc;
 
