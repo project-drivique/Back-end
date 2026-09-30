@@ -36,7 +36,7 @@ public class UserDocumentController {
             description = "Recupera la lista de documentos de identidad cargados por el usuario y su estado de verificación actual (PENDING, APPROVED, REJECTED)."
     )
     @ApiResponse(responseCode = "200", description = "Lista de documentos obtenida exitosamente")
-    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
     public List<UserDocumentResponseDTO> getMyDocuments(Authentication authentication) {
         return userDocumentService.getUserDocuments(authentication.getName());
     }
@@ -48,9 +48,9 @@ public class UserDocumentController {
             description = "Permite al usuario subir archivos de identificación (frontal y opcional trasero). Formatos soportados: JPG, PNG, PDF (máx. 5MB)."
     )
     @ApiResponse(responseCode = "201", description = "Documento subido exitosamente y puesto en revisión")
-    @ApiResponse(responseCode = "400", description = "Formato no válido o tamaño de archivo excedido", content = @Content(schema = @Schema(ref = "#/components/schemas/ApiProblem")))
-    @ApiResponse(responseCode = "401", description = "No autenticado")
-    @ApiResponse(responseCode = "404", description = "Tipo de documento no encontrado")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
+    @ApiResponse(responseCode = "404", ref = "#/components/responses/Error404")
     public UserDocumentResponseDTO uploadDocument(
             @Parameter(description = "Identificador UUID del tipo de documento", required = true)
             @RequestParam("documentTypeId") UUID documentTypeId,
