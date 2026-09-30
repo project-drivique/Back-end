@@ -58,14 +58,12 @@ class RbacIntegrationTests extends DatabaseHealthTestSupport {
         resetIamTables();
 
         Permission readPerm = permissionRepository.save(new Permission(
-                UUID.randomUUID(),
                 "roles:read",
                 "Read Roles",
                 "Read permissions and roles"
         ));
 
         Role adminRole = new Role(
-                UUID.randomUUID(),
                 "SUPER_ADMIN",
                 "Super Admin",
                 "Super Administrator",
@@ -75,7 +73,6 @@ class RbacIntegrationTests extends DatabaseHealthTestSupport {
         adminRole = roleRepository.save(adminRole);
 
         Role customerRole = roleRepository.save(new Role(
-                UUID.randomUUID(),
                 "CUSTOMER",
                 "Customer",
                 "Customer",
@@ -83,7 +80,6 @@ class RbacIntegrationTests extends DatabaseHealthTestSupport {
         ));
 
         Role employeeRole = roleRepository.save(new Role(
-                UUID.randomUUID(),
                 "EMPLOYEE",
                 "Employee",
                 "Employee",
