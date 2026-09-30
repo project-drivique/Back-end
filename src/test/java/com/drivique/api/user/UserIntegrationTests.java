@@ -55,7 +55,6 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
         resetIamTables();
 
         Role customerRole = roleRepository.save(new Role(
-                UUID.randomUUID(),
                 "CUSTOMER",
                 "Customer",
                 "Customer role",
