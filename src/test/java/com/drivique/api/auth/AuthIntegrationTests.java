@@ -256,6 +256,10 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     void jwtTokenAuthenticatesProtectedEndpoints() throws Exception {
+        // Ensure active brand exists to be updated
+        jdbc.update("DELETE FROM core.brand_configurations");
+        jdbc.update("INSERT INTO core.brand_configurations (id,company_name,primary_color,secondary_color,accent_color,default_theme,is_active) VALUES (?, 'Original','#2563EB','#1E3A8A','#60A5FA','SYSTEM',true)", UUID.randomUUID());
+
         // Create an admin user
         Role adminRole = roleRepository.findByCode("SUPER_ADMIN").orElseThrow();
         User admin = new User("Admin", "User", "admin@drivique.com", passwordEncoder.encode("Admin123$Secure"));
