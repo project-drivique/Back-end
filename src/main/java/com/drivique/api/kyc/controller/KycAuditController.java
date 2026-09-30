@@ -39,8 +39,8 @@ public class KycAuditController {
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Listar documentos KYC para auditoría", description = "Permite a los agentes y administradores listar documentos cargados, con filtro opcional por estado (PENDING, APPROVED, REJECTED).")
     @ApiResponse(responseCode = "200", description = "Documentos obtenidos exitosamente")
-    @ApiResponse(responseCode = "401", description = "No autenticado")
-    @ApiResponse(responseCode = "403", description = "No autorizado")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
+    @ApiResponse(responseCode = "403", ref = "#/components/responses/Error403")
     public List<UserDocumentResponseDTO> getDocuments(
             @RequestParam(value = "status", required = false) String status
     ) {
@@ -56,9 +56,9 @@ public class KycAuditController {
     )
     @ApiResponse(responseCode = "200", description = "Documento auditado exitosamente")
     @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
-    @ApiResponse(responseCode = "401", description = "No autenticado")
-    @ApiResponse(responseCode = "403", description = "No autorizado")
-    @ApiResponse(responseCode = "404", description = "Documento no encontrado")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
+    @ApiResponse(responseCode = "403", ref = "#/components/responses/Error403")
+    @ApiResponse(responseCode = "404", ref = "#/components/responses/Error404")
     public UserDocumentResponseDTO reviewDocument(
             @PathVariable("id") UUID id,
             @Valid @RequestBody ReviewDocumentRequestDTO request,
