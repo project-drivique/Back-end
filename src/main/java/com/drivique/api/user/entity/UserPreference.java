@@ -5,13 +5,18 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
 
+import org.springframework.data.domain.Persistable;
+
 @Entity
 @Table(name = "user_preferences", schema = "iam")
-public class UserPreference {
+public class UserPreference implements Persistable<UUID> {
 
     @Id
     @Column(name = "user_id")
     private UUID userId;
+
+    @Transient
+    private boolean isNew = true;
 
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
@@ -80,4 +85,20 @@ public class UserPreference {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    @Override
+    public UUID getId() {
+        return this.userId;
+    }
+
+    @Override
+    public boolean isNew() {
+        return this.isNew;
+    }
+
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
 }
