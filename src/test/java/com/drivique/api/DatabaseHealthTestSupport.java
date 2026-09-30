@@ -39,6 +39,20 @@ public abstract class DatabaseHealthTestSupport {
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected HikariDataSource dataSource;
 
+    protected void resetIamTables() {
+        jdbc.execute("DELETE FROM iam.user_documents");
+        jdbc.execute("DELETE FROM iam.user_preferences");
+        jdbc.execute("DELETE FROM iam.verification_codes");
+        jdbc.execute("DELETE FROM iam.user_sessions");
+        jdbc.execute("DELETE FROM iam.user_roles");
+        jdbc.execute("DELETE FROM iam.role_permissions");
+        jdbc.execute("DELETE FROM iam.users");
+        jdbc.execute("DELETE FROM iam.roles");
+        jdbc.execute("DELETE FROM iam.permissions");
+        jdbc.execute("DELETE FROM iam.document_types");
+        jdbc.execute("DELETE FROM iam.document_statuses");
+    }
+
     @Test
     void healthReportsDatabaseUpWithoutConnectionDetails() throws Exception {
         var response = get("/actuator/health");

@@ -38,6 +38,10 @@ public class DocumentType {
 
     protected DocumentType() {}
 
+    public DocumentType(String code, String name, String description, boolean requiresFrontAndBack, boolean mandatory, boolean active) {
+        this(null, code, name, description, requiresFrontAndBack, mandatory, active);
+    }
+
     public DocumentType(UUID id, String code, String name, String description, boolean requiresFrontAndBack, boolean mandatory, boolean active) {
         this.id = id;
         this.code = code;

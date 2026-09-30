@@ -26,6 +26,10 @@ public class Permission {
 
     protected Permission() {}
 
+    public Permission(String code, String name, String description) {
+        this(null, code, name, description);
+    }
+
     public Permission(UUID id, String code, String name, String description) {
         this.id = id;
         this.code = code;

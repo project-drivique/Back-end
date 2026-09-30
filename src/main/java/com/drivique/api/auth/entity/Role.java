@@ -9,6 +9,7 @@ import java.util.UUID;
 public class Role {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(name = "code", nullable = false, unique = true, length = 40)
@@ -39,6 +40,10 @@ public class Role {
     private java.util.Set<Permission> permissions = new java.util.HashSet<>();
 
     protected Role() {}
+
+    public Role(String code, String name, String description, boolean active) {
+        this(null, code, name, description, active);
+    }
 
     public Role(UUID id, String code, String name, String description, boolean active) {
         this.id = id;
