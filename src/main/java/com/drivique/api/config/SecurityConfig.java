@@ -36,7 +36,11 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/v1/auth/login",
-                                "/v1/auth/refresh"
+                                "/v1/auth/refresh",
+                                "/v1/auth/logout",
+                                "/v1/auth/verify-email",
+                                "/v1/auth/forgot-password",
+                                "/v1/auth/reset-password"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/languages",
