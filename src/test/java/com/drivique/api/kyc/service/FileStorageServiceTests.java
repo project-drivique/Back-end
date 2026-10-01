@@ -1,4 +1,4 @@
-package com.drivique.api.kyc.service;
+package com.drivique.api.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
