@@ -39,3 +39,6 @@ build/
 
 bin/
 
+# Archivos locales cargados durante la ejecución o las pruebas de KYC
+uploads/
+

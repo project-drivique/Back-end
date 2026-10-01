@@ -100,4 +100,6 @@ Consultar [HU-BE-03](docs/HU-BE-03.md) para idiomas, monedas, tasas, caché y pe
 
 Consultar [HU-BE-04](docs/HU-BE-04.md) para configuración de marca, tema y parámetros públicos.
 
+Consultar [HU-BE-11](docs/HU-BE-11.md) para consentimientos legales, trazabilidad de Habeas Data y la configuración de las versiones vigentes.
+
 Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.
