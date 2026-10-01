@@ -1,10 +1,10 @@
 package com.drivique.api;
 
-import com.drivique.api.system.entity.Currency;
-import com.drivique.api.system.integration.ExchangeRateProvider;
-import com.drivique.api.system.repository.LanguageRepository;
+import com.drivique.api.model.Currency;
+import com.drivique.api.integration.ExchangeRateProvider;
+import com.drivique.api.repository.LanguageRepository;
 
-import com.drivique.api.system.entity.Language;
+import com.drivique.api.model.Language;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;

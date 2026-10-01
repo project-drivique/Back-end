@@ -40,6 +40,7 @@ public abstract class DatabaseHealthTestSupport {
     @Autowired protected HikariDataSource dataSource;
 
     protected void resetIamTables() {
+        jdbc.execute("DELETE FROM iam.user_consents");
         jdbc.execute("DELETE FROM iam.user_documents");
         jdbc.execute("DELETE FROM iam.user_preferences");
         jdbc.execute("DELETE FROM iam.verification_codes");
