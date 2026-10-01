@@ -1,11 +1,11 @@
-package com.drivique.api.user.service;
+package com.drivique.api.service;
 
-import com.drivique.api.auth.entity.User;
-import com.drivique.api.auth.repository.UserRepository;
-import com.drivique.api.user.dto.UpdateUserPreferenceRequestDTO;
-import com.drivique.api.user.dto.UserPreferenceResponseDTO;
-import com.drivique.api.user.entity.UserPreference;
-import com.drivique.api.user.repository.UserPreferenceRepository;
+import com.drivique.api.model.User;
+import com.drivique.api.repository.UserRepository;
+import com.drivique.api.dto.UpdateUserPreferenceRequestDTO;
+import com.drivique.api.dto.UserPreferenceResponseDTO;
+import com.drivique.api.model.UserPreference;
+import com.drivique.api.repository.UserPreferenceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

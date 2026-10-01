@@ -1,6 +1,6 @@
 package com.drivique.api;
 
-import com.drivique.api.system.dto.BrandRequestDTO;
+import com.drivique.api.dto.BrandRequestDTO;
 
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
