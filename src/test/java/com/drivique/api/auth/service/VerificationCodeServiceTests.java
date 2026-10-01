@@ -1,8 +1,8 @@
-package com.drivique.api.auth.service;
+package com.drivique.api.service;
 
-import com.drivique.api.auth.entity.User;
-import com.drivique.api.auth.entity.VerificationCode;
-import com.drivique.api.auth.repository.VerificationCodeRepository;
+import com.drivique.api.model.User;
+import com.drivique.api.model.VerificationCode;
+import com.drivique.api.repository.VerificationCodeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
