@@ -1,6 +1,6 @@
 package com.drivique.api.config;
 
-import com.drivique.api.common.exception.ApiProblem;
+import com.drivique.api.exception.ApiProblem;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

@@ -1,6 +1,6 @@
 package com.drivique.api.config;
 
-import com.drivique.api.common.exception.ApiProblem;
+import com.drivique.api.exception.ApiProblem;
 import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;

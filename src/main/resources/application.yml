@@ -60,3 +60,8 @@ catalog:
   exchange-rates:
     base-url: ${FRANKFURTER_BASE_URL:https://api.frankfurter.dev}
     timeout-ms: ${FRANKFURTER_TIMEOUT_MS:5000}
+
+compliance:
+  # Define each legal version by environment, for example:
+  # required-consents[0]: { consent-type: TERMS_AND_CONDITIONS, document-version: 2026-09 }
+  required-consents: []

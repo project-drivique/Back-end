@@ -1,6 +1,6 @@
 package com.drivique.api.config;
 
-import com.drivique.api.auth.filter.JwtAuthenticationFilter;
+import com.drivique.api.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
