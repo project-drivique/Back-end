@@ -102,7 +102,7 @@ class FeaturesAndFavoritesIntegrationTests extends DatabaseHealthTestSupport {
         mvc.perform(get("/api/v1/features").contextPath("/api"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
-                .andExpect(jsonPath("$[0].featureGroup").exists())
+                .andExpect(jsonPath("$[0].group").exists())
                 .andExpect(jsonPath("$[0].features").isArray());
 
         mvc.perform(get("/api/v1/features/all").contextPath("/api"))
