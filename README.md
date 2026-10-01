@@ -102,4 +102,6 @@ Consultar [HU-BE-04](docs/HU-BE-04.md) para configuraci처n de marca, tema y par�
 
 Consultar [HU-BE-11](docs/HU-BE-11.md) para consentimientos legales, trazabilidad de Habeas Data y la configuraci처n de las versiones vigentes.
 
+Consultar [HU-BE-12](docs/HU-BE-12.md) para departamentos, ciudades y sus puntos de aeropuerto o terminal.
+
 Consultar [la arquitectura del c처digo](docs/architecture.md) para la organizaci처n por m처dulos y responsabilidades.
