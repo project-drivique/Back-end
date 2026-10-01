@@ -52,7 +52,10 @@ public class SecurityConfig {
                                 "/v1/kyc/document-types",
                                 "/v1/departments",
                                 "/v1/departments/*/cities",
-                                "/v1/cities"
+                                "/v1/cities",
+                                "/v1/cities/*/branches",
+                                "/v1/branches",
+                                "/v1/branches/*"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
