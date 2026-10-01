@@ -54,6 +54,23 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM iam.document_statuses");
     }
 
+    protected void resetFleetTables() {
+        jdbc.execute("DELETE FROM fleet.vehicles");
+        jdbc.execute("DELETE FROM fleet.vehicle_categories");
+        jdbc.execute("DELETE FROM fleet.vehicle_brands");
+        jdbc.execute("DELETE FROM fleet.transmission_types");
+        jdbc.execute("DELETE FROM fleet.fuel_types");
+        jdbc.execute("DELETE FROM fleet.vehicle_statuses");
+    }
+
+    protected void resetLocationTables() {
+        jdbc.execute("DELETE FROM fleet.vehicles");
+        jdbc.execute("DELETE FROM location.branch_users");
+        jdbc.execute("DELETE FROM location.branches");
+        jdbc.execute("DELETE FROM location.cities");
+        jdbc.execute("DELETE FROM location.departments");
+    }
+
     @Test
     void healthReportsDatabaseUpWithoutConnectionDetails() throws Exception {
         var response = get("/actuator/health");
