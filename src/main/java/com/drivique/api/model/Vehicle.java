@@ -2,6 +2,8 @@ package com.drivique.api.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -74,6 +76,15 @@ public class Vehicle {
 
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "vehicle_features",
+            schema = "fleet",
+            joinColumns = @JoinColumn(name = "vehicle_id"),
+            inverseJoinColumns = @JoinColumn(name = "feature_id")
+    )
+    private Set<Feature> features = new java.util.HashSet<>();
 
     protected Vehicle() {}
 
@@ -150,5 +161,9 @@ public class Vehicle {
     public void setDoorsCount(Short doorsCount) { this.doorsCount = doorsCount; }
     public void setTrunkCapacityLiters(Integer trunkCapacityLiters) { this.trunkCapacityLiters = trunkCapacityLiters; }
     public void setActive(boolean active) { this.active = active; }
+    public java.util.Set<Feature> getFeatures() { return features; }
+    public void setFeatures(java.util.Set<Feature> features) { this.features = features != null ? features : new java.util.HashSet<>(); }
+    public void addFeature(Feature feature) { if (feature != null) { this.features.add(feature); } }
+    public void removeFeature(Feature feature) { if (feature != null) { this.features.remove(feature); } }
     public void toggleActive() { this.active = !this.active; }
 }
