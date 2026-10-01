@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("dev") @AutoConfigureMockMvc
 class BranchStaffIntegrationTests extends DatabaseHealthTestSupport {
  @Autowired MockMvc mvc; @Autowired BranchUserRepository assignments; @Autowired BranchRepository branches; @Autowired CityRepository cities; @Autowired DepartmentRepository departments; @Autowired UserRepository users; @Autowired RoleRepository roles;
- @BeforeEach void reset() { assignments.deleteAll(); branches.deleteAll(); cities.deleteAll(); departments.deleteAll(); resetIamTables(); }
+ @BeforeEach void reset() { resetLocationTables(); resetIamTables(); }
  @Test @WithMockUser(roles="BRANCH_ADMIN") void assignsListsAndRemovesOperationalStaff() throws Exception {
   Branch branch=branch(); User employee=user("EMPLOYEE", "employee@drivique.com");
   mvc.perform(post("/api/v1/branches/{branch}/staff/{user}",branch.getId(),employee.getId()).contextPath("/api")).andExpect(status().isNoContent());

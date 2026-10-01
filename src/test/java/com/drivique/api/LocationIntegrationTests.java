@@ -31,8 +31,7 @@ class LocationIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void resetLocations() {
-        cities.deleteAll();
-        departments.deleteAll();
+        resetLocationTables();
         caches.getCache("activeCities").clear();
         caches.getCache("departmentCities").clear();
     }
