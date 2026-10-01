@@ -143,6 +143,12 @@ public class Vehicle {
     public void setMileage(int mileage) { this.mileage = mileage; }
     public void setCurrentBranch(Branch currentBranch) { this.currentBranch = currentBranch; }
     public void setStatus(VehicleStatus status) { this.status = status; }
+    public void setColor(String color) { this.color = color; }
+    public void setMainImageUrl(String mainImageUrl) { this.mainImageUrl = mainImageUrl; }
     public void setFeatured(boolean featured) { this.featured = featured; }
+    public void setPassengerCapacity(short passengerCapacity) { this.passengerCapacity = passengerCapacity; }
+    public void setDoorsCount(Short doorsCount) { this.doorsCount = doorsCount; }
+    public void setTrunkCapacityLiters(Integer trunkCapacityLiters) { this.trunkCapacityLiters = trunkCapacityLiters; }
+    public void setActive(boolean active) { this.active = active; }
     public void toggleActive() { this.active = !this.active; }
 }
