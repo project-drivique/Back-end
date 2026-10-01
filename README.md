@@ -109,4 +109,7 @@ Consultar [HU-BE-13](docs/HU-BE-13.md) para sedes físicas, horarios y pagos en 
 Consultar [HU-BE-15](docs/HU-BE-15.md) para los catálogos técnicos de flota:
 marcas, transmisiones, combustibles y estados habilitados para reserva.
 
+Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
+y depósitos de garantía.
+
 Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.
