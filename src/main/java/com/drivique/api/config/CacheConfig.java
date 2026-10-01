@@ -12,7 +12,8 @@ public class CacheConfig {
     @Bean
     CacheManager cacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager(
-                "activeLanguages", "latestRates", "activeCities", "departmentCities");
+                "activeLanguages", "latestRates", "activeCities", "departmentCities", "vehicleBrands",
+                "transmissionTypes", "fuelTypes", "reservableVehicleStatuses");
         manager.setCaffeine(Caffeine.newBuilder().maximumSize(256).expireAfterWrite(Duration.ofMinutes(5)));
         manager.setAllowNullValues(false);
         return new TransactionAwareCacheManagerProxy(manager);
