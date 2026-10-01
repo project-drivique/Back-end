@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("dev") @AutoConfigureMockMvc
 class BranchIntegrationTests extends DatabaseHealthTestSupport {
  @Autowired MockMvc mvc; @Autowired BranchRepository branches; @Autowired CityRepository cities; @Autowired DepartmentRepository departments;
- @BeforeEach void resetLocations() { branches.deleteAll(); cities.deleteAll(); departments.deleteAll(); }
+ @BeforeEach void resetLocations() { resetFleetTables(); resetLocationTables(); }
  @Test void publicEndpointsOnlyExposeActiveBranches() throws Exception {
   City city = city(); Branch active = branches.saveAndFlush(new Branch("Centro", "Calle 1", city, "123", java.time.LocalTime.of(8,0), java.time.LocalTime.of(18,0), true));
   Branch inactive = branches.saveAndFlush(new Branch("Norte", "Calle 2", city, "456", java.time.LocalTime.of(8,0), java.time.LocalTime.of(18,0), false)); inactive.toggleStatus(); branches.saveAndFlush(inactive);

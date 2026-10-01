@@ -20,9 +20,11 @@ import java.util.UUID;
 public class AdminVehicleController {
 
     private final AdminVehicleService service;
+    private final com.drivique.api.service.FeatureService featureService;
 
-    public AdminVehicleController(AdminVehicleService service) {
+    public AdminVehicleController(AdminVehicleService service, com.drivique.api.service.FeatureService featureService) {
         this.service = service;
+        this.featureService = featureService;
     }
 
     @GetMapping
@@ -73,5 +75,21 @@ public class AdminVehicleController {
     @Operation(summary = "Eliminar lógicamente un vehículo de la flota")
     public void delete(@PathVariable UUID id) {
         service.delete(id);
+    }
+
+    @PostMapping("/{id}/features")
+    @Operation(summary = "Asignar equipamiento y características a un vehículo")
+    public java.util.List<com.drivique.api.dto.FeatureResponseDTO> assignFeatures(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.drivique.api.dto.AssignVehicleFeaturesRequestDTO request
+    ) {
+        return featureService.assignFeaturesToVehicle(id, request.featureIds());
+    }
+
+    @DeleteMapping("/{id}/features/{featureId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Remover una característica de un vehículo")
+    public void removeFeature(@PathVariable UUID id, @PathVariable UUID featureId) {
+        featureService.removeFeatureFromVehicle(id, featureId);
     }
 }
