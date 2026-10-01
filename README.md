@@ -112,4 +112,7 @@ marcas, transmisiones, combustibles y estados habilitados para reserva.
 Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
 y depósitos de garantía.
 
+Consultar [HU-BE-17](docs/HU-BE-17.md) para catálogo y búsqueda pública de flota
+con filtros dinámicos y destacados.
+
 Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.
