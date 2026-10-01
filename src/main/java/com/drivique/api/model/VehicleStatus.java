@@ -1,0 +1,3 @@
+package com.drivique.api.model;
+import jakarta.persistence.*; import java.util.UUID;
+@Entity @Table(name="vehicle_statuses",schema="fleet") public class VehicleStatus { @Id @GeneratedValue(strategy=GenerationType.UUID) private UUID id; @Column(nullable=false,unique=true,length=30) private String code; @Column(nullable=false,length=100) private String name; @Column(name="allows_reservation",nullable=false) private boolean allowsReservation; @Column(name="is_active",nullable=false) private boolean active=true; protected VehicleStatus(){} public UUID getId(){return id;} public String getCode(){return code;} public String getName(){return name;} public boolean allowsReservation(){return allowsReservation;} public boolean isActive(){return active;} }
