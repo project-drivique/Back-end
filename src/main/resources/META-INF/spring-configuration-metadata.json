@@ -1,7 +1,8 @@
 {
   "groups": [
     { "name": "catalog", "type": "java.lang.Object" },
-    { "name": "catalog.exchange-rates", "type": "java.lang.Object" }
+    { "name": "catalog.exchange-rates", "type": "java.lang.Object" },
+    { "name": "compliance", "type": "com.drivique.api.config.ConsentRequirementsProperties" }
   ],
   "properties": [
     {
@@ -15,6 +16,11 @@
       "type": "java.lang.Integer",
       "description": "Connection and read timeout per provider request, in milliseconds.",
       "defaultValue": 5000
+    },
+    {
+      "name": "compliance.required-consents",
+      "type": "java.util.List",
+      "description": "Legal consent types and document versions required by the active environment."
     }
   ]
 }

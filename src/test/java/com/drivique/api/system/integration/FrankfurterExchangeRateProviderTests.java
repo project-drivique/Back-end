@@ -1,4 +1,4 @@
-package com.drivique.api.system.integration;
+package com.drivique.api.integration;
 
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;

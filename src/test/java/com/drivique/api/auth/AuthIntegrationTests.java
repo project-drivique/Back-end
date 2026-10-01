@@ -1,11 +1,11 @@
 package com.drivique.api.auth;
 
 import com.drivique.api.DatabaseHealthTestSupport;
-import com.drivique.api.auth.entity.Role;
-import com.drivique.api.auth.entity.User;
-import com.drivique.api.auth.repository.RoleRepository;
-import com.drivique.api.auth.repository.UserRepository;
-import com.drivique.api.auth.repository.UserSessionRepository;
+import com.drivique.api.model.Role;
+import com.drivique.api.model.User;
+import com.drivique.api.repository.RoleRepository;
+import com.drivique.api.repository.UserRepository;
+import com.drivique.api.repository.UserSessionRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,10 +42,10 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
     private UserSessionRepository sessionRepository;
 
     @Autowired
-    private com.drivique.api.auth.repository.VerificationCodeRepository verificationCodeRepository;
+    private com.drivique.api.repository.VerificationCodeRepository verificationCodeRepository;
 
     @Autowired
-    private com.drivique.api.auth.service.VerificationCodeService verificationCodeService;
+    private com.drivique.api.service.VerificationCodeService verificationCodeService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
