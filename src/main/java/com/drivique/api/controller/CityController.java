@@ -3,6 +3,7 @@ package com.drivique.api.controller;
 import com.drivique.api.dto.CityRequestDTO;
 import com.drivique.api.dto.CityResponseDTO;
 import com.drivique.api.service.LocationService;
+import com.drivique.api.service.BranchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,15 +26,23 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Locations", description = "División territorial para reservas")
 public class CityController {
     private final LocationService service;
+    private final BranchService branches;
 
-    public CityController(LocationService service) {
+    public CityController(LocationService service, BranchService branches) {
         this.service = service;
+        this.branches = branches;
     }
 
     @GetMapping
     @Operation(summary = "Consultar ciudades activas")
     public List<CityResponseDTO> cities() {
         return service.cities();
+    }
+
+    @GetMapping("/{id}/branches")
+    @Operation(summary = "Consultar sedes activas de una ciudad")
+    public List<com.drivique.api.dto.BranchResponseDTO> branches(@PathVariable UUID id) {
+        return branches.byCity(id);
     }
 
     @PostMapping
