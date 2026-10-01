@@ -1,4 +1,4 @@
-package com.drivique.api.auth.service;
+package com.drivique.api.service;
 
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,14 +1,14 @@
-package com.drivique.api.auth.service;
+package com.drivique.api.service;
 
-import com.drivique.api.auth.dto.AuthResponseDTO;
-import com.drivique.api.auth.dto.LoginRequestDTO;
-import com.drivique.api.auth.dto.RefreshTokenRequestDTO;
-import com.drivique.api.auth.entity.Role;
-import com.drivique.api.auth.entity.User;
-import com.drivique.api.auth.entity.UserSession;
-import com.drivique.api.auth.repository.UserRepository;
-import com.drivique.api.auth.repository.UserSessionRepository;
-import com.drivique.api.common.exception.AccountLockedException;
+import com.drivique.api.dto.AuthResponseDTO;
+import com.drivique.api.dto.LoginRequestDTO;
+import com.drivique.api.dto.RefreshTokenRequestDTO;
+import com.drivique.api.model.Role;
+import com.drivique.api.model.User;
+import com.drivique.api.model.UserSession;
+import com.drivique.api.repository.UserRepository;
+import com.drivique.api.repository.UserSessionRepository;
+import com.drivique.api.exception.AccountLockedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -207,8 +207,8 @@ class AuthServiceTests {
 
     @Test
     void verifyEmailSuccessActivatesUser() {
-        com.drivique.api.auth.dto.VerifyEmailRequestDTO request =
-                new com.drivique.api.auth.dto.VerifyEmailRequestDTO("carlos@drivique.com", "123456");
+        com.drivique.api.dto.VerifyEmailRequestDTO request =
+                new com.drivique.api.dto.VerifyEmailRequestDTO("carlos@drivique.com", "123456");
 
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
                 .thenReturn(Optional.of(testUser));
@@ -225,8 +225,8 @@ class AuthServiceTests {
 
     @Test
     void forgotPasswordGeneratesOtpIfUserExists() {
-        com.drivique.api.auth.dto.ForgotPasswordRequestDTO request =
-                new com.drivique.api.auth.dto.ForgotPasswordRequestDTO("carlos@drivique.com");
+        com.drivique.api.dto.ForgotPasswordRequestDTO request =
+                new com.drivique.api.dto.ForgotPasswordRequestDTO("carlos@drivique.com");
 
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
                 .thenReturn(Optional.of(testUser));
@@ -239,8 +239,8 @@ class AuthServiceTests {
 
     @Test
     void forgotPasswordSafeWhenUserDoesNotExist() {
-        com.drivique.api.auth.dto.ForgotPasswordRequestDTO request =
-                new com.drivique.api.auth.dto.ForgotPasswordRequestDTO("unknown@drivique.com");
+        com.drivique.api.dto.ForgotPasswordRequestDTO request =
+                new com.drivique.api.dto.ForgotPasswordRequestDTO("unknown@drivique.com");
 
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("unknown@drivique.com"))
                 .thenReturn(Optional.empty());
@@ -253,8 +253,8 @@ class AuthServiceTests {
 
     @Test
     void resetPasswordSuccessUpdatesPasswordAndRevokesAllSessions() {
-        com.drivique.api.auth.dto.ResetPasswordRequestDTO request =
-                new com.drivique.api.auth.dto.ResetPasswordRequestDTO("carlos@drivique.com", "654321", "NewSecureP@ss123");
+        com.drivique.api.dto.ResetPasswordRequestDTO request =
+                new com.drivique.api.dto.ResetPasswordRequestDTO("carlos@drivique.com", "654321", "NewSecureP@ss123");
 
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
                 .thenReturn(Optional.of(testUser));

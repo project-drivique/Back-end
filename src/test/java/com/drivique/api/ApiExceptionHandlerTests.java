@@ -1,8 +1,8 @@
 package com.drivique.api;
 
-import com.drivique.api.common.exception.ApiExceptionHandler;
-import com.drivique.api.common.exception.ConflictException;
-import com.drivique.api.common.exception.ResourceNotFoundException;
+import com.drivique.api.exception.ApiExceptionHandler;
+import com.drivique.api.exception.ConflictException;
+import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.config.ProblemSecurityHandler;
 import com.drivique.api.config.SecurityConfig;
 import jakarta.validation.Valid;
@@ -25,8 +25,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(ApiExceptionHandlerTests.FailureController.class)
 @Import({ApiExceptionHandlerTests.FailureController.class, ApiExceptionHandler.class,
-        SecurityConfig.class, ProblemSecurityHandler.class, com.drivique.api.auth.service.JwtService.class,
-        com.drivique.api.auth.filter.JwtAuthenticationFilter.class})
+        SecurityConfig.class, ProblemSecurityHandler.class, com.drivique.api.service.JwtService.class,
+        com.drivique.api.security.JwtAuthenticationFilter.class})
 class ApiExceptionHandlerTests {
     @Autowired MockMvc mvc;
 
