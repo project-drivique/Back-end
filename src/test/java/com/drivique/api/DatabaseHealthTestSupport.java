@@ -40,6 +40,7 @@ public abstract class DatabaseHealthTestSupport {
     @Autowired protected HikariDataSource dataSource;
 
     protected void resetIamTables() {
+        jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
         jdbc.execute("DELETE FROM iam.user_consents");
         jdbc.execute("DELETE FROM iam.user_documents");
         jdbc.execute("DELETE FROM iam.user_preferences");
@@ -47,6 +48,7 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM iam.user_sessions");
         jdbc.execute("DELETE FROM iam.user_roles");
         jdbc.execute("DELETE FROM iam.role_permissions");
+        jdbc.execute("DELETE FROM location.branch_users");
         jdbc.execute("DELETE FROM iam.users");
         jdbc.execute("DELETE FROM iam.roles");
         jdbc.execute("DELETE FROM iam.permissions");
@@ -55,6 +57,11 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetFleetTables() {
+        jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
+        jdbc.execute("DELETE FROM fleet.vehicle_features");
+        jdbc.execute("DELETE FROM fleet.features");
+        jdbc.execute("DELETE FROM fleet.vehicle_documents");
+        jdbc.execute("DELETE FROM fleet.vehicle_images");
         jdbc.execute("DELETE FROM fleet.vehicles");
         jdbc.execute("DELETE FROM fleet.vehicle_categories");
         jdbc.execute("DELETE FROM fleet.vehicle_brands");
@@ -64,6 +71,10 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetLocationTables() {
+        jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
+        jdbc.execute("DELETE FROM fleet.vehicle_features");
+        jdbc.execute("DELETE FROM fleet.vehicle_documents");
+        jdbc.execute("DELETE FROM fleet.vehicle_images");
         jdbc.execute("DELETE FROM fleet.vehicles");
         jdbc.execute("DELETE FROM location.branch_users");
         jdbc.execute("DELETE FROM location.branches");
