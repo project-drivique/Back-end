@@ -106,4 +106,7 @@ Consultar [HU-BE-12](docs/HU-BE-12.md) para departamentos, ciudades y sus puntos
 
 Consultar [HU-BE-13](docs/HU-BE-13.md) para sedes físicas, horarios y pagos en efectivo.
 
+Consultar [HU-BE-15](docs/HU-BE-15.md) para los catálogos técnicos de flota:
+marcas, transmisiones, combustibles y estados habilitados para reserva.
+
 Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.
