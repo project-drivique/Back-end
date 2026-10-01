@@ -104,4 +104,6 @@ Consultar [HU-BE-11](docs/HU-BE-11.md) para consentimientos legales, trazabilida
 
 Consultar [HU-BE-12](docs/HU-BE-12.md) para departamentos, ciudades y sus puntos de aeropuerto o terminal.
 
+Consultar [HU-BE-13](docs/HU-BE-13.md) para sedes físicas, horarios y pagos en efectivo.
+
 Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.
