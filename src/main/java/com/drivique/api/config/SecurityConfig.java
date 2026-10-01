@@ -59,7 +59,9 @@ public class SecurityConfig {
                                 "/v1/vehicle-brands",
                                 "/v1/transmission-types",
                                 "/v1/fuel-types",
-                                "/v1/vehicle-statuses"
+                                "/v1/vehicle-statuses",
+                                "/v1/vehicle-categories",
+                                "/v1/vehicle-categories/*"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
