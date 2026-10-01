@@ -1,12 +1,12 @@
 package com.drivique.api.user;
 
 import com.drivique.api.DatabaseHealthTestSupport;
-import com.drivique.api.auth.entity.Role;
-import com.drivique.api.auth.entity.User;
-import com.drivique.api.auth.repository.RoleRepository;
-import com.drivique.api.auth.repository.UserRepository;
-import com.drivique.api.auth.service.JwtService;
-import com.drivique.api.user.repository.UserPreferenceRepository;
+import com.drivique.api.model.Role;
+import com.drivique.api.model.User;
+import com.drivique.api.repository.RoleRepository;
+import com.drivique.api.repository.UserRepository;
+import com.drivique.api.service.JwtService;
+import com.drivique.api.repository.UserPreferenceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
