@@ -1,11 +1,11 @@
-package com.drivique.api.user.service;
+package com.drivique.api.service;
 
-import com.drivique.api.auth.entity.Role;
-import com.drivique.api.auth.entity.User;
-import com.drivique.api.auth.repository.UserRepository;
-import com.drivique.api.common.exception.ResourceNotFoundException;
-import com.drivique.api.user.dto.UpdateUserProfileRequestDTO;
-import com.drivique.api.user.dto.UserProfileDetailResponseDTO;
+import com.drivique.api.model.Role;
+import com.drivique.api.model.User;
+import com.drivique.api.repository.UserRepository;
+import com.drivique.api.exception.ResourceNotFoundException;
+import com.drivique.api.dto.UpdateUserProfileRequestDTO;
+import com.drivique.api.dto.UserProfileDetailResponseDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

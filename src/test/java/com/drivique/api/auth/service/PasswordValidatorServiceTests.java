@@ -1,7 +1,7 @@
-package com.drivique.api.auth.service;
+package com.drivique.api.service;
 
-import com.drivique.api.auth.entity.PasswordPolicy;
-import com.drivique.api.auth.repository.PasswordPolicyRepository;
+import com.drivique.api.model.PasswordPolicy;
+import com.drivique.api.repository.PasswordPolicyRepository;
 
 import com.drivique.api.config.PasswordConfig;
 import java.util.List;
