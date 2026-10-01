@@ -20,4 +20,6 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID>, JpaSpec
 
     boolean existsByPlateIgnoreCase(String plate);
     boolean existsByVinIgnoreCase(String vin);
+    boolean existsByPlateIgnoreCaseAndIdNot(String plate, UUID id);
+    boolean existsByVinIgnoreCaseAndIdNot(String vin, UUID id);
 }
