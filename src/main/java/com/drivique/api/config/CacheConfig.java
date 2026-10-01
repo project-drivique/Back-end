@@ -11,7 +11,8 @@ import org.springframework.context.annotation.*;
 public class CacheConfig {
     @Bean
     CacheManager cacheManager() {
-        CaffeineCacheManager manager = new CaffeineCacheManager("activeLanguages", "latestRates");
+        CaffeineCacheManager manager = new CaffeineCacheManager(
+                "activeLanguages", "latestRates", "activeCities", "departmentCities");
         manager.setCaffeine(Caffeine.newBuilder().maximumSize(256).expireAfterWrite(Duration.ofMinutes(5)));
         manager.setAllowNullValues(false);
         return new TransactionAwareCacheManagerProxy(manager);
