@@ -46,15 +46,8 @@ class VehicleSearchIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setupData() {
-        vehicles.deleteAll();
-        branches.deleteAll();
-        cities.deleteAll();
-        departments.deleteAll();
-        categories.deleteAll();
-        brands.deleteAll();
-        transmissions.deleteAll();
-        fuels.deleteAll();
-        statuses.deleteAll();
+        resetFleetTables();
+        resetLocationTables();
 
         Department dep = departments.saveAndFlush(new Department("Cundinamarca"));
         City cityBogota = cities.saveAndFlush(new City(dep, "Bogotá", true, true));
