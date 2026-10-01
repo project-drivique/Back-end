@@ -55,7 +55,11 @@ public class SecurityConfig {
                                 "/v1/cities",
                                 "/v1/cities/*/branches",
                                 "/v1/branches",
-                                "/v1/branches/*"
+                                "/v1/branches/*",
+                                "/v1/vehicle-brands",
+                                "/v1/transmission-types",
+                                "/v1/fuel-types",
+                                "/v1/vehicle-statuses"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
