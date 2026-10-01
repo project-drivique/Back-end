@@ -20,9 +20,11 @@ import java.util.UUID;
 public class VehicleController {
 
     private final VehicleSearchService searchService;
+    private final com.drivique.api.service.FeatureService featureService;
 
-    public VehicleController(VehicleSearchService searchService) {
+    public VehicleController(VehicleSearchService searchService, com.drivique.api.service.FeatureService featureService) {
         this.searchService = searchService;
+        this.featureService = featureService;
     }
 
     @GetMapping("/search")
@@ -63,5 +65,11 @@ public class VehicleController {
     @Operation(summary = "Consultar ficha técnica pública de un vehículo")
     public VehicleCardResponseDTO detail(@PathVariable UUID id) {
         return searchService.detail(id);
+    }
+
+    @GetMapping("/{id}/features")
+    @Operation(summary = "Consultar características y equipamiento de un vehículo")
+    public List<com.drivique.api.dto.FeatureResponseDTO> features(@PathVariable UUID id) {
+        return featureService.listByVehicle(id);
     }
 }
