@@ -1,0 +1,3 @@
+package com.drivique.api.model;
+import jakarta.persistence.*; import java.util.UUID;
+@Entity @Table(name="fuel_types",schema="fleet") public class FuelType { @Id @GeneratedValue(strategy=GenerationType.UUID) private UUID id; @Column(nullable=false,unique=true,length=30) private String code; @Column(nullable=false,length=100) private String name; @Column(name="is_active",nullable=false) private boolean active=true; protected FuelType(){} public UUID getId(){return id;} public String getCode(){return code;} public String getName(){return name;} public boolean isActive(){return active;} }
