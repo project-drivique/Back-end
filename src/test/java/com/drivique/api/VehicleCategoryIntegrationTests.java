@@ -32,7 +32,7 @@ class VehicleCategoryIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void resetCategories() {
-        categories.deleteAll();
+        resetFleetTables();
         var cache = cacheManager.getCache("vehicleCategories");
         if (cache != null) {
             cache.clear();
