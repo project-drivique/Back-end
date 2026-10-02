@@ -57,6 +57,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetFleetTables() {
+        jdbc.execute("DELETE FROM fleet.vehicle_maintenances");
+        jdbc.execute("DELETE FROM fleet.maintenance_types");
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
         jdbc.execute("DELETE FROM fleet.vehicle_features");
         jdbc.execute("DELETE FROM fleet.features");
@@ -71,6 +73,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetLocationTables() {
+        jdbc.execute("DELETE FROM fleet.vehicle_maintenances");
+        jdbc.execute("DELETE FROM fleet.maintenance_types");
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
         jdbc.execute("DELETE FROM fleet.vehicle_features");
         jdbc.execute("DELETE FROM fleet.vehicle_documents");
