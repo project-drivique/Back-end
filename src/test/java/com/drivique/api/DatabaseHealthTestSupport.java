@@ -90,6 +90,10 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM contract.contract_clause_assignments");
+        jdbc.execute("DELETE FROM contract.rental_contracts");
+        jdbc.execute("DELETE FROM contract.contract_clauses");
+        jdbc.execute("DELETE FROM contract.contract_statuses");
         jdbc.execute("DELETE FROM rental.rental_extension_requests");
         jdbc.execute("DELETE FROM rental.reservation_delivery_points");
         jdbc.execute("DELETE FROM rental.reservation_promotions");
@@ -100,6 +104,10 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM contract.contract_clause_assignments");
+        jdbc.execute("DELETE FROM contract.rental_contracts");
+        jdbc.execute("DELETE FROM contract.contract_clauses");
+        jdbc.execute("DELETE FROM contract.contract_statuses");
         jdbc.execute("DELETE FROM rental.rental_extension_requests");
         jdbc.execute("DELETE FROM rental.reservation_delivery_points");
         jdbc.execute("DELETE FROM rental.reservation_promotions");
