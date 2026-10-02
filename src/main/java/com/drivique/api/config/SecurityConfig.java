@@ -66,7 +66,8 @@ public class SecurityConfig {
                                 "/v1/features",
                                 "/v1/features/**",
                                 "/v1/additional-services",
-                                "/v1/insurance-coverages"
+                                "/v1/insurance-coverages",
+                                "/v1/mileage-plans"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
