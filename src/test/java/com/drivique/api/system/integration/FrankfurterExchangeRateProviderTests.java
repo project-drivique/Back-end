@@ -1,4 +1,6 @@
-package com.drivique.api.integration;
+package com.drivique.api.system.integration;
+
+import com.drivique.api.integration.FrankfurterExchangeRateProvider;
 
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
