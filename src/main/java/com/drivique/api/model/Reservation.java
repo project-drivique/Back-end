@@ -75,6 +75,9 @@ public class Reservation {
     @OneToMany(mappedBy = "reservation")
     private List<ReservationPromotion> promotions = new ArrayList<>();
 
+    @OneToMany(mappedBy = "reservation")
+    private List<ReservationDeliveryPoint> deliveryPoints = new ArrayList<>();
+
     protected Reservation() {}
 
     public Reservation(
@@ -130,6 +133,7 @@ public class Reservation {
     public Instant getUpdatedAt() { return updatedAt; }
     public List<ReservationAdditionalService> getAdditionalServices() { return additionalServices; }
     public List<ReservationPromotion> getPromotions() { return promotions; }
+    public List<ReservationDeliveryPoint> getDeliveryPoints() { return deliveryPoints; }
 
     public void setStatus(ReservationStatus status) {
         this.status = status;
@@ -173,6 +177,12 @@ public class Reservation {
     public void addPromotion(ReservationPromotion promo) {
         if (promo != null) {
             this.promotions.add(promo);
+        }
+    }
+
+    public void addDeliveryPoint(ReservationDeliveryPoint point) {
+        if (point != null) {
+            this.deliveryPoints.add(point);
         }
     }
 }
