@@ -48,12 +48,6 @@ public class ReservationPromotion {
 
     public void setReservation(Reservation reservation) {
         this.reservation = reservation;
-        if (this.id == null) {
-            this.id = new ReservationPromotionId();
-        }
-        if (reservation != null && reservation.getId() != null) {
-            this.id = new ReservationPromotionId(reservation.getId(), this.promotion != null ? this.promotion.getId() : null);
-        }
     }
 
     public void setDiscountApplied(BigDecimal discountApplied) { this.discountApplied = discountApplied; }
