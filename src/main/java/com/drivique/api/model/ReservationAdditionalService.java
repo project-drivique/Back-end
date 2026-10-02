@@ -53,12 +53,6 @@ public class ReservationAdditionalService {
 
     public void setReservation(Reservation reservation) {
         this.reservation = reservation;
-        if (this.id == null) {
-            this.id = new ReservationAdditionalServiceId();
-        }
-        if (reservation != null && reservation.getId() != null) {
-            this.id = new ReservationAdditionalServiceId(reservation.getId(), this.additionalService != null ? this.additionalService.getId() : null);
-        }
     }
 
     public void setQuantity(short quantity) { this.quantity = quantity; }
