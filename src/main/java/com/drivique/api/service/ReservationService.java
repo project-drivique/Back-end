@@ -4,6 +4,7 @@ import com.drivique.api.dto.*;
 import com.drivique.api.exception.*;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,6 +67,7 @@ public class ReservationService {
         );
     }
 
+    @Autowired
     public ReservationService(
             ReservationRepository reservationRepository,
             ReservationStatusRepository reservationStatusRepository,
