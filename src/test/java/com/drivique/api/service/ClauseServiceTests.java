@@ -27,7 +27,7 @@ class ClauseServiceTests {
         ContractClause c1 = new ContractClause("v1.0", (short) 1, "Cláusula 1", "Contenido 1", true);
         ContractClause c2 = new ContractClause("v1.0", (short) 2, "Cláusula 2", "Contenido 2", true);
 
-        when(repository.findByIsActiveTrueOrderBySortOrderAsc()).thenReturn(List.of(c1, c2));
+        when(repository.findByActiveTrueOrderBySortOrderAsc()).thenReturn(List.of(c1, c2));
 
         List<ContractClauseResponseDTO> result = service.getActiveClauses();
 
@@ -38,7 +38,7 @@ class ClauseServiceTests {
 
     @Test
     void getActiveClauses_WhenEmpty_SeedsDefaultClauses() {
-        when(repository.findByIsActiveTrueOrderBySortOrderAsc()).thenReturn(List.of());
+        when(repository.findByActiveTrueOrderBySortOrderAsc()).thenReturn(List.of());
         when(repository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<ContractClauseResponseDTO> result = service.getActiveClauses();

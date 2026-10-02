@@ -10,9 +10,9 @@ import java.util.UUID;
 @Repository
 public interface ContractClauseRepository extends JpaRepository<ContractClause, UUID> {
 
-    List<ContractClause> findByIsActiveTrueOrderBySortOrderAsc();
+    List<ContractClause> findByActiveTrueOrderBySortOrderAsc();
 
-    List<ContractClause> findByVersionAndIsActiveTrueOrderBySortOrderAsc(String version);
+    List<ContractClause> findByVersionAndActiveTrueOrderBySortOrderAsc(String version);
 
     List<ContractClause> findAllByOrderByVersionAscSortOrderAsc();
 }

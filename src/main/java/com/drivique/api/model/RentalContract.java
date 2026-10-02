@@ -1,8 +1,6 @@
 package com.drivique.api.model;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -69,8 +67,7 @@ public class RentalContract {
     @Column(name = "signature_url", length = 1000)
     private String signatureUrl;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "signature_stroke_data", columnDefinition = "jsonb")
+    @Column(name = "signature_stroke_data", columnDefinition = "text")
     private String signatureStrokeData;
 
     @ManyToOne(fetch = FetchType.LAZY)
