@@ -116,26 +116,24 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
         InsuranceCoverage insurance = insuranceRepository.saveAndFlush(new InsuranceCoverage(
                 "Cobertura Total",
                 new BigDecimal("45000.00"),
-                "Proteccion completa",
-                true
+                "Proteccion completa"
         ));
         insuranceId = insurance.getId();
 
         MileagePlan mileagePlan = mileagePlanRepository.saveAndFlush(new MileagePlan(
                 "Ilimitado",
-                new BigDecimal("30000.00"),
                 null,
-                BigDecimal.ZERO,
-                true
+                new BigDecimal("30000.00"),
+                BigDecimal.ZERO
         ));
         mileagePlanId = mileagePlan.getId();
 
         AdditionalService additionalService = additionalServiceRepository.saveAndFlush(new AdditionalService(
                 "Silla para Bebe",
-                new BigDecimal("15000.00"),
-                true
+                new BigDecimal("15000.00")
         ));
         additionalServiceId = additionalService.getId();
+
 
         promotionRepository.saveAndFlush(new Promotion(
                 "DESC10",
