@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("dev") @AutoConfigureMockMvc
 class PricingCatalogIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired MockMvc mvc;
-    @BeforeEach void reset() { jdbc.execute("delete from catalog.additional_services"); jdbc.execute("delete from catalog.insurance_coverages"); }
+    @BeforeEach void reset() { resetRentalTables(); jdbc.execute("delete from catalog.additional_services"); jdbc.execute("delete from catalog.insurance_coverages"); }
     @Test void exposesActivePricingCatalogsPublicly() throws Exception {
         jdbc.update("insert into catalog.additional_services(id,name,daily_rate,is_active) values(?,?,?,true)", UUID.randomUUID(), "GPS Navigation", 18000);
         jdbc.update("insert into catalog.insurance_coverages(id,name,daily_rate,description,is_active) values(?,?,?,?,true)", UUID.randomUUID(), "Basic Protection", 0, "Included protection");
