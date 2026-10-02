@@ -89,6 +89,25 @@ public class LocalFileStorageService implements FileStorageService {
         }
     }
 
+    @Override
+    public String storePdf(byte[] content, String subDirectory) {
+        if (content == null || content.length == 0 || content.length > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("El PDF generado no es válido o excede el límite de 5MB.");
+        }
+        try {
+            Path targetDir = rootLocation.resolve(subDirectory).normalize();
+            Files.createDirectories(targetDir);
+            Path destination = targetDir.resolve(UUID.randomUUID() + ".pdf").normalize();
+            if (!destination.toAbsolutePath().startsWith(rootLocation.toAbsolutePath())) {
+                throw new IllegalArgumentException("No se permite almacenar archivos fuera del directorio designado.");
+            }
+            Files.write(destination, content);
+            return "/uploads/" + subDirectory + "/" + destination.getFileName();
+        } catch (IOException e) {
+            throw new IllegalStateException("Error al almacenar el PDF generado.", e);
+        }
+    }
+
     private String getFileExtension(String filename) {
         int dotIndex = filename.lastIndexOf('.');
         if (dotIndex >= 0 && dotIndex < filename.length() - 1) {

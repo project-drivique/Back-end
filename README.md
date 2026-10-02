@@ -120,6 +120,8 @@ Consultar [HU-BE-24](docs/HU-BE-24.md) para validación de promociones y cupones
 
 Consultar [HU-BE-25](docs/HU-BE-25.md) para el cotizador de alquiler.
 
+Consultar [HU-BE-31](docs/HU-BE-31.md) para firma biométrica y PDF contractual.
+
 Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
 y depósitos de garantía.
 
