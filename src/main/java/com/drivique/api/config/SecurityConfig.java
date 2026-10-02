@@ -35,6 +35,7 @@ public class SecurityConfig {
                                 "/swagger-ui.html"
                         ).permitAll()
                         .requestMatchers(HttpMethod.POST,
+                                "/v1/payments/wompi/webhook",
                                 "/v1/auth/register",
                                 "/v1/auth/login",
                                 "/v1/auth/refresh",
