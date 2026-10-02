@@ -40,6 +40,7 @@ public abstract class DatabaseHealthTestSupport {
     @Autowired protected HikariDataSource dataSource;
 
     protected void resetIamTables() {
+        resetRentalTables();
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
         jdbc.execute("DELETE FROM iam.user_consents");
         jdbc.execute("DELETE FROM iam.user_documents");
@@ -57,6 +58,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetFleetTables() {
+        resetRentalTables();
         jdbc.execute("DELETE FROM fleet.vehicle_maintenances");
         jdbc.execute("DELETE FROM fleet.maintenance_types");
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
@@ -73,6 +75,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetLocationTables() {
+        resetRentalTables();
         jdbc.execute("DELETE FROM fleet.vehicle_maintenances");
         jdbc.execute("DELETE FROM fleet.maintenance_types");
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
