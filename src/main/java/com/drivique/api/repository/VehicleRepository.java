@@ -6,6 +6,10 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,8 +22,13 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID>, JpaSpec
 
     Optional<Vehicle> findByIdAndActiveTrue(UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT v FROM Vehicle v WHERE v.id = :id AND v.active = true")
+    Optional<Vehicle> findByIdWithPessimisticLock(@Param("id") UUID id);
+
     boolean existsByPlateIgnoreCase(String plate);
     boolean existsByVinIgnoreCase(String vin);
     boolean existsByPlateIgnoreCaseAndIdNot(String plate, UUID id);
     boolean existsByVinIgnoreCaseAndIdNot(String vin, UUID id);
 }
+
