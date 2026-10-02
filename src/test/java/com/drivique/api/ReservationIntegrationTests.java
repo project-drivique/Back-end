@@ -1,7 +1,10 @@
 package com.drivique.api;
 
 import com.drivique.api.dto.CreateReservationRequestDTO;
+import com.drivique.api.model.*;
+import com.drivique.api.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -25,24 +29,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ReservationIntegrationTests extends DatabaseHealthTestSupport {
 
-    @Autowired
-    private MockMvc mvc;
+    @Autowired private MockMvc mvc;
+    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Autowired private UserRepository userRepository;
+    @Autowired private DepartmentRepository departmentRepository;
+    @Autowired private CityRepository cityRepository;
+    @Autowired private BranchRepository branchRepository;
+    @Autowired private VehicleBrandRepository brandRepository;
+    @Autowired private VehicleCategoryRepository categoryRepository;
+    @Autowired private TransmissionTypeRepository transmissionRepository;
+    @Autowired private FuelTypeRepository fuelRepository;
+    @Autowired private VehicleStatusRepository vehicleStatusRepository;
+    @Autowired private VehicleRepository vehicleRepository;
+    @Autowired private InsuranceCoverageRepository insuranceRepository;
+    @Autowired private MileagePlanRepository mileagePlanRepository;
+    @Autowired private AdditionalServiceRepository additionalServiceRepository;
+    @Autowired private PromotionRepository promotionRepository;
+    @Autowired private ReservationStatusRepository reservationStatusRepository;
 
-    private UUID customerId;
     private UUID vehicleId;
-    private UUID categoryId;
-    private UUID brandId;
-    private UUID transmissionId;
-    private UUID fuelId;
-    private UUID vehicleStatusId;
-    private UUID branchId;
     private UUID insuranceId;
     private UUID mileagePlanId;
     private UUID additionalServiceId;
-    private UUID promotionId;
+    private UUID branchId;
 
     @BeforeEach
     void setUp() {
@@ -52,83 +62,94 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
         resetLocationTables();
         resetIamTables();
 
-        // 1. Seed Customer User
-        customerId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO iam.users (id, email, password_hash, first_name, last_name, phone_number, is_active, email_verified, created_at, updated_at) " +
-                "VALUES (?, 'customer@drivique.com', '$2a$10$hash', 'Carlos', 'Gomez', '+573001112233', true, true, now(), now())",
-                customerId
-        );
+        // 1. Customer User
+        User customer = new User("Carlos", "Gomez", "customer@drivique.com", "$2a$10$hash");
+        userRepository.saveAndFlush(customer);
 
-        // 2. Seed Location
-        UUID deptId = UUID.randomUUID();
-        jdbc.update("INSERT INTO location.departments (id, name, code) VALUES (?, 'Antioquia', 'ANT')", deptId);
-        UUID cityId = UUID.randomUUID();
-        jdbc.update("INSERT INTO location.cities (id, department_id, name, code) VALUES (?, ?, 'Medellin', 'MED')", cityId, deptId);
-        branchId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO location.branches (id, city_id, name, address, phone, is_active, created_at, updated_at) " +
-                "VALUES (?, ?, 'Sede El Poblado', 'Cra 43A # 1-50', '3001234567', true, now(), now())",
-                branchId, cityId
-        );
+        // 2. Location
+        Department department = departmentRepository.saveAndFlush(new Department("Antioquia"));
+        City city = cityRepository.saveAndFlush(new City(department, "Medellín", true, true));
+        Branch branch = branchRepository.saveAndFlush(new Branch(
+                "Sede El Poblado",
+                "Cra 43A # 1-50",
+                city,
+                "3001234567",
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                true
+        ));
+        branchId = branch.getId();
 
-        // 3. Seed Fleet Requirements
-        brandId = UUID.randomUUID();
-        jdbc.update("INSERT INTO fleet.vehicle_brands (id, name) VALUES (?, 'Toyota')", brandId);
+        // 3. Fleet
+        VehicleBrand brand = brandRepository.saveAndFlush(new VehicleBrand("Toyota"));
+        VehicleCategory category = categoryRepository.saveAndFlush(new VehicleCategory(
+                "SUV Premium",
+                new BigDecimal("220000"),
+                new BigDecimal("1500000")
+        ));
+        TransmissionType transmission = transmissionRepository.saveAndFlush(new TransmissionType("AUTOMATIC", "Automatic"));
+        FuelType fuel = fuelRepository.saveAndFlush(new FuelType("GASOLINE", "Gasoline"));
+        VehicleStatus status = vehicleStatusRepository.saveAndFlush(new VehicleStatus("AVAILABLE", "Available", true));
 
-        categoryId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO fleet.vehicle_categories (id, name, code, security_deposit, is_active) VALUES (?, 'SUV Premium', 'SUV_PREM', 1500000, true)",
-                categoryId
-        );
+        Vehicle vehicle = vehicleRepository.saveAndFlush(new Vehicle(
+                "DRV777",
+                "1HGCR2F83HA000777",
+                brand,
+                category,
+                transmission,
+                fuel,
+                status,
+                branch,
+                "Corolla Cross",
+                (short) 2024,
+                "Blanco",
+                (short) 5,
+                (short) 5,
+                500,
+                12000,
+                new BigDecimal("220000.00"),
+                null,
+                true
+        ));
+        vehicleId = vehicle.getId();
 
-        transmissionId = UUID.randomUUID();
-        jdbc.update("INSERT INTO fleet.transmission_types (id, name, code) VALUES (?, 'Automatica', 'AUTOMATIC')", transmissionId);
+        // 4. Catalogs
+        InsuranceCoverage insurance = insuranceRepository.saveAndFlush(new InsuranceCoverage(
+                "Cobertura Total",
+                new BigDecimal("45000.00"),
+                "Proteccion completa"
+        ));
+        insuranceId = insurance.getId();
 
-        fuelId = UUID.randomUUID();
-        jdbc.update("INSERT INTO fleet.fuel_types (id, name, code) VALUES (?, 'Gasolina', 'GASOLINE')", fuelId);
+        MileagePlan mileagePlan = mileagePlanRepository.saveAndFlush(new MileagePlan(
+                "Ilimitado",
+                null,
+                new BigDecimal("30000.00"),
+                BigDecimal.ZERO
+        ));
+        mileagePlanId = mileagePlan.getId();
 
-        vehicleStatusId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO fleet.vehicle_statuses (id, name, code, allows_reservation, is_active) VALUES (?, 'Disponible', 'AVAILABLE', true, true)",
-                vehicleStatusId
-        );
+        AdditionalService additionalService = additionalServiceRepository.saveAndFlush(new AdditionalService(
+                "Silla para Bebe",
+                new BigDecimal("15000.00")
+        ));
+        additionalServiceId = additionalService.getId();
 
-        vehicleId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO fleet.vehicles (id, plate, vin, brand_id, category_id, transmission_type_id, fuel_type_id, status_id, current_branch_id, model, year, color, passenger_capacity, mileage, daily_rate, is_featured, is_active) " +
-                "VALUES (?, 'DRV777', '1HGCR2F83HA000777', ?, ?, ?, ?, ?, ?, 'Corolla Cross', 2024, 'Blanco', 5, 12000, 220000.00, true, true)",
-                vehicleId, brandId, categoryId, transmissionId, fuelId, vehicleStatusId, branchId
-        );
 
-        // 4. Seed Catalogs (Insurance, Mileage, Additional Services, Promotion)
-        insuranceId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO catalog.insurance_coverages (id, name, daily_rate, description, is_active) VALUES (?, 'Cobertura Total', 45000.00, 'Proteccion completa', true)",
-                insuranceId
-        );
+        promotionRepository.saveAndFlush(new Promotion(
+                "DESC10",
+                "PROMOTION",
+                "PERCENTAGE",
+                new BigDecimal("10.00"),
+                Instant.now().minus(1, ChronoUnit.DAYS),
+                Instant.now().plus(30, ChronoUnit.DAYS),
+                1,
+                100,
+                0
+        ));
 
-        mileagePlanId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO catalog.mileage_plans (id, name, daily_rate, included_km_per_day, extra_km_rate, is_active) VALUES (?, 'Ilimitado', 30000.00, NULL, 0.00, true)",
-                mileagePlanId
-        );
-
-        additionalServiceId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO catalog.additional_services (id, name, daily_rate, is_active) VALUES (?, 'Silla para Bebe', 15000.00, true)",
-                additionalServiceId
-        );
-
-        promotionId = UUID.randomUUID();
-        jdbc.update(
-                "INSERT INTO catalog.promotions (id, code, offer_type, discount_type, discount_value, starts_at, ends_at, minimum_rental_days, max_uses_limit, current_uses_count, is_active) " +
-                "VALUES (?, 'DESC10', 'PROMOTION', 'PERCENTAGE', 10.00, now() - interval '1 day', now() + interval '30 days', 1, 100, 0, true)",
-                promotionId
-        );
-
-        // 5. Seed Statuses
-        jdbc.update("INSERT INTO rental.reservation_statuses (id, code, name, blocks_availability) VALUES (gen_random_uuid(), 'PENDING_PAYMENT', 'Pending payment', true)");
+        // 5. Reservation Status
+        reservationStatusRepository.saveAndFlush(new ReservationStatus("PENDING_PAYMENT", "Pending payment", true));
     }
 
     @Test
@@ -165,7 +186,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(jsonPath("$.additionalServices[0].name").value("Silla para Bebe"))
                 .andExpect(jsonPath("$.additionalServices[0].dailyRate").value(15000.00))
                 .andExpect(jsonPath("$.promotion.code").value("DESC10"))
-                .andExpect(jsonPath("$.promotion.discountApplied").value(66000.00)) // 10% of 660,000 vehicle subtotal
+                .andExpect(jsonPath("$.promotion.discountApplied").value(66000.00)) // 10% of 660k
                 // Total = 660,000 + 135,000 (insurance) + 90,000 (mileage) + 45,000 (baby seat) - 66,000 (discount) = 864,000
                 .andExpect(jsonPath("$.totalEstimated").value(864000.00))
                 .andExpect(jsonPath("$.cashPaymentCode", startsWith("CASH-")))
