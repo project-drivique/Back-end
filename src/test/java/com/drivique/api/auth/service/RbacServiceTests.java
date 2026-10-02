@@ -1,4 +1,6 @@
-package com.drivique.api.service;
+package com.drivique.api.auth.service;
+
+import com.drivique.api.service.*;
 
 import com.drivique.api.dto.AssignRolesRequestDTO;
 import com.drivique.api.dto.PermissionResponseDTO;
