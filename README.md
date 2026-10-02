@@ -114,6 +114,8 @@ de mantenimientos de vehículos.
 
 Consultar [HU-BE-22](docs/HU-BE-22.md) para servicios adicionales y coberturas de seguro.
 
+Consultar [HU-BE-23](docs/HU-BE-23.md) para planes de kilometraje.
+
 Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
 y depósitos de garantía.
 
