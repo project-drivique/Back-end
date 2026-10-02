@@ -69,10 +69,10 @@ public class Reservation {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
-    @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "reservation")
     private List<ReservationAdditionalService> additionalServices = new ArrayList<>();
 
-    @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "reservation")
     private List<ReservationPromotion> promotions = new ArrayList<>();
 
     protected Reservation() {}
@@ -167,14 +167,12 @@ public class Reservation {
     public void addAdditionalService(ReservationAdditionalService service) {
         if (service != null) {
             this.additionalServices.add(service);
-            service.setReservation(this);
         }
     }
 
     public void addPromotion(ReservationPromotion promo) {
         if (promo != null) {
             this.promotions.add(promo);
-            promo.setReservation(this);
         }
     }
 }
