@@ -116,6 +116,8 @@ Consultar [HU-BE-22](docs/HU-BE-22.md) para servicios adicionales y coberturas d
 
 Consultar [HU-BE-23](docs/HU-BE-23.md) para planes de kilometraje.
 
+Consultar [HU-BE-24](docs/HU-BE-24.md) para validación de promociones y cupones.
+
 Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
 y depósitos de garantía.
 
