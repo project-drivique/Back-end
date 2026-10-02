@@ -40,6 +40,7 @@ public abstract class DatabaseHealthTestSupport {
     @Autowired protected HikariDataSource dataSource;
 
     protected void resetIamTables() {
+        resetRentalTables();
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
         jdbc.execute("DELETE FROM iam.user_consents");
         jdbc.execute("DELETE FROM iam.user_documents");
@@ -57,6 +58,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetFleetTables() {
+        resetRentalTables();
         jdbc.execute("DELETE FROM fleet.vehicle_maintenances");
         jdbc.execute("DELETE FROM fleet.maintenance_types");
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
@@ -73,6 +75,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetLocationTables() {
+        resetRentalTables();
         jdbc.execute("DELETE FROM fleet.vehicle_maintenances");
         jdbc.execute("DELETE FROM fleet.maintenance_types");
         jdbc.execute("DELETE FROM fleet.user_favorite_vehicles");
@@ -85,6 +88,26 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM location.cities");
         jdbc.execute("DELETE FROM location.departments");
     }
+
+    protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM rental.reservation_promotions");
+        jdbc.execute("DELETE FROM rental.reservation_additional_services");
+        jdbc.execute("DELETE FROM rental.reservations");
+        jdbc.execute("DELETE FROM rental.reservation_statuses");
+        jdbc.execute("DELETE FROM catalog.user_coupon_usages");
+    }
+
+    protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM rental.reservation_promotions");
+        jdbc.execute("DELETE FROM rental.reservation_additional_services");
+        jdbc.execute("DELETE FROM rental.reservations");
+        jdbc.execute("DELETE FROM catalog.user_coupon_usages");
+        jdbc.execute("DELETE FROM catalog.promotions");
+        jdbc.execute("DELETE FROM catalog.additional_services");
+        jdbc.execute("DELETE FROM catalog.insurance_coverages");
+        jdbc.execute("DELETE FROM catalog.mileage_plans");
+    }
+
 
     @Test
     void healthReportsDatabaseUpWithoutConnectionDetails() throws Exception {
