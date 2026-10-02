@@ -154,6 +154,11 @@ public class Reservation {
         this.updatedAt = Instant.now();
     }
 
+    public void setReturnDate(Instant returnDate) {
+        this.returnDate = returnDate;
+        this.updatedAt = Instant.now();
+    }
+
     public void setTotalEstimated(BigDecimal totalEstimated) {
         this.totalEstimated = totalEstimated;
         this.updatedAt = Instant.now();
