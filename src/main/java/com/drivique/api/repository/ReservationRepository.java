@@ -47,4 +47,13 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
             @Param("pickupDate") Instant pickupDate,
             @Param("returnDate") Instant returnDate
     );
+
+    @Query("SELECT r FROM Reservation r " +
+           "WHERE UPPER(r.status.code) = UPPER(:statusCode) " +
+           "AND r.cashPaymentExpiresAt IS NOT NULL " +
+           "AND r.cashPaymentExpiresAt < :now")
+    List<Reservation> findExpiredPendingReservations(
+            @Param("statusCode") String statusCode,
+            @Param("now") Instant now
+    );
 }
