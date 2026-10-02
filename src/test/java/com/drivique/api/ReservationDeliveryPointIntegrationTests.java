@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.*;
@@ -33,6 +34,7 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
     @Autowired private MockMvc mvc;
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
+    @Autowired private RoleRepository roleRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private CityRepository cityRepository;
@@ -61,12 +63,17 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
         resetLocationTables();
         resetIamTables();
 
-        // 1. Users
+        // 1. Users & Roles
         User customer = new User("Carlos", "Gomez", "customer@drivique.com", "$2a$10$hash");
         userRepository.saveAndFlush(customer);
 
         User otherCustomer = new User("Lucia", "Perez", "other@drivique.com", "$2a$10$hash");
         userRepository.saveAndFlush(otherCustomer);
+
+        Role adminRole = roleRepository.saveAndFlush(new Role("ADMIN", "ADMIN", "Administrator", true));
+        User adminUser = new User("Admin", "Staff", "admin@drivique.com", "$2a$10$hash");
+        adminUser.setRoles(Set.of(adminRole));
+        userRepository.saveAndFlush(adminUser);
 
         // 2. Location
         Department department = departmentRepository.saveAndFlush(new Department("Antioquia"));
