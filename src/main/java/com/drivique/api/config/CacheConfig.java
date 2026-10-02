@@ -13,7 +13,8 @@ public class CacheConfig {
     CacheManager cacheManager() {
         CaffeineCacheManager manager = new CaffeineCacheManager(
                 "activeLanguages", "latestRates", "activeCities", "departmentCities", "vehicleBrands",
-                "transmissionTypes", "fuelTypes", "reservableVehicleStatuses", "vehicleCategories");
+                "transmissionTypes", "fuelTypes", "reservableVehicleStatuses", "vehicleCategories",
+                "additionalServices", "insuranceCoverages");
         manager.setCaffeine(Caffeine.newBuilder().maximumSize(256).expireAfterWrite(Duration.ofMinutes(5)));
         manager.setAllowNullValues(false);
         return new TransactionAwareCacheManagerProxy(manager);
