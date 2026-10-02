@@ -90,6 +90,9 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM contract.inspection_checklist_answers");
+        jdbc.execute("DELETE FROM contract.vehicle_inspections");
+        jdbc.execute("DELETE FROM contract.inspection_checklist_items");
         jdbc.execute("DELETE FROM contract.contract_clause_assignments");
         jdbc.execute("DELETE FROM contract.rental_contracts");
         jdbc.execute("DELETE FROM contract.contract_clauses");
@@ -104,6 +107,9 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM contract.inspection_checklist_answers");
+        jdbc.execute("DELETE FROM contract.vehicle_inspections");
+        jdbc.execute("DELETE FROM contract.inspection_checklist_items");
         jdbc.execute("DELETE FROM contract.contract_clause_assignments");
         jdbc.execute("DELETE FROM contract.rental_contracts");
         jdbc.execute("DELETE FROM contract.contract_clauses");
