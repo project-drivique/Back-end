@@ -19,7 +19,7 @@ public class ContractStatus {
     private String name;
 
     @Column(name = "is_active", nullable = false)
-    private boolean isActive = true;
+    private boolean active = true;
 
     @Column(name = "is_final", nullable = false)
     private boolean isFinal = false;
@@ -32,10 +32,10 @@ public class ContractStatus {
 
     protected ContractStatus() {}
 
-    public ContractStatus(String code, String name, boolean isActive, boolean isFinal) {
+    public ContractStatus(String code, String name, boolean active, boolean isFinal) {
         this.code = code;
         this.name = name;
-        this.isActive = isActive;
+        this.active = active;
         this.isFinal = isFinal;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
@@ -44,8 +44,10 @@ public class ContractStatus {
     public UUID getId() { return id; }
     public String getCode() { return code; }
     public String getName() { return name; }
-    public boolean isActive() { return isActive; }
+    public boolean isActive() { return active; }
+    public boolean getActive() { return active; }
     public boolean isFinal() { return isFinal; }
+    public boolean getIsFinal() { return isFinal; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 
@@ -55,12 +57,12 @@ public class ContractStatus {
     }
 
     public void setActive(boolean active) {
-        isActive = active;
+        this.active = active;
         this.updatedAt = Instant.now();
     }
 
     public void setFinal(boolean aFinal) {
-        isFinal = aFinal;
+        this.isFinal = aFinal;
         this.updatedAt = Instant.now();
     }
 }

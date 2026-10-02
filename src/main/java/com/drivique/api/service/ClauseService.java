@@ -27,7 +27,7 @@ public class ClauseService {
 
     @Transactional
     public List<ContractClause> getOrSeedDefaultClauses() {
-        List<ContractClause> activeClauses = contractClauseRepository.findByIsActiveTrueOrderBySortOrderAsc();
+        List<ContractClause> activeClauses = contractClauseRepository.findByActiveTrueOrderBySortOrderAsc();
         if (!activeClauses.isEmpty()) {
             return activeClauses;
         }
