@@ -32,7 +32,7 @@ public class Reservation {
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "status_id", nullable = false)
     private ReservationStatus status;
 
