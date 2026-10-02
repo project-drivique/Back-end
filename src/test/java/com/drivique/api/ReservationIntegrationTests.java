@@ -4,6 +4,7 @@ import com.drivique.api.dto.CreateReservationRequestDTO;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReservationIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired private MockMvc mvc;
-    @Autowired private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @Autowired private UserRepository userRepository;
     @Autowired private DepartmentRepository departmentRepository;
