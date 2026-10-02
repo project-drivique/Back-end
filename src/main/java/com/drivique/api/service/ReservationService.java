@@ -31,6 +31,7 @@ public class ReservationService {
     private final UserCouponUsageRepository userCouponUsageRepository;
     private final PromotionValidationService promotionValidationService;
     private final BranchRepository branchRepository;
+    private final ReservationDeliveryPointRepository deliveryPointRepository;
 
     public ReservationService(
             ReservationRepository reservationRepository,
@@ -47,6 +48,40 @@ public class ReservationService {
             PromotionValidationService promotionValidationService,
             BranchRepository branchRepository
     ) {
+        this(
+                reservationRepository,
+                reservationStatusRepository,
+                additionalServiceRepository,
+                promotionRepository,
+                vehicleRepository,
+                userRepository,
+                insuranceCoverageRepository,
+                mileagePlanRepository,
+                additionalServiceCatalogRepository,
+                promotionCatalogRepository,
+                userCouponUsageRepository,
+                promotionValidationService,
+                branchRepository,
+                null
+        );
+    }
+
+    public ReservationService(
+            ReservationRepository reservationRepository,
+            ReservationStatusRepository reservationStatusRepository,
+            ReservationAdditionalServiceRepository additionalServiceRepository,
+            ReservationPromotionRepository promotionRepository,
+            VehicleRepository vehicleRepository,
+            UserRepository userRepository,
+            InsuranceCoverageRepository insuranceCoverageRepository,
+            MileagePlanRepository mileagePlanRepository,
+            AdditionalServiceRepository additionalServiceCatalogRepository,
+            PromotionRepository promotionCatalogRepository,
+            UserCouponUsageRepository userCouponUsageRepository,
+            PromotionValidationService promotionValidationService,
+            BranchRepository branchRepository,
+            ReservationDeliveryPointRepository deliveryPointRepository
+    ) {
         this.reservationRepository = reservationRepository;
         this.reservationStatusRepository = reservationStatusRepository;
         this.additionalServiceRepository = additionalServiceRepository;
@@ -60,6 +95,7 @@ public class ReservationService {
         this.userCouponUsageRepository = userCouponUsageRepository;
         this.promotionValidationService = promotionValidationService;
         this.branchRepository = branchRepository;
+        this.deliveryPointRepository = deliveryPointRepository;
     }
 
     @Transactional
@@ -326,6 +362,27 @@ public class ReservationService {
             List<ReservationAdditionalServiceItemDTO> services,
             ReservationPromotionItemDTO promo
     ) {
+        List<DeliveryPointResponseDTO> deliveryPointDTOs = r.getDeliveryPoints() != null
+                ? r.getDeliveryPoints().stream()
+                .map(pt -> new DeliveryPointResponseDTO(
+                        pt.getId(),
+                        r.getId(),
+                        pt.getPointType(),
+                        pt.getModality(),
+                        pt.getBranch() != null ? pt.getBranch().getId() : null,
+                        pt.getBranch() != null ? pt.getBranch().getName() : null,
+                        pt.getCity() != null ? pt.getCity().getId() : null,
+                        pt.getCity() != null ? pt.getCity().getName() : null,
+                        pt.getNeighborhood(),
+                        pt.getAddress(),
+                        pt.getFlightOrBusNumber(),
+                        pt.getReferenceDetails(),
+                        pt.getCreatedAt(),
+                        pt.getUpdatedAt()
+                ))
+                .toList()
+                : List.of();
+
         return new ReservationResponseDTO(
                 r.getId(),
                 r.getCode(),
@@ -355,6 +412,7 @@ public class ReservationService {
                 r.getCashPaymentCode(),
                 r.getCashPaymentExpiresAt(),
                 r.isBlocksAvailability(),
+                deliveryPointDTOs,
                 r.getCreatedAt()
         );
     }
