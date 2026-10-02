@@ -112,7 +112,7 @@ class RentalExtensionIntegrationTests extends DatabaseHealthTestSupport {
         mileagePlan = mileagePlanRepository.saveAndFlush(new MileagePlan("200km", 200, new BigDecimal("10000.00"), new BigDecimal("500.00")));
         confirmedStatus = reservationStatusRepository.saveAndFlush(new ReservationStatus("CONFIRMED", "Confirmed", true));
 
-        Instant now = Instant.now();
+        Instant now = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         reservation = reservationRepository.saveAndFlush(new Reservation(
                 "RES-2026-EXT1",
                 customer,
