@@ -8,7 +8,13 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "reservations", schema = "rental")
+@Table(
+    name = "reservations",
+    schema = "rental",
+    indexes = {
+        @Index(name = "idx_reservations_status", columnList = "status_id")
+    }
+)
 public class Reservation {
 
     @Id
