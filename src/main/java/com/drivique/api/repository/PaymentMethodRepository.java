@@ -1,0 +1,1 @@
+package com.drivique.api.repository; import com.drivique.api.model.PaymentMethod; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface PaymentMethodRepository extends JpaRepository<PaymentMethod,UUID>{Optional<PaymentMethod> findByCodeIgnoreCaseAndActiveTrue(String code);}

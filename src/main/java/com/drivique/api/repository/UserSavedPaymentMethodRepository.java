@@ -1,0 +1,1 @@
+package com.drivique.api.repository; import com.drivique.api.model.UserSavedPaymentMethod; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface UserSavedPaymentMethodRepository extends JpaRepository<UserSavedPaymentMethod,UUID>{boolean existsByPaymentToken(String token);}

@@ -65,3 +65,10 @@ compliance:
   # Define each legal version by environment, for example:
   # required-consents[0]: { consent-type: TERMS_AND_CONDITIONS, document-version: 2026-09 }
   required-consents: []
+
+payments:
+  wompi:
+    public-key: ${WOMPI_PUBLIC_KEY:}
+    integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
+    event-secret: ${WOMPI_EVENT_SECRET:}
+    checkout-url: ${WOMPI_CHECKOUT_URL:https://checkout.wompi.co/p/}

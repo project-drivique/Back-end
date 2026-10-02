@@ -1,0 +1,1 @@
+package com.drivique.api.repository; import com.drivique.api.model.PaymentStatus; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface PaymentStatusRepository extends JpaRepository<PaymentStatus,UUID>{Optional<PaymentStatus> findByCodeIgnoreCase(String code);}
