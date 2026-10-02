@@ -5,6 +5,7 @@ import com.drivique.api.dto.ContractResponseDTO;
 import com.drivique.api.dto.GenerateContractRequestDTO;
 import com.drivique.api.service.ClauseService;
 import com.drivique.api.service.ContractService;
+import com.drivique.api.service.ContractSignatureService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -13,6 +14,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,10 +27,12 @@ public class ContractController {
 
     private final ContractService contractService;
     private final ClauseService clauseService;
+    private final ContractSignatureService signatureService;
 
-    public ContractController(ContractService contractService, ClauseService clauseService) {
+    public ContractController(ContractService contractService, ClauseService clauseService, ContractSignatureService signatureService) {
         this.contractService = contractService;
         this.clauseService = clauseService;
+        this.signatureService = signatureService;
     }
 
     @PostMapping("/generate")
@@ -47,6 +51,18 @@ public class ContractController {
             Authentication authentication
     ) {
         return contractService.generateContract(request, authentication.getName());
+    }
+
+    @PostMapping(path = "/{id}/sign", consumes = "multipart/form-data")
+    @Operation(summary = "Firmar contrato y generar PDF oficial")
+    public ContractResponseDTO sign(
+            @PathVariable UUID id,
+            @RequestPart("signature") MultipartFile signature,
+            @RequestPart("signatureStrokeData") String signatureStrokeData,
+            @RequestPart("signedCityId") String signedCityId,
+            Authentication authentication
+    ) {
+        return signatureService.sign(id, signature, signatureStrokeData, UUID.fromString(signedCityId), authentication.getName());
     }
 
     @GetMapping("/clauses")
