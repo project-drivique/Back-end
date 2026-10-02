@@ -112,6 +112,8 @@ marcas, transmisiones, combustibles y estados habilitados para reserva.
 Consultar [HU-BE-21](docs/HU-BE-21.md) para la programación, finalización e historial
 de mantenimientos de vehículos.
 
+Consultar [HU-BE-22](docs/HU-BE-22.md) para servicios adicionales y coberturas de seguro.
+
 Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
 y depósitos de garantía.
 
