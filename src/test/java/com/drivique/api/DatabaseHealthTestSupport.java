@@ -90,6 +90,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM rental.reservation_delivery_points");
         jdbc.execute("DELETE FROM rental.reservation_promotions");
         jdbc.execute("DELETE FROM rental.reservation_additional_services");
         jdbc.execute("DELETE FROM rental.reservations");
@@ -98,6 +99,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM rental.reservation_delivery_points");
         jdbc.execute("DELETE FROM rental.reservation_promotions");
         jdbc.execute("DELETE FROM rental.reservation_additional_services");
         jdbc.execute("DELETE FROM rental.reservations");
