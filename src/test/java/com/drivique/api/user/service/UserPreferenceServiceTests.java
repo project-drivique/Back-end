@@ -1,4 +1,6 @@
-package com.drivique.api.service;
+package com.drivique.api.user.service;
+
+import com.drivique.api.service.*;
 
 import com.drivique.api.model.User;
 import com.drivique.api.repository.UserRepository;
