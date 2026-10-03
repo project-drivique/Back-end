@@ -91,6 +91,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM billing.payment_receipts");
         jdbc.execute("DELETE FROM billing.payments");
         jdbc.execute("DELETE FROM contract.inspection_checklist_answers");
         jdbc.execute("DELETE FROM contract.vehicle_inspections");
@@ -109,6 +110,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM billing.payment_receipts");
         jdbc.execute("DELETE FROM billing.payments");
         jdbc.execute("DELETE FROM contract.inspection_checklist_answers");
         jdbc.execute("DELETE FROM contract.vehicle_inspections");
