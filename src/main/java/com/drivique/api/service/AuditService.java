@@ -9,7 +9,7 @@ import com.drivique.api.model.User;
 import com.drivique.api.repository.AuditLogRepository;
 import com.drivique.api.repository.BranchRepository;
 import com.drivique.api.repository.UserRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
