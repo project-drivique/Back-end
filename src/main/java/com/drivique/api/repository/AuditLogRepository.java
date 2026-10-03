@@ -16,7 +16,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID>, JpaSp
 
     List<AuditLog> findByDomainNameIgnoreCaseOrderByCreatedAtDesc(String domainName);
 
-    List<AuditLog> findByActorIdOrderByCreatedAtDesc(UUID actorUserId);
+    List<AuditLog> findByActor_IdOrderByCreatedAtDesc(UUID actorUserId);
 
     List<AuditLog> findByCreatedAtBetweenOrderByCreatedAtDesc(Instant start, Instant end);
 }

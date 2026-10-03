@@ -1,6 +1,9 @@
 package com.drivique.api.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
 import java.util.UUID;
 
@@ -23,6 +26,7 @@ public class GeneratedReport {
     @JoinColumn(name = "generated_by", nullable = false)
     private User generatedBy;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "filters", columnDefinition = "jsonb")
     private String filters = "{}";
 
