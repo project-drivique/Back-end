@@ -1,0 +1,1 @@
+package com.drivique.api.dto;import jakarta.validation.constraints.*;import java.util.UUID;public record ReviewRequestDTO(@NotNull UUID reservationId,@NotNull @Min(1) @Max(5) Short rating,@Size(max=1000) String comment){}

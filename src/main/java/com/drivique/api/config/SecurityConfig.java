@@ -64,6 +64,7 @@ public class SecurityConfig {
                                 "/v1/vehicle-categories",
                                 "/v1/vehicle-categories/*",
                                 "/v1/vehicles/**",
+                                "/v1/vehicles/*/reviews",
                                 "/v1/features",
                                 "/v1/features/**",
                                 "/v1/additional-services",
