@@ -1,0 +1,1 @@
+package com.drivique.api.repository;import com.drivique.api.model.BranchReview;import java.util.*;import org.springframework.data.jpa.repository.JpaRepository;public interface BranchReviewRepository extends JpaRepository<BranchReview,UUID>{boolean existsByReservationIdAndBranchId(UUID reservationId,UUID branchId);}
