@@ -89,7 +89,7 @@ public class ReportGeneratorService {
     public List<GeneratedReportResponseDTO> getGeneratedReports(String reportTypeCode) {
         List<GeneratedReport> reports;
         if (reportTypeCode != null && !reportTypeCode.isBlank()) {
-            reports = generatedReportRepository.findByReportTypeCodeIgnoreCaseOrderByGeneratedAtDesc(reportTypeCode.trim());
+            reports = generatedReportRepository.findByReportType_CodeIgnoreCaseOrderByGeneratedAtDesc(reportTypeCode.trim());
         } else {
             reports = generatedReportRepository.findAllByOrderByGeneratedAtDesc();
         }
