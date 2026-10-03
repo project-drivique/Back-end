@@ -1,0 +1,1 @@
+package com.drivique.api.dto;import jakarta.validation.constraints.*;import java.util.UUID;public record IncidentRequestDTO(UUID vehicleId,UUID reservationId,@NotBlank @Size(max=150) String subject,@NotBlank @Size(max=5000) String description,@NotBlank @Pattern(regexp="LOW|MEDIUM|HIGH|CRITICAL") String priority){}
