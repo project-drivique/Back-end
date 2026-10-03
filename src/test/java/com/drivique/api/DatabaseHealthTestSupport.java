@@ -91,6 +91,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM support.incident_responses");
+        jdbc.execute("DELETE FROM support.incident_reports");
         jdbc.execute("DELETE FROM rental.branch_reviews");
         jdbc.execute("DELETE FROM rental.vehicle_ratings");
         jdbc.execute("DELETE FROM billing.payment_receipts");
@@ -112,6 +114,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM support.incident_responses");
+        jdbc.execute("DELETE FROM support.incident_reports");
         jdbc.execute("DELETE FROM rental.branch_reviews");
         jdbc.execute("DELETE FROM rental.vehicle_ratings");
         jdbc.execute("DELETE FROM billing.payment_receipts");
