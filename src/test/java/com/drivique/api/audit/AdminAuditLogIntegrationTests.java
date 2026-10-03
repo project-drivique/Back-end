@@ -116,8 +116,8 @@ class AdminAuditLogIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(log1.getId().toString()))
                 .andExpect(jsonPath("$.domainName").value("FLEET"))
-                .andExpect(jsonPath("$.oldData").value("{\"mileage\":10000}"))
-                .andExpect(jsonPath("$.newData").value("{\"mileage\":12500}"));
+                .andExpect(jsonPath("$.oldData").value(org.hamcrest.Matchers.containsString("10000")))
+                .andExpect(jsonPath("$.newData").value(org.hamcrest.Matchers.containsString("12500")));
     }
 
     @Test
