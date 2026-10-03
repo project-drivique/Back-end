@@ -91,6 +91,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM audit.generated_reports");
+        jdbc.execute("DELETE FROM audit.administrative_report_types");
         jdbc.execute("DELETE FROM support.notifications");
         jdbc.execute("DELETE FROM support.incident_responses");
         jdbc.execute("DELETE FROM support.incident_reports");
