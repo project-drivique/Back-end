@@ -10,7 +10,8 @@ import com.drivique.api.repository.AuditLogRepository;
 import com.drivique.api.repository.BranchRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.service.AuditService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +51,7 @@ class AuditServiceTests {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
+        objectMapper = new JsonMapper();
         auditService = new AuditService(auditLogRepository, userRepository, branchRepository, objectMapper);
 
         sampleUser = new User("Audit", "Admin", "audit.admin@drivique.com", "pass123");
