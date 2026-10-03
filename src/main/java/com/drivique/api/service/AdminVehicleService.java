@@ -1,5 +1,6 @@
 package com.drivique.api.service;
 
+import com.drivique.api.config.Auditable;
 import com.drivique.api.dto.*;
 import com.drivique.api.exception.ConflictException;
 import com.drivique.api.exception.ResourceNotFoundException;
@@ -63,6 +64,7 @@ public class AdminVehicleService {
     }
 
     @Transactional
+    @Auditable(domain = "FLEET", entity = "Vehicle", action = "CREATE", description = "Creación de vehículo")
     public VehicleAdminResponseDTO create(VehicleCreateRequestDTO input) {
         String plate = input.plate().strip().toUpperCase();
         String vin = input.vin().strip().toUpperCase();
@@ -120,6 +122,7 @@ public class AdminVehicleService {
     }
 
     @Transactional
+    @Auditable(domain = "FLEET", entity = "Vehicle", action = "UPDATE", description = "Actualización de vehículo")
     public VehicleAdminResponseDTO update(UUID id, VehicleUpdateRequestDTO input) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
@@ -166,6 +169,7 @@ public class AdminVehicleService {
     }
 
     @Transactional
+    @Auditable(domain = "FLEET", entity = "Vehicle", action = "UPDATE_STATUS", description = "Cambio de estado de vehículo")
     public VehicleAdminResponseDTO updateStatus(UUID id, VehicleStatusUpdateRequestDTO input) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
@@ -194,6 +198,7 @@ public class AdminVehicleService {
     }
 
     @Transactional
+    @Auditable(domain = "FLEET", entity = "Vehicle", action = "DELETE", description = "Eliminación lógica de vehículo")
     public void delete(UUID id) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
