@@ -108,6 +108,26 @@ public class LocalFileStorageService implements FileStorageService {
         }
     }
 
+    @Override
+    public String storeBytes(byte[] content, String filenameWithExtension, String subDirectory) {
+        if (content == null || content.length == 0 || content.length > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("El archivo generado no es válido o excede el límite de 5MB.");
+        }
+        try {
+            Path targetDir = rootLocation.resolve(subDirectory).normalize();
+            Files.createDirectories(targetDir);
+            String safeName = UUID.randomUUID() + "_" + StringUtils.cleanPath(filenameWithExtension);
+            Path destination = targetDir.resolve(safeName).normalize();
+            if (!destination.toAbsolutePath().startsWith(rootLocation.toAbsolutePath())) {
+                throw new IllegalArgumentException("No se permite almacenar archivos fuera del directorio designado.");
+            }
+            Files.write(destination, content);
+            return "/uploads/" + subDirectory + "/" + destination.getFileName();
+        } catch (IOException e) {
+            throw new IllegalStateException("Error al almacenar el archivo generado.", e);
+        }
+    }
+
     private String getFileExtension(String filename) {
         int dotIndex = filename.lastIndexOf('.');
         if (dotIndex >= 0 && dotIndex < filename.length() - 1) {
