@@ -19,6 +19,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
     Optional<Reservation> findByCode(String code);
 
     Optional<Reservation> findByCodeIgnoreCase(String code);
+    Optional<Reservation> findByCashPaymentCodeIgnoreCase(String cashPaymentCode);
 
     List<Reservation> findByCustomerOrderByCreatedAtDesc(User customer);
 
