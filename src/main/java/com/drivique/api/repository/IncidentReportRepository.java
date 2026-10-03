@@ -1,0 +1,1 @@
+package com.drivique.api.repository;import com.drivique.api.model.IncidentReport;import java.util.*;import org.springframework.data.jpa.repository.JpaRepository;public interface IncidentReportRepository extends JpaRepository<IncidentReport,UUID>{long countByIncidentCodeStartingWith(String prefix);}
