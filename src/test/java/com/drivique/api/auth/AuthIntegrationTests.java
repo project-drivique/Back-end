@@ -21,7 +21,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -37,9 +36,6 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired
     private RoleRepository roleRepository;
-
-    @Autowired
-    private UserSessionRepository sessionRepository;
 
     @Autowired
     private com.drivique.api.repository.VerificationCodeRepository verificationCodeRepository;
@@ -67,7 +63,7 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                 true
         ));
 
-        Role superAdminRole = roleRepository.save(new Role(
+        roleRepository.save(new Role(
                 "SUPER_ADMIN",
                 "Super Admin",
                 "Super Admin role",
