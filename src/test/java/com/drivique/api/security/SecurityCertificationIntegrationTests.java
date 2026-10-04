@@ -13,6 +13,10 @@ import java.net.http.HttpResponse;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Suite de pruebas de integración para HU-BE-41: Certificación de Seguridad, Criptografía y Hardening de Endpoints.
+ * Valida cabeceras de seguridad HTTP, control de acceso por JWT, BCrypt y respuestas RFC 7807 sin exposición sensible.
+ */
 @DisplayName("HU-BE-41: Certificación de Seguridad, Criptografía y Hardening de Endpoints")
 class SecurityCertificationIntegrationTests extends DatabaseHealthTestSupport {
 
