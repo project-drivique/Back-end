@@ -63,8 +63,6 @@ public class ReservationService {
         this.promotionValidationService = promotionValidationService;
         this.branchRepository = branchRepository;
     }
-        this.deliveryPointRepository = deliveryPointRepository;
-    }
 
     @Transactional
     public ReservationResponseDTO createReservation(CreateReservationRequestDTO request, String userEmail) {
