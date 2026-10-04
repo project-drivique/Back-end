@@ -1,7 +1,5 @@
 package com.drivique.api.system;
 
-import com.drivique.api.DatabaseHealthTestSupport;
-
 import com.drivique.api.exception.ApiExceptionHandler;
 import com.drivique.api.exception.ConflictException;
 import com.drivique.api.exception.ResourceNotFoundException;

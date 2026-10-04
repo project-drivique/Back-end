@@ -5,8 +5,6 @@ import com.drivique.api.DatabaseHealthTestSupport;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
 import com.drivique.api.service.ReservationExpirationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,7 +18,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -32,7 +29,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ReservationExpirationIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired private MockMvc mvc;
-    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @Autowired private UserRepository userRepository;
     @Autowired private DepartmentRepository departmentRepository;
