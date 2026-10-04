@@ -6,7 +6,6 @@ import com.drivique.api.model.User;
 import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.service.JwtService;
-import com.drivique.api.repository.UserPreferenceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +17,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -37,9 +35,6 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired
     private RoleRepository roleRepository;
-
-    @Autowired
-    private UserPreferenceRepository preferenceRepository;
 
     @Autowired
     private JwtService jwtService;

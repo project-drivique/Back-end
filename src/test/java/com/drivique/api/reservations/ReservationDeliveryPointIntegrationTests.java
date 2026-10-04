@@ -51,7 +51,6 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
     @Autowired private MileagePlanRepository mileagePlanRepository;
     @Autowired private ReservationStatusRepository reservationStatusRepository;
     @Autowired private ReservationRepository reservationRepository;
-    @Autowired private ReservationDeliveryPointRepository deliveryPointRepository;
 
     private UUID reservationId;
     private UUID branchId;
