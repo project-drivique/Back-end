@@ -3,7 +3,6 @@ package com.drivique.api.notifications;
 import com.drivique.api.controller.NotificationController;
 import com.drivique.api.dto.NotificationResponseDTO;
 import com.drivique.api.dto.SendNotificationRequestDTO;
-import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
