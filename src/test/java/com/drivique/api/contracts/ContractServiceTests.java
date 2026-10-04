@@ -1,13 +1,13 @@
 package com.drivique.api.contracts;
 
-import com.drivique.api.service.*;
-
 import com.drivique.api.dto.ContractResponseDTO;
 import com.drivique.api.dto.GenerateContractRequestDTO;
 import com.drivique.api.exception.ConflictException;
 import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
+import com.drivique.api.service.ClauseService;
+import com.drivique.api.service.ContractService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -160,6 +160,16 @@ class ContractServiceTests {
     }
 
     @Test
+    void generateContract_ThrowsNotFound_WhenReservationNotFound() {
+        UUID randomId = UUID.randomUUID();
+        when(reservationRepository.findById(randomId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.generateContract(new GenerateContractRequestDTO(randomId), customerEmail))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Reserva no encontrada");
+    }
+
+    @Test
     void getContractById_Success() {
         RentalContract contract = new RentalContract(
                 "CTR-2026-0001",
@@ -204,5 +214,37 @@ class ContractServiceTests {
         ContractResponseDTO response = service.getContractByReservationId(reservationId, customerEmail);
 
         assertThat(response.contractNumber()).isEqualTo("CTR-2026-0001");
+    }
+
+    @Test
+    void getContractByNumber_Success() {
+        RentalContract contract = new RentalContract(
+                "CTR-2026-0001",
+                reservation,
+                customer,
+                vehicle,
+                draftStatus,
+                branch,
+                branch,
+                reservation.getPickupDate(),
+                reservation.getReturnDate(),
+                reservation.getTotalEstimated(),
+                new BigDecimal("1500000.00"),
+                clauses
+        );
+        when(rentalContractRepository.findByContractNumber("CTR-2026-0001")).thenReturn(Optional.of(contract));
+
+        ContractResponseDTO response = service.getContractByNumber("CTR-2026-0001", customerEmail);
+
+        assertThat(response.contractNumber()).isEqualTo("CTR-2026-0001");
+    }
+
+    @Test
+    void getContractByNumber_ThrowsNotFound() {
+        when(rentalContractRepository.findByContractNumber("CTR-INVALID")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getContractByNumber("CTR-INVALID", customerEmail))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Contrato no encontrado");
     }
 }
