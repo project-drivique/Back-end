@@ -1,14 +1,10 @@
 package com.drivique.api.controller;
 
-import com.drivique.api.dto.AssignVehicleFeaturesRequestDTO;
 import com.drivique.api.dto.FeatureResponseDTO;
 import com.drivique.api.dto.GroupedFeaturesResponseDTO;
 import com.drivique.api.service.FeatureService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

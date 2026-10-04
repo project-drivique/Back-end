@@ -4,7 +4,6 @@ import com.drivique.api.service.*;
 
 import com.drivique.api.model.User;
 import com.drivique.api.repository.UserRepository;
-import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.dto.ReviewDocumentRequestDTO;
 import com.drivique.api.dto.UserDocumentResponseDTO;
 import com.drivique.api.model.DocumentStatus;
