@@ -2,10 +2,8 @@ package com.drivique.api.notifications;
 
 import com.drivique.api.DatabaseHealthTestSupport;
 import com.drivique.api.model.Notification;
-import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.repository.NotificationRepository;
-import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,9 +36,6 @@ class NotificationIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private RoleRepository roleRepository;
-
     private User testUser;
     private User otherUser;
 
@@ -56,13 +51,13 @@ class NotificationIntegrationTests extends DatabaseHealthTestSupport {
     @Test
     @WithMockUser(username = "customer@drivique.com")
     void getNotifications_ReturnsOnlyAuthenticatedUserNotifications() throws Exception {
-        Notification n1 = notificationRepository.saveAndFlush(new Notification(
+        notificationRepository.saveAndFlush(new Notification(
                 testUser, "IN_APP", "RESERVATION", "Reserva confirmada", "Tu reserva #101 está lista", UUID.randomUUID()
         ));
-        Notification n2 = notificationRepository.saveAndFlush(new Notification(
+        notificationRepository.saveAndFlush(new Notification(
                 testUser, "EMAIL", "SECURITY", "Cambio de clave", "Clave modificada", null
         ));
-        Notification otherNotif = notificationRepository.saveAndFlush(new Notification(
+        notificationRepository.saveAndFlush(new Notification(
                 otherUser, "IN_APP", "GENERAL", "Notificación ajena", "No debe verse", null
         ));
 
@@ -76,7 +71,7 @@ class NotificationIntegrationTests extends DatabaseHealthTestSupport {
     @Test
     @WithMockUser(username = "customer@drivique.com")
     void getNotifications_WithIsReadFilter_ReturnsFilteredList() throws Exception {
-        Notification unread = notificationRepository.saveAndFlush(new Notification(
+        notificationRepository.saveAndFlush(new Notification(
                 testUser, "IN_APP", "RESERVATION", "Reserva pendiente", "Por favor completa el pago", null
         ));
         Notification readNotif = new Notification(

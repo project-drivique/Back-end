@@ -2,7 +2,6 @@ package com.drivique.api.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
