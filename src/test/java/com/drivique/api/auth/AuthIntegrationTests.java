@@ -5,7 +5,6 @@ import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserRepository;
-import com.drivique.api.repository.UserSessionRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
