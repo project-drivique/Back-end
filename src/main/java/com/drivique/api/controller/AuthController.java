@@ -21,6 +21,11 @@ public class AuthController {
         this.authService = authService;
     }
 
+    @PostMapping("/register")
+    public MessageResponseDTO register(@Valid @RequestBody RegisterRequestDTO request) { return authService.register(request); }
+
+    @PostMapping("/resend-verification")
+    public MessageResponseDTO resendVerification(@Valid @RequestBody ForgotPasswordRequestDTO request) { return authService.resendVerificationCode(request); }
     @PostMapping("/login")
     @Operation(summary = "Iniciar sesión", description = "Valida credenciales y emite tokens JWT y de refresco. Bloquea la cuenta tras 5 intentos fallidos.")
     @ApiResponse(responseCode = "200", description = "Autenticación exitosa")
@@ -69,6 +74,11 @@ public class AuthController {
     @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
     public MessageResponseDTO forgotPassword(@Valid @RequestBody ForgotPasswordRequestDTO request) {
         return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/validate-reset-code")
+    public MessageResponseDTO validateResetCode(@Valid @RequestBody ValidateResetCodeRequestDTO request) {
+        return authService.validateResetCode(request);
     }
 
     @PostMapping("/reset-password")
