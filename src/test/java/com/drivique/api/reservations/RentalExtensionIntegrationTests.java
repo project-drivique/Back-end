@@ -52,6 +52,7 @@ class RentalExtensionIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired private RentalExtensionRequestRepository extensionRepository;
 
     private User customer;
+    @SuppressWarnings("unused")
     private User admin;
     private Vehicle vehicle;
     private Branch branch;

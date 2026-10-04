@@ -15,7 +15,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -60,6 +59,7 @@ class AdminVehicleIntegrationTests extends DatabaseHealthTestSupport {
     private TransmissionType transmission;
     private FuelType fuel;
     private VehicleStatus statusAvailable;
+    @SuppressWarnings("unused")
     private VehicleStatus statusMaintenance;
     private Branch branch;
 

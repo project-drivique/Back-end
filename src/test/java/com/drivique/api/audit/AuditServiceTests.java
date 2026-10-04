@@ -61,6 +61,7 @@ class AuditServiceTests {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void getAuditLogs_WithFilters_ReturnsList() {
         AuditLog log1 = new AuditLog(
                 "FLEET", "Vehicle", UUID.randomUUID(), "CREATE", "SUCCESS",
