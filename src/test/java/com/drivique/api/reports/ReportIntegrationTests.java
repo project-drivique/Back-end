@@ -95,7 +95,12 @@ class ReportIntegrationTests extends DatabaseHealthTestSupport {
 
         mvc.perform(post("/api/v1/admin/reports/generate").contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .content("""
+                                {
+                                    "reportType": "FLEET_OCCUPANCY",
+                                    "format": "PDF"
+                                }
+                                """))
                 .andExpect(status().isForbidden());
     }
 

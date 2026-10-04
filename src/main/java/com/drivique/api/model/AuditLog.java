@@ -1,5 +1,7 @@
 package com.drivique.api.model;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -41,9 +43,11 @@ public class AuditLog {
     @Column(name = "description", columnDefinition = "text")
     private String description;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "old_data", columnDefinition = "jsonb")
     private String oldData;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "new_data", columnDefinition = "jsonb")
     private String newData;
 
