@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockMultipartFile;
 
 class VehicleInspectionServiceTests {
     private final RentalContractRepository contracts = mock(RentalContractRepository.class);

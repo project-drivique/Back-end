@@ -6,7 +6,6 @@ import com.drivique.api.dto.CreateExtensionRequestDTO;
 import com.drivique.api.dto.RentalExtensionResponseDTO;
 import com.drivique.api.dto.ReviewExtensionRequestDTO;
 import com.drivique.api.exception.ConflictException;
-import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.RentalExtensionRequestRepository;
 import com.drivique.api.repository.ReservationRepository;

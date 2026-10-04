@@ -57,7 +57,6 @@ class ReservationExpirationServiceTests {
 
     @Test
     void expirePendingReservations_WhenExpiredReservationsFound_CancelsReservationsAndFreesAvailability() {
-        ReservationStatus pendingStatus = new ReservationStatus("PENDING_PAYMENT", "Pending payment", true);
         ReservationStatus cancelledStatus = new ReservationStatus("CANCELLED_BY_TIMEOUT", "Cancelled by timeout", false);
 
         User customer = mock(User.class);
