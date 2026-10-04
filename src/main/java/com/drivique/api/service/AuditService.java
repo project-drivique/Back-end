@@ -39,12 +39,12 @@ public class AuditService {
             AuditLogRepository auditLogRepository,
             UserRepository userRepository,
             BranchRepository branchRepository,
-            ObjectMapper objectMapper
+            @org.springframework.beans.factory.annotation.Autowired(required = false) ObjectMapper objectMapper
     ) {
         this.auditLogRepository = auditLogRepository;
         this.userRepository = userRepository;
         this.branchRepository = branchRepository;
-        this.objectMapper = objectMapper;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     @Transactional(readOnly = true)
