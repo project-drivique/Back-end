@@ -15,7 +15,7 @@ public class CacheConfig {
                 "activeLanguages", "latestRates", "activeCities", "departmentCities", "vehicleBrands",
                 "transmissionTypes", "fuelTypes", "reservableVehicleStatuses", "vehicleCategories",
                 "additionalServices", "insuranceCoverages", "mileagePlans", "featuredPromotions");
-        manager.setCaffeine(Caffeine.newBuilder().maximumSize(256).expireAfterWrite(Duration.ofMinutes(5)));
+        manager.setCaffeine(Caffeine.newBuilder().recordStats().maximumSize(256).expireAfterWrite(Duration.ofMinutes(5)));
         manager.setAllowNullValues(false);
         return new TransactionAwareCacheManagerProxy(manager);
     }

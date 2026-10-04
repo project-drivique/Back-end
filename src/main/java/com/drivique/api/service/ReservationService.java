@@ -32,40 +32,6 @@ public class ReservationService {
     private final UserCouponUsageRepository userCouponUsageRepository;
     private final PromotionValidationService promotionValidationService;
     private final BranchRepository branchRepository;
-    private final ReservationDeliveryPointRepository deliveryPointRepository;
-
-    public ReservationService(
-            ReservationRepository reservationRepository,
-            ReservationStatusRepository reservationStatusRepository,
-            ReservationAdditionalServiceRepository additionalServiceRepository,
-            ReservationPromotionRepository promotionRepository,
-            VehicleRepository vehicleRepository,
-            UserRepository userRepository,
-            InsuranceCoverageRepository insuranceCoverageRepository,
-            MileagePlanRepository mileagePlanRepository,
-            AdditionalServiceRepository additionalServiceCatalogRepository,
-            PromotionRepository promotionCatalogRepository,
-            UserCouponUsageRepository userCouponUsageRepository,
-            PromotionValidationService promotionValidationService,
-            BranchRepository branchRepository
-    ) {
-        this(
-                reservationRepository,
-                reservationStatusRepository,
-                additionalServiceRepository,
-                promotionRepository,
-                vehicleRepository,
-                userRepository,
-                insuranceCoverageRepository,
-                mileagePlanRepository,
-                additionalServiceCatalogRepository,
-                promotionCatalogRepository,
-                userCouponUsageRepository,
-                promotionValidationService,
-                branchRepository,
-                null
-        );
-    }
 
     @Autowired
     public ReservationService(
@@ -81,8 +47,7 @@ public class ReservationService {
             PromotionRepository promotionCatalogRepository,
             UserCouponUsageRepository userCouponUsageRepository,
             PromotionValidationService promotionValidationService,
-            BranchRepository branchRepository,
-            ReservationDeliveryPointRepository deliveryPointRepository
+            BranchRepository branchRepository
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationStatusRepository = reservationStatusRepository;
@@ -97,7 +62,6 @@ public class ReservationService {
         this.userCouponUsageRepository = userCouponUsageRepository;
         this.promotionValidationService = promotionValidationService;
         this.branchRepository = branchRepository;
-        this.deliveryPointRepository = deliveryPointRepository;
     }
 
     @Transactional
@@ -157,7 +121,6 @@ public class ReservationService {
         BigDecimal mileageSubtotal = mileagePlan.getDailyRate().multiply(multiplier);
 
         List<ReservationAdditionalServiceItemDTO> serviceItems = new ArrayList<>();
-        List<ReservationAdditionalService> additionalEntities = new ArrayList<>();
         BigDecimal extrasSubtotal = BigDecimal.ZERO;
 
         if (request.additionalServiceIds() != null && !request.additionalServiceIds().isEmpty()) {
