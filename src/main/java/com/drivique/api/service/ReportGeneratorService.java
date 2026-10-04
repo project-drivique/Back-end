@@ -13,7 +13,6 @@ import com.drivique.api.repository.AdministrativeReportTypeRepository;
 import com.drivique.api.repository.GeneratedReportRepository;
 import com.drivique.api.repository.RentalContractRepository;
 import com.drivique.api.repository.UserRepository;
-import com.drivique.api.repository.VehicleMaintenanceRepository;
 import com.drivique.api.repository.VehicleRepository;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -40,7 +39,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,7 +52,6 @@ public class ReportGeneratorService {
     private final UserRepository userRepository;
     private final VehicleRepository vehicleRepository;
     private final RentalContractRepository rentalContractRepository;
-    private final VehicleMaintenanceRepository maintenanceRepository;
     private final FileStorageService fileStorageService;
 
     public ReportGeneratorService(
@@ -63,7 +60,6 @@ public class ReportGeneratorService {
             UserRepository userRepository,
             VehicleRepository vehicleRepository,
             RentalContractRepository rentalContractRepository,
-            VehicleMaintenanceRepository maintenanceRepository,
             FileStorageService fileStorageService
     ) {
         this.reportTypeRepository = reportTypeRepository;
@@ -71,7 +67,6 @@ public class ReportGeneratorService {
         this.userRepository = userRepository;
         this.vehicleRepository = vehicleRepository;
         this.rentalContractRepository = rentalContractRepository;
-        this.maintenanceRepository = maintenanceRepository;
         this.fileStorageService = fileStorageService;
     }
 
