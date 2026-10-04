@@ -5,7 +5,6 @@ import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserRepository;
-import com.drivique.api.repository.UserSessionRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +20,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -37,9 +35,6 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired
     private RoleRepository roleRepository;
-
-    @Autowired
-    private UserSessionRepository sessionRepository;
 
     @Autowired
     private com.drivique.api.repository.VerificationCodeRepository verificationCodeRepository;
@@ -67,7 +62,7 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                 true
         ));
 
-        Role superAdminRole = roleRepository.save(new Role(
+        roleRepository.save(new Role(
                 "SUPER_ADMIN",
                 "Super Admin",
                 "Super Admin role",

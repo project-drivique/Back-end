@@ -6,7 +6,6 @@ import com.drivique.api.dto.GeneratedReportResponseDTO;
 import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.model.AdministrativeReportType;
 import com.drivique.api.model.GeneratedReport;
-import com.drivique.api.model.RentalContract;
 import com.drivique.api.model.User;
 import com.drivique.api.model.Vehicle;
 import com.drivique.api.model.VehicleBrand;

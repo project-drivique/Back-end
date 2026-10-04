@@ -2,8 +2,6 @@ package com.drivique.api.catalog;
 
 import com.drivique.api.DatabaseHealthTestSupport;
 
-import com.drivique.api.dto.BrandRequestDTO;
-
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
