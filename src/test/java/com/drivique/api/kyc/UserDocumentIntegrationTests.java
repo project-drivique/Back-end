@@ -25,7 +25,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -65,6 +64,7 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
     private String employeeToken;
     private DocumentType ccDocType;
     private DocumentStatus pendingStatus;
+    @SuppressWarnings("unused")
     private DocumentStatus approvedStatus;
 
     @BeforeEach

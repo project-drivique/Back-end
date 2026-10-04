@@ -19,7 +19,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -79,7 +78,7 @@ class RbacIntegrationTests extends DatabaseHealthTestSupport {
                 true
         ));
 
-        Role employeeRole = roleRepository.save(new Role(
+        roleRepository.save(new Role(
                 "EMPLOYEE",
                 "Employee",
                 "Employee",

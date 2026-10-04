@@ -15,9 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
-import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -64,10 +62,12 @@ class FeaturesAndFavoritesIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired
     private DepartmentRepository departmentRepository;
 
+    @SuppressWarnings("unused")
     private User testUser;
     private Vehicle testVehicle;
     private Feature featureStandard;
     private Feature featureTech;
+    @SuppressWarnings("unused")
     private Feature featureSafety;
 
     @BeforeEach

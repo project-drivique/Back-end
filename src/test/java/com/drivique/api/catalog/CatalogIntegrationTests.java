@@ -2,7 +2,6 @@ package com.drivique.api.catalog;
 
 import com.drivique.api.DatabaseHealthTestSupport;
 
-import com.drivique.api.model.Currency;
 import com.drivique.api.integration.ExchangeRateProvider;
 import com.drivique.api.repository.LanguageRepository;
 
