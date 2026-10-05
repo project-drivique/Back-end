@@ -71,7 +71,9 @@ public class SecurityConfig {
                                 "/v1/auth/refresh",
                                 "/v1/auth/logout",
                                 "/v1/auth/verify-email",
+                                "/v1/auth/resend-verification",
                                 "/v1/auth/forgot-password",
+                                "/v1/auth/validate-reset-code",
                                 "/v1/auth/reset-password"
                         ).permitAll()
                         .requestMatchers(HttpMethod.GET,
