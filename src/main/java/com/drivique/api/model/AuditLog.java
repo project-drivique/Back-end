@@ -40,7 +40,8 @@ public class AuditLog {
     @JoinColumn(name = "branch_id")
     private Branch branch;
 
-    @Column(name = "ip_address", length = 45)
+    @JdbcTypeCode(SqlTypes.INET)
+    @Column(name = "ip_address", columnDefinition = "inet")
     private String ipAddress;
 
     @Column(name = "description", columnDefinition = "text")
