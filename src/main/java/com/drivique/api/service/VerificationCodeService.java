@@ -41,16 +41,21 @@ public class VerificationCodeService {
         return rawOtp;
     }
 
-    @Transactional
-    public void validateAndConsume(User user, String purpose, String rawCode) {
+    @Transactional(readOnly = true)
+    public void validate(User user, String purpose, String rawCode) {
         String codeHash = jwtService.hashToken(rawCode);
         VerificationCode verificationCode = codeRepository.findByUserAndPurposeAndCodeHash(user, purpose, codeHash)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Código de verificación inválido o expirado."));
-
         if (!verificationCode.isValid()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Código de verificación inválido o expirado.");
         }
+    }
 
+    @Transactional
+    public void validateAndConsume(User user, String purpose, String rawCode) {
+        validate(user, purpose, rawCode);
+        String codeHash = jwtService.hashToken(rawCode);
+        VerificationCode verificationCode = codeRepository.findByUserAndPurposeAndCodeHash(user, purpose, codeHash).orElseThrow();
         verificationCode.markUsed();
         codeRepository.save(verificationCode);
     }
