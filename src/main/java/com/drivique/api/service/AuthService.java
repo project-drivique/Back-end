@@ -6,6 +6,8 @@ import com.drivique.api.model.User;
 import com.drivique.api.model.UserSession;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.repository.UserSessionRepository;
+import com.drivique.api.repository.RoleRepository;
+import com.drivique.api.exception.ConflictException;
 import com.drivique.api.exception.AccountLockedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +27,8 @@ public class AuthService {
     private final JwtService jwtService;
     private final VerificationCodeService verificationCodeService;
     private final PasswordValidatorService passwordValidatorService;
+    private final RoleRepository roleRepository;
+    private final AuthEmailService authEmailService;
 
     public AuthService(
             UserRepository userRepository,
@@ -32,7 +36,9 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             VerificationCodeService verificationCodeService,
-            PasswordValidatorService passwordValidatorService
+            PasswordValidatorService passwordValidatorService,
+            RoleRepository roleRepository,
+            AuthEmailService authEmailService
     ) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
@@ -40,8 +46,32 @@ public class AuthService {
         this.jwtService = jwtService;
         this.verificationCodeService = verificationCodeService;
         this.passwordValidatorService = passwordValidatorService;
+        this.roleRepository = roleRepository;
+        this.authEmailService = authEmailService;
     }
 
+    @Transactional
+    public MessageResponseDTO register(RegisterRequestDTO request) {
+        String email = request.email().trim().toLowerCase();
+        if (userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email).isPresent()) throw new ConflictException("No fue posible procesar el registro.");
+        passwordValidatorService.validate(request.password());
+        User user = new User(request.firstName().trim(), request.lastName().trim(), email, passwordEncoder.encode(request.password()));
+        user.setAccountStatus("PENDING_VERIFICATION");
+        user.setRoles(java.util.Set.of(roleRepository.findByCodeAndActiveTrue("CUSTOMER").orElseThrow(() -> new IllegalStateException("Rol CUSTOMER no configurado."))));
+        userRepository.save(user);
+        String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
+        authEmailService.sendOtp(email, "verificar tu cuenta", code);
+        return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
+    }
+
+    @Transactional
+    public MessageResponseDTO resendVerificationCode(ForgotPasswordRequestDTO request) {
+        userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).ifPresent(user -> {
+            String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
+            authEmailService.sendOtp(user.getEmail(), "verificar tu cuenta", code);
+        });
+        return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
+    }
     @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class})
     public AuthResponseDTO login(LoginRequestDTO request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
@@ -173,10 +203,20 @@ public class AuthService {
     @Transactional
     public MessageResponseDTO forgotPassword(ForgotPasswordRequestDTO request) {
         userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).ifPresent(user -> {
-            verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
+            String code = verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
+            authEmailService.sendOtp(user.getEmail(), "restablecer tu contraseña", code);
         });
 
         return MessageResponseDTO.of("Si el correo está registrado, se ha enviado un código de verificación.");
+    }
+
+    @Transactional(readOnly = true)
+    public MessageResponseDTO validateResetCode(ValidateResetCodeRequestDTO request) {
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "Código de verificación inválido o expirado."));
+        verificationCodeService.validate(user, "PASSWORD_RESET", request.code());
+        return MessageResponseDTO.of("Código verificado.");
     }
 
     @Transactional

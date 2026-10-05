@@ -9,6 +9,7 @@ import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.model.UserSession;
 import com.drivique.api.repository.UserRepository;
+import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserSessionRepository;
 import com.drivique.api.exception.AccountLockedException;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +54,12 @@ class AuthServiceTests {
     @Mock
     private PasswordValidatorService passwordValidatorService;
 
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private AuthEmailService authEmailService;
+
     private AuthService authService;
     private User testUser;
     private Role customerRole;
@@ -65,7 +72,9 @@ class AuthServiceTests {
                 passwordEncoder,
                 jwtService,
                 verificationCodeService,
-                passwordValidatorService
+                passwordValidatorService,
+                roleRepository,
+                authEmailService
         );
 
         customerRole = new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer role", true);
