@@ -1,6 +1,5 @@
 package com.drivique.api.model;
 
-import com.drivique.api.model.User;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;

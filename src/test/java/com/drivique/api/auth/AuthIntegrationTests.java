@@ -5,7 +5,6 @@ import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserRepository;
-import com.drivique.api.repository.UserSessionRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +13,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -21,7 +21,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -39,9 +38,6 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
     private RoleRepository roleRepository;
 
     @Autowired
-    private UserSessionRepository sessionRepository;
-
-    @Autowired
     private com.drivique.api.repository.VerificationCodeRepository verificationCodeRepository;
 
     @Autowired
@@ -49,6 +45,9 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @MockitoBean
+    private com.drivique.api.service.AuthEmailService authEmailService;
 
     private User testUser;
     private Role customerRole;
@@ -67,7 +66,7 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                 true
         ));
 
-        Role superAdminRole = roleRepository.save(new Role(
+        roleRepository.save(new Role(
                 "SUPER_ADMIN",
                 "Super Admin",
                 "Super Admin role",

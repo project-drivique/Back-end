@@ -8,6 +8,8 @@ import com.drivique.api.dto.UpdateUserProfileRequestDTO;
 import com.drivique.api.dto.UserProfileDetailResponseDTO;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Instant;
 import java.util.List;
@@ -16,9 +18,11 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -47,6 +51,16 @@ public class UserService {
 
         User saved = userRepository.save(user);
         return mapToDetailDTO(saved);
+    }
+
+    @Transactional
+    public void deleteAccount(String email, String password) {
+        User user = findUserByEmail(email);
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new BadCredentialsException("Credenciales inválidas.");
+        }
+        userRepository.delete(user);
+        userRepository.flush();
     }
 
     private User findUserByEmail(String email) {

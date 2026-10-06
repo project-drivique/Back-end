@@ -42,3 +42,7 @@ bin/
 # Archivos locales cargados durante la ejecución o las pruebas de KYC
 uploads/
 
+# Archivos de documentación local / seguimiento interno
+hu-backend.md
+
+
