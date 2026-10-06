@@ -27,7 +27,7 @@ class BranchIntegrationTests extends DatabaseHealthTestSupport {
  @Test @WithMockUser(roles="BRANCH_ADMIN") void adminCreatesTogglesAndValidatesHours() throws Exception {
   City city = city(); String valid = payload(city.getId(), "Centro", "08:00", "18:00");
   mvc.perform(post("/api/v1/branches").contextPath("/api").contentType("application/json").content(valid)).andExpect(status().isCreated()).andExpect(jsonPath("$.allowsCashPayment").value(true));
-  UUID id = branches.findAll().getFirst().getId();
+  UUID id = branches.findAll().get(0).getId();
   mvc.perform(patch("/api/v1/branches/{id}/toggle-status", id).contextPath("/api")).andExpect(status().isOk()).andExpect(jsonPath("$.isActive").value(false));
   mvc.perform(put("/api/v1/branches/{id}", id).contextPath("/api").contentType("application/json").content(payload(city.getId(), "Centro", "18:00", "18:00"))).andExpect(status().isBadRequest());
  }
