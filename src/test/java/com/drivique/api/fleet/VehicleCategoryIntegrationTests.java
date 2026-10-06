@@ -86,7 +86,7 @@ class VehicleCategoryIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(jsonPath("$.securityDeposit").value(2000000.00))
                 .andExpect(jsonPath("$.isActive").value(true));
 
-        UUID id = categories.findAll().getFirst().getId();
+        UUID id = categories.findAll().get(0).getId();
 
         // Duplicate name conflict
         mvc.perform(post("/api/v1/vehicle-categories")

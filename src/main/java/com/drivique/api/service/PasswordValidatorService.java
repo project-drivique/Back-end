@@ -16,11 +16,11 @@ public class PasswordValidatorService {
     @Transactional(readOnly = true)
     public void validate(String password) {
         var active = policies.findByActiveTrue();
-        if (active.size() != 1 || active.getFirst().getMinLength() < 8
-                || active.getFirst().getMinLength() > 72) {
+        if (active.size() != 1 || active.get(0).getMinLength() < 8
+                || active.get(0).getMinLength() > 72) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE);
         }
-        var policy = active.getFirst();
+        var policy = active.get(0);
         // BCrypt accepts at most 72 UTF-8 bytes; never truncate or trim the password.
         if (password == null || password.isBlank() || password.length() > 72
                 || password.getBytes(StandardCharsets.UTF_8).length > 72
