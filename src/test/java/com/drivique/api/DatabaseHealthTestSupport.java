@@ -35,6 +35,9 @@ public abstract class DatabaseHealthTestSupport {
         registry.add("DB_URL", POSTGRES::getJdbcUrl);
         registry.add("DB_USERNAME", POSTGRES::getUsername);
         registry.add("DB_PASSWORD", POSTGRES::getPassword);
+        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+        registry.add("spring.datasource.username", POSTGRES::getUsername);
+        registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
     @Value("${local.server.port}") protected int port;
