@@ -30,6 +30,8 @@ public abstract class DatabaseHealthTestSupport {
         // Test-only schema generated from mappings; production retains ddl-auto=validate.
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.properties.hibernate.hbm2ddl.create_namespaces", () -> "true");
+        // SMTP availability belongs to deployment monitoring, not database integration tests.
+        registry.add("management.health.mail.enabled", () -> "false");
         registry.add("DB_URL", POSTGRES::getJdbcUrl);
         registry.add("DB_USERNAME", POSTGRES::getUsername);
         registry.add("DB_PASSWORD", POSTGRES::getPassword);
@@ -92,6 +94,7 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetRentalTables() {
+        jdbc.execute("DELETE FROM audit.audit_logs");
         jdbc.execute("DELETE FROM audit.generated_reports");
         jdbc.execute("DELETE FROM audit.administrative_report_types");
         jdbc.execute("DELETE FROM support.notifications");

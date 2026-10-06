@@ -2,7 +2,6 @@ package com.drivique.api.reports;
 
 import com.drivique.api.DatabaseHealthTestSupport;
 import com.drivique.api.model.AdministrativeReportType;
-import com.drivique.api.model.GeneratedReport;
 import com.drivique.api.model.User;
 import com.drivique.api.repository.AdministrativeReportTypeRepository;
 import com.drivique.api.repository.GeneratedReportRepository;
@@ -38,15 +37,13 @@ class ReportIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired
     private UserRepository userRepository;
 
-    private User adminUser;
-
     @BeforeEach
     void setup() {
         generatedReportRepository.deleteAll();
         reportTypeRepository.deleteAll();
         resetIamTables();
 
-        adminUser = userRepository.saveAndFlush(new User("Admin", "Manager", "admin@drivique.com", "hashedpassword"));
+        userRepository.saveAndFlush(new User("Admin", "Manager", "admin@drivique.com", "hashedpassword"));
         reportTypeRepository.saveAndFlush(new AdministrativeReportType("FLEET_OCCUPANCY", "Ocupación de Flota", "Reporte de flota", true));
         reportTypeRepository.saveAndFlush(new AdministrativeReportType("REVENUE_SUMMARY", "Resumen de Ingresos", "Reporte de ingresos", true));
     }
@@ -95,7 +92,12 @@ class ReportIntegrationTests extends DatabaseHealthTestSupport {
 
         mvc.perform(post("/api/v1/admin/reports/generate").contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+                        .content("""
+                                {
+                                    "reportType": "FLEET_OCCUPANCY",
+                                    "format": "PDF"
+                                }
+                                """))
                 .andExpect(status().isForbidden());
     }
 

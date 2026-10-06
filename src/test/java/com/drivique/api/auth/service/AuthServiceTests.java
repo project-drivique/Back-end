@@ -3,18 +3,21 @@ package com.drivique.api.auth.service;
 import com.drivique.api.service.*;
 
 import com.drivique.api.dto.AuthResponseDTO;
+import com.drivique.api.dto.ForgotPasswordRequestDTO;
 import com.drivique.api.dto.LoginRequestDTO;
 import com.drivique.api.dto.RefreshTokenRequestDTO;
+import com.drivique.api.dto.RegisterRequestDTO;
+import com.drivique.api.dto.ValidateResetCodeRequestDTO;
 import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.model.UserSession;
 import com.drivique.api.repository.UserRepository;
+import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserSessionRepository;
 import com.drivique.api.exception.AccountLockedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -54,6 +57,12 @@ class AuthServiceTests {
     @Mock
     private PasswordValidatorService passwordValidatorService;
 
+    @Mock
+    private RoleRepository roleRepository;
+
+    @Mock
+    private AuthEmailService authEmailService;
+
     private AuthService authService;
     private User testUser;
     private Role customerRole;
@@ -66,13 +75,67 @@ class AuthServiceTests {
                 passwordEncoder,
                 jwtService,
                 verificationCodeService,
-                passwordValidatorService
+                passwordValidatorService,
+                roleRepository,
+                authEmailService
         );
 
         customerRole = new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer role", true);
         testUser = new User("Carlos", "Gomez", "carlos@drivique.com", "$2a$12$hashedPassword");
         testUser.setId(UUID.randomUUID());
         testUser.setRoles(Set.of(customerRole));
+    }
+
+    @Test
+    void registerCreatesPendingCustomerAndSendsVerificationCode() {
+        RegisterRequestDTO request = new RegisterRequestDTO(
+                " Carlos ", " Gomez ", " CARLOS@DRIVIQUE.COM ", "SecureP@ss123");
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.empty());
+        when(roleRepository.findByCodeAndActiveTrue("CUSTOMER")).thenReturn(Optional.of(customerRole));
+        when(passwordEncoder.encode("SecureP@ss123")).thenReturn("encoded-password");
+        when(verificationCodeService.createVerificationCode(any(User.class), eq("ACCOUNT_VERIFICATION"), eq(15)))
+                .thenReturn("246810");
+
+        var response = authService.register(request);
+
+        assertThat(response.message()).contains("código de verificación");
+        verify(passwordValidatorService).validate("SecureP@ss123");
+        verify(userRepository).save(argThat(user ->
+                user.getEmail().equals("carlos@drivique.com")
+                        && user.getFirstName().equals("Carlos")
+                        && user.getLastName().equals("Gomez")
+                        && user.getAccountStatus().equals("PENDING_VERIFICATION")
+                        && user.getRoles().contains(customerRole)));
+        verify(authEmailService).sendOtp("carlos@drivique.com", "verificar tu cuenta", "246810");
+    }
+
+    @Test
+    void resendVerificationCodeSendsANewCodeForExistingUser() {
+        ForgotPasswordRequestDTO request = new ForgotPasswordRequestDTO("carlos@drivique.com");
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        when(verificationCodeService.createVerificationCode(testUser, "ACCOUNT_VERIFICATION", 15))
+                .thenReturn("135790");
+
+        var response = authService.resendVerificationCode(request);
+
+        assertThat(response.message()).contains("código de verificación");
+        verify(authEmailService).sendOtp("carlos@drivique.com", "verificar tu cuenta", "135790");
+    }
+
+    @Test
+    void validateResetCodeChecksTheCodeWithoutConsumingIt() {
+        ValidateResetCodeRequestDTO request = new ValidateResetCodeRequestDTO("carlos@drivique.com", "654321");
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+
+        var response = authService.validateResetCode(request);
+
+        assertThat(response.message()).isEqualTo("Código verificado.");
+        verify(verificationCodeService).validate(testUser, "PASSWORD_RESET", "654321");
+        verify(verificationCodeService, never()).validateAndConsume(any(), any(), any());
     }
 
     @Test

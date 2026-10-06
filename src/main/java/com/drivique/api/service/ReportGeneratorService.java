@@ -9,7 +9,6 @@ import com.drivique.api.model.GeneratedReport;
 import com.drivique.api.model.RentalContract;
 import com.drivique.api.model.User;
 import com.drivique.api.model.Vehicle;
-import com.drivique.api.model.VehicleMaintenance;
 import com.drivique.api.repository.AdministrativeReportTypeRepository;
 import com.drivique.api.repository.GeneratedReportRepository;
 import com.drivique.api.repository.RentalContractRepository;
@@ -40,9 +39,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -56,6 +53,7 @@ public class ReportGeneratorService {
     private final UserRepository userRepository;
     private final VehicleRepository vehicleRepository;
     private final RentalContractRepository rentalContractRepository;
+    @SuppressWarnings("unused")
     private final VehicleMaintenanceRepository maintenanceRepository;
     private final FileStorageService fileStorageService;
 
