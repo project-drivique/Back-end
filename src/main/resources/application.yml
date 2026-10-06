@@ -72,3 +72,12 @@ payments:
     integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
     event-secret: ${WOMPI_EVENT_SECRET:}
     checkout-url: ${WOMPI_CHECKOUT_URL:https://checkout.wompi.co/p/}
+
+drivique:
+  oauth:
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:18960724578-h53pr526uva5mtb9doup86f5hjei231c.apps.googleusercontent.com}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+    facebook:
+      app-id: ${FACEBOOK_APP_ID:1072551762252390}
+      app-secret: ${FACEBOOK_APP_SECRET:}

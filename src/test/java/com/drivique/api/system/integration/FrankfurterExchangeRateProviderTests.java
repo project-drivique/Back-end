@@ -57,8 +57,8 @@ class FrankfurterExchangeRateProviderTests {
     void readsAllActivePairsWithDecimalPrecisionAndCollectionTime() {
         var rates = provider.fetch(List.of("COP", "USD"));
         assertThat(rates).hasSize(2);
-        assertThat(rates.getFirst().rate()).isEqualByComparingTo(new BigDecimal("0.000303237"));
-        assertThat(rates.getFirst().fetchedAt()).isEqualTo(rates.getLast().fetchedAt());
+        assertThat(rates.get(0).rate()).isEqualByComparingTo(new BigDecimal("0.000303237"));
+        assertThat(rates.get(0).fetchedAt()).isEqualTo(rates.get(rates.size() - 1).fetchedAt());
         assertThat(provider.name()).isEqualTo("Frankfurter v2");
     }
 

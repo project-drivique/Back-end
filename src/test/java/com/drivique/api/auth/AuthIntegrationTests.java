@@ -358,7 +358,7 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
 
         var codes = verificationCodeRepository.findAll();
         assertThat(codes).hasSize(1);
-        assertThat(codes.getFirst().getPurpose()).isEqualTo("PASSWORD_RESET");
+        assertThat(codes.get(0).getPurpose()).isEqualTo("PASSWORD_RESET");
     }
 
     @Test

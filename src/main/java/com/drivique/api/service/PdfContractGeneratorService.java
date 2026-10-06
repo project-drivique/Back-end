@@ -2,8 +2,8 @@ package com.drivique.api.service;
 
 import com.drivique.api.model.RentalContract;
 import java.io.ByteArrayOutputStream;
-import org.openpdf.text.*;
-import org.openpdf.text.pdf.PdfWriter;
+import com.lowagie.text.*;
+import com.lowagie.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
 
 @Service
