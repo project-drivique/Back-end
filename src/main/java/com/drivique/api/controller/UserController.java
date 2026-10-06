@@ -2,6 +2,7 @@ package com.drivique.api.controller;
 
 import com.drivique.api.dto.UpdateUserPreferenceRequestDTO;
 import com.drivique.api.dto.UpdateUserProfileRequestDTO;
+import com.drivique.api.dto.DeleteAccountRequestDTO;
 import com.drivique.api.dto.UserProfileDetailResponseDTO;
 import com.drivique.api.dto.UserPreferenceResponseDTO;
 import com.drivique.api.service.UserPreferenceService;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -54,6 +56,19 @@ public class UserController {
             Authentication authentication
     ) {
         return userService.updateProfile(authentication.getName(), request);
+    }
+
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Eliminar cuenta propia", description = "Valida la contraseña y elimina permanentemente la cuenta autenticada y sus datos dependientes configurados con eliminación en cascada.")
+    @ApiResponse(responseCode = "204", description = "Cuenta eliminada exitosamente")
+    @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
+    @ApiResponse(responseCode = "401", description = "Contraseña inválida o usuario no autenticado")
+    public void deleteMyAccount(
+            @Valid @RequestBody DeleteAccountRequestDTO request,
+            Authentication authentication
+    ) {
+        userService.deleteAccount(authentication.getName(), request.password());
     }
 
     @GetMapping("/me/preferences")
