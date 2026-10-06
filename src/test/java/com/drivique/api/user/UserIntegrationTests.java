@@ -20,6 +20,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -114,6 +115,31 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
         User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
         assertThat(updatedUser.getFirstName()).isEqualTo("Ana Maria");
         assertThat(updatedUser.getEmail()).isEqualTo("ana.martinez@drivique.com"); // Remains untouched
+    }
+
+    @Test
+    void deleteMyAccountRemovesUserWhenPasswordMatches() throws Exception {
+        mvc.perform(delete("/api/v1/users/me")
+                        .contextPath("/api")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"SecurePass123!\"}"))
+                .andExpect(status().isNoContent());
+
+        assertThat(userRepository.findById(testUser.getId())).isEmpty();
+        assertThat(userRepository.findByEmailIgnoreCase("ana.martinez@drivique.com")).isEmpty();
+    }
+
+    @Test
+    void deleteMyAccountRejectsIncorrectPassword() throws Exception {
+        mvc.perform(delete("/api/v1/users/me")
+                        .contextPath("/api")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"WrongPass123!\"}"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(userRepository.findById(testUser.getId())).isPresent();
     }
 
     @Test
