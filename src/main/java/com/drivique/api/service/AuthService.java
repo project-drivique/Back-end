@@ -1,9 +1,11 @@
 package com.drivique.api.service;
 
 import com.drivique.api.dto.*;
+import com.drivique.api.model.Permission;
 import com.drivique.api.model.Role;
 import com.drivique.api.model.User;
 import com.drivique.api.model.UserSession;
+import com.drivique.api.repository.BranchUserRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.repository.UserSessionRepository;
 import com.drivique.api.repository.RoleRepository;
@@ -17,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -29,6 +33,7 @@ public class AuthService {
     private final PasswordValidatorService passwordValidatorService;
     private final RoleRepository roleRepository;
     private final AuthEmailService authEmailService;
+    private final BranchUserRepository branchUserRepository;
 
     public AuthService(
             UserRepository userRepository,
@@ -38,7 +43,8 @@ public class AuthService {
             VerificationCodeService verificationCodeService,
             PasswordValidatorService passwordValidatorService,
             RoleRepository roleRepository,
-            AuthEmailService authEmailService
+            AuthEmailService authEmailService,
+            BranchUserRepository branchUserRepository
     ) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
@@ -48,16 +54,20 @@ public class AuthService {
         this.passwordValidatorService = passwordValidatorService;
         this.roleRepository = roleRepository;
         this.authEmailService = authEmailService;
+        this.branchUserRepository = branchUserRepository;
     }
 
     @Transactional
     public MessageResponseDTO register(RegisterRequestDTO request) {
         String email = request.email().trim().toLowerCase();
-        if (userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email).isPresent()) throw new ConflictException("No fue posible procesar el registro.");
+        if (userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email).isPresent()) {
+            throw new ConflictException("No fue posible procesar el registro.");
+        }
         passwordValidatorService.validate(request.password());
         User user = new User(request.firstName().trim(), request.lastName().trim(), email, passwordEncoder.encode(request.password()));
         user.setAccountStatus("PENDING_VERIFICATION");
-        user.setRoles(java.util.Set.of(roleRepository.findByCodeAndActiveTrue("CUSTOMER").orElseThrow(() -> new IllegalStateException("Rol CUSTOMER no configurado."))));
+        user.setRoles(java.util.Set.of(roleRepository.findByCodeAndActiveTrue("CUSTOMER")
+                .orElseThrow(() -> new IllegalStateException("Rol CUSTOMER no configurado."))));
         userRepository.save(user);
         String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
         authEmailService.sendOtp(email, "verificar tu cuenta", code);
@@ -72,6 +82,7 @@ public class AuthService {
         });
         return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
     }
+
     @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class})
     public AuthResponseDTO login(LoginRequestDTO request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
@@ -95,7 +106,24 @@ public class AuthService {
         userRepository.save(user);
 
         List<String> roleCodes = user.getRoles().stream().map(Role::getCode).toList();
-        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getFullName(), roleCodes);
+        List<String> permissions = user.getRoles().stream()
+                .filter(Objects::nonNull)
+                .flatMap(r -> r.getPermissions().stream())
+                .map(Permission::getCode)
+                .distinct()
+                .toList();
+
+        UUID branchId = null;
+        String branchName = null;
+        var branchAssignment = branchUserRepository.findByUserId(user.getId());
+        if (branchAssignment.isPresent()) {
+            branchId = branchAssignment.get().getBranchId();
+            if (branchAssignment.get().getBranch() != null) {
+                branchName = branchAssignment.get().getBranch().getName();
+            }
+        }
+
+        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getFullName(), roleCodes, permissions, branchId, branchName);
         String refreshToken = jwtService.generateRefreshToken();
         String refreshTokenHash = jwtService.hashToken(refreshToken);
 
@@ -118,7 +146,10 @@ public class AuthService {
                 user.getPhone(),
                 roleCodes,
                 user.isProfileComplete(),
-                user.getAccountStatus()
+                user.getAccountStatus(),
+                branchId,
+                branchName,
+                permissions
         );
 
         return AuthResponseDTO.of(accessToken, refreshToken, jwtService.getAccessTokenExpirationSeconds(), profile);
@@ -146,7 +177,24 @@ public class AuthService {
         sessionRepository.save(session);
 
         List<String> roleCodes = user.getRoles().stream().map(Role::getCode).toList();
-        String newAccessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getFullName(), roleCodes);
+        List<String> permissions = user.getRoles().stream()
+                .filter(Objects::nonNull)
+                .flatMap(r -> r.getPermissions().stream())
+                .map(Permission::getCode)
+                .distinct()
+                .toList();
+
+        UUID branchId = null;
+        String branchName = null;
+        var branchAssignment = branchUserRepository.findByUserId(user.getId());
+        if (branchAssignment.isPresent()) {
+            branchId = branchAssignment.get().getBranchId();
+            if (branchAssignment.get().getBranch() != null) {
+                branchName = branchAssignment.get().getBranch().getName();
+            }
+        }
+
+        String newAccessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getFullName(), roleCodes, permissions, branchId, branchName);
         String newRefreshToken = jwtService.generateRefreshToken();
         String newRefreshTokenHash = jwtService.hashToken(newRefreshToken);
 
@@ -169,10 +217,57 @@ public class AuthService {
                 user.getPhone(),
                 roleCodes,
                 user.isProfileComplete(),
-                user.getAccountStatus()
+                user.getAccountStatus(),
+                branchId,
+                branchName,
+                permissions
         );
 
         return AuthResponseDTO.of(newAccessToken, newRefreshToken, jwtService.getAccessTokenExpirationSeconds(), profile);
+    }
+
+    @Transactional(readOnly = true)
+    public UserProfileResponseDTO getCurrentSession(String email) {
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "Sesión no encontrada o usuario inexistente."));
+
+        if (user.isLocked() || "INACTIVE".equalsIgnoreCase(user.getAccountStatus()) || "SUSPENDED".equalsIgnoreCase(user.getAccountStatus())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "La cuenta está inactiva o suspendida.");
+        }
+
+        List<String> roleCodes = user.getRoles().stream().map(Role::getCode).toList();
+        List<String> permissions = user.getRoles().stream()
+                .filter(Objects::nonNull)
+                .flatMap(r -> r.getPermissions().stream())
+                .map(Permission::getCode)
+                .distinct()
+                .toList();
+
+        UUID branchId = null;
+        String branchName = null;
+        var branchAssignment = branchUserRepository.findByUserId(user.getId());
+        if (branchAssignment.isPresent()) {
+            branchId = branchAssignment.get().getBranchId();
+            if (branchAssignment.get().getBranch() != null) {
+                branchName = branchAssignment.get().getBranch().getName();
+            }
+        }
+
+        return new UserProfileResponseDTO(
+                user.getId(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getPhone(),
+                roleCodes,
+                user.isProfileComplete(),
+                user.getAccountStatus(),
+                branchId,
+                branchName,
+                permissions
+        );
     }
 
     @Transactional
