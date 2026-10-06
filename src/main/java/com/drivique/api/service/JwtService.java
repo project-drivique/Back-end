@@ -40,19 +40,41 @@ public class JwtService {
         this.refreshTokenExpirationDays = refreshTokenExpirationDays;
     }
 
-    public String generateAccessToken(UUID userId, String email, String name, List<String> roles) {
+    public String generateAccessToken(
+            UUID userId,
+            String email,
+            String name,
+            List<String> roles,
+            List<String> permissions,
+            UUID branchId,
+            String branchName
+    ) {
         Instant now = Instant.now();
         Instant expiresAt = now.plusSeconds(accessTokenExpirationSeconds);
 
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(userId.toString())
                 .claim("email", email)
                 .claim("name", name)
-                .claim("roles", roles)
+                .claim("roles", roles != null ? roles : List.of())
+                .claim("permissions", permissions != null ? permissions : List.of());
+
+        if (branchId != null) {
+            builder.claim("branchId", branchId.toString());
+        }
+        if (branchName != null) {
+            builder.claim("branchName", branchName);
+        }
+
+        return builder
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiresAt))
                 .signWith(key)
                 .compact();
+    }
+
+    public String generateAccessToken(UUID userId, String email, String name, List<String> roles) {
+        return generateAccessToken(userId, email, name, roles, List.of(), null, null);
     }
 
     public String generateRefreshToken() {

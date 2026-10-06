@@ -63,6 +63,9 @@ class AuthServiceTests {
     @Mock
     private AuthEmailService authEmailService;
 
+    @Mock
+    private com.drivique.api.repository.BranchUserRepository branchUserRepository;
+
     private AuthService authService;
     private User testUser;
     private Role customerRole;
@@ -77,7 +80,8 @@ class AuthServiceTests {
                 verificationCodeService,
                 passwordValidatorService,
                 roleRepository,
-                authEmailService
+                authEmailService,
+                branchUserRepository
         );
 
         customerRole = new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer role", true);
@@ -145,7 +149,7 @@ class AuthServiceTests {
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("MyP@ssword123", "$2a$12$hashedPassword")).thenReturn(true);
-        when(jwtService.generateAccessToken(any(), any(), any(), any()))
+        when(jwtService.generateAccessToken(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("mock.jwt.token");
         when(jwtService.generateRefreshToken()).thenReturn("drivique_rf_abc123");
         when(jwtService.hashToken("drivique_rf_abc123")).thenReturn("hashedRefreshToken123");
@@ -224,7 +228,7 @@ class AuthServiceTests {
 
         when(jwtService.hashToken("drivique_rf_old")).thenReturn(oldHash);
         when(sessionRepository.findByRefreshTokenHash(oldHash)).thenReturn(Optional.of(oldSession));
-        when(jwtService.generateAccessToken(any(), any(), any(), any()))
+        when(jwtService.generateAccessToken(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn("new.mock.jwt.token");
         when(jwtService.generateRefreshToken()).thenReturn("drivique_rf_new");
         when(jwtService.hashToken("drivique_rf_new")).thenReturn("hash_new");
@@ -334,5 +338,29 @@ class AuthServiceTests {
         assertThat(testUser.getFailedLoginAttempts()).isZero();
         verify(userRepository, times(1)).save(testUser);
         verify(sessionRepository, times(1)).revokeAllActiveSessionsForUser(eq(testUser), any(Instant.class));
+    }
+
+    @Test
+    void getCurrentSessionReturnsActiveUserProfileWithRolesAndBranch() {
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        when(branchUserRepository.findByUserId(testUser.getId()))
+                .thenReturn(Optional.empty());
+
+        var sessionProfile = authService.getCurrentSession("carlos@drivique.com");
+
+        assertThat(sessionProfile).isNotNull();
+        assertThat(sessionProfile.email()).isEqualTo("carlos@drivique.com");
+        assertThat(sessionProfile.roles()).contains("CUSTOMER");
+        assertThat(sessionProfile.accountStatus()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void getCurrentSessionThrowsUnauthorizedWhenUserNotFound() {
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("nonexistent@drivique.com"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.getCurrentSession("nonexistent@drivique.com"))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
     }
 }
