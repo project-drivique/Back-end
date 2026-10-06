@@ -69,7 +69,7 @@ class RbacServiceTests {
 
         assertThat(roles).hasSize(2);
         assertThat(roles.get(1).permissions()).hasSize(1);
-        assertThat(roles.get(1).permissions().getFirst().code()).isEqualTo("roles:read");
+        assertThat(roles.get(1).permissions().get(0).code()).isEqualTo("roles:read");
     }
 
     @Test
@@ -79,7 +79,7 @@ class RbacServiceTests {
         List<PermissionResponseDTO> permissions = rbacService.getAllPermissions();
 
         assertThat(permissions).hasSize(1);
-        assertThat(permissions.getFirst().code()).isEqualTo("roles:read");
+        assertThat(permissions.get(0).code()).isEqualTo("roles:read");
     }
 
     @Test
