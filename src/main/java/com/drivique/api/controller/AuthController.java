@@ -49,6 +49,15 @@ public class AuthController {
         return authService.refresh(request, ipAddress, userAgent);
     }
 
+    @GetMapping("/me")
+    @Operation(summary = "Obtener sesión actual", description = "Retorna el perfil del usuario autenticado, roles, permisos y sede asignada.")
+    @ApiResponse(responseCode = "200", description = "Sesión obtenida exitosamente")
+    @ApiResponse(responseCode = "401", description = "No autenticado o token expirado")
+    @ApiResponse(responseCode = "403", description = "Cuenta inactiva o bloqueada")
+    public UserProfileResponseDTO me(org.springframework.security.core.Authentication authentication) {
+        return authService.getCurrentSession(authentication.getName());
+    }
+
     @PostMapping("/logout")
     @Operation(summary = "Cerrar sesión", description = "Revoca el refresh token activo en el sistema.")
     @ApiResponse(responseCode = "204", description = "Sesión cerrada exitosamente")
