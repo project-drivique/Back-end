@@ -33,5 +33,7 @@ public class BranchUser {
     }
 
     public User getUser() { return user; }
+    public Branch getBranch() { return branch; }
+    public UUID getBranchId() { return branchId; }
     public Instant getAssignedAt() { return assignedAt; }
 }
