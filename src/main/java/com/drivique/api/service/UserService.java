@@ -6,6 +6,7 @@ import com.drivique.api.repository.UserRepository;
 import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.dto.UpdateUserProfileRequestDTO;
 import com.drivique.api.dto.UserProfileDetailResponseDTO;
+import com.drivique.api.repository.UserSessionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,10 +19,16 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final UserSessionRepository userSessionRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(
+            UserRepository userRepository,
+            UserSessionRepository userSessionRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         this.userRepository = userRepository;
+        this.userSessionRepository = userSessionRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -59,8 +66,11 @@ public class UserService {
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
             throw new BadCredentialsException("Credenciales inválidas.");
         }
-        userRepository.delete(user);
-        userRepository.flush();
+        userSessionRepository.revokeAllActiveSessionsForUser(user, Instant.now());
+        user.setAccountStatus("DELETED");
+        user.setDeletedAt(Instant.now());
+        user.setUpdatedAt(Instant.now());
+        userRepository.save(user);
     }
 
     private User findUserByEmail(String email) {
