@@ -32,6 +32,9 @@ class UserServiceTests {
     private UserRepository userRepository;
 
     @Mock
+    private com.drivique.api.repository.UserSessionRepository userSessionRepository;
+
+    @Mock
     private PasswordEncoder passwordEncoder;
 
     private UserService userService;
@@ -39,7 +42,7 @@ class UserServiceTests {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, passwordEncoder);
+        userService = new UserService(userRepository, userSessionRepository, passwordEncoder);
 
         Role customerRole = new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer role", true);
         testUser = new User("Carlos", "Gomez", "carlos@drivique.com", "$2a$12$hashedPassword");
@@ -96,5 +99,32 @@ class UserServiceTests {
         assertThat(updated.birthDate()).isEqualTo(LocalDate.of(1994, 10, 12));
         assertThat(updated.profileComplete()).isTrue();
         assertThat(testUser.getEmail()).isEqualTo("carlos@drivique.com"); // Email unchanged
+    }
+
+    @Test
+    void deleteAccountWithValidPasswordRevokesSessionsAndMarksDeleted() {
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("ValidPassword123", "$2a$12$hashedPassword")).thenReturn(true);
+
+        userService.deleteAccount("carlos@drivique.com", "ValidPassword123");
+
+        verify(userSessionRepository, times(1)).revokeAllActiveSessionsForUser(eq(testUser), any());
+        verify(userRepository, times(1)).save(testUser);
+        assertThat(testUser.getAccountStatus()).isEqualTo("DELETED");
+        assertThat(testUser.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void deleteAccountWithInvalidPasswordThrowsBadCredentials() {
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("WrongPassword", "$2a$12$hashedPassword")).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.deleteAccount("carlos@drivique.com", "WrongPassword"))
+                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class);
+
+        verify(userSessionRepository, never()).revokeAllActiveSessionsForUser(any(), any());
+        verify(userRepository, never()).save(any());
     }
 }
