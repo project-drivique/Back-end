@@ -94,7 +94,7 @@ class SocialAuthServiceTests {
         when(oAuthProviderService.verifyAndExtract(request)).thenReturn(oauthInfo);
         when(socialAccountRepository.findByProviderIgnoreCaseAndProviderUserId("GOOGLE", "google-sub-123"))
                 .thenReturn(Optional.of(socialAccount));
-        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("access-token-jwt");
+        when(jwtService.generateAccessToken(any(), any(), any(), any(), any(), any(), any())).thenReturn("access-token-jwt");
         when(jwtService.generateRefreshToken()).thenReturn("refresh-token-plain");
         when(jwtService.hashToken("refresh-token-plain")).thenReturn("hashed-refresh-token");
         when(jwtService.getRefreshTokenExpirationDays()).thenReturn(30L);
@@ -122,7 +122,7 @@ class SocialAuthServiceTests {
                 .thenReturn(Optional.empty());
         when(passwordEncoder.encode(any())).thenReturn("$2a$12$randomPasswordHash");
         when(roleRepository.findByCode("CUSTOMER")).thenReturn(Optional.of(customerRole));
-        when(jwtService.generateAccessToken(any(), any(), any(), any())).thenReturn("new-access-token");
+        when(jwtService.generateAccessToken(any(), any(), any(), any(), any(), any(), any())).thenReturn("new-access-token");
         when(jwtService.generateRefreshToken()).thenReturn("new-refresh-token");
         when(jwtService.hashToken("new-refresh-token")).thenReturn("new-hashed-token");
         when(jwtService.getRefreshTokenExpirationDays()).thenReturn(30L);
