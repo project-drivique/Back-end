@@ -10,7 +10,7 @@ public interface GeneratedReportRepository extends JpaRepository<GeneratedReport
 
     List<GeneratedReport> findAllByOrderByGeneratedAtDesc();
 
-    List<GeneratedReport> findByReportType_CodeIgnoreCaseOrderByGeneratedAtDesc(String reportTypeCode);
+    List<GeneratedReport> findByReportTypeCodeIgnoreCaseOrderByGeneratedAtDesc(String reportTypeCode);
 
-    List<GeneratedReport> findByGeneratedBy_IdOrderByGeneratedAtDesc(UUID generatedById);
+    List<GeneratedReport> findByGeneratedByIdOrderByGeneratedAtDesc(UUID generatedById);
 }
