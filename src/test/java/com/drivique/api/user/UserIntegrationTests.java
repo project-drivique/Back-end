@@ -93,6 +93,10 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setUp() {
+        resetRentalTables();
+        resetCatalogTables();
+        resetFleetTables();
+        resetLocationTables();
         resetIamTables();
 
         Role customerRole = roleRepository.save(new Role(
@@ -189,11 +193,11 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     void deleteMyAccountWithOperationsAnonymizesProfileAndPreservesOperationalRecords() throws Exception {
-        Department department = departmentRepository.saveAndFlush(new Department("Antioquia"));
-        City city = cityRepository.saveAndFlush(new City(department, "Medellín", true, true));
+        Department department = departmentRepository.saveAndFlush(new Department("Antioquia-Del"));
+        City city = cityRepository.saveAndFlush(new City(department, "Medellín-Del", true, true));
         Branch branch = branchRepository.saveAndFlush(new Branch(
-                "Sede Poblado",
-                "Cra 43A # 1-50",
+                "Sede Poblado Del",
+                "Cra 43A # 1-50 Del",
                 city,
                 "3001234567",
                 LocalTime.of(8, 0),
@@ -201,21 +205,21 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
                 true
         ));
 
-        VehicleBrand brand = brandRepository.saveAndFlush(new VehicleBrand("Toyota"));
-        VehicleCategory category = categoryRepository.saveAndFlush(new VehicleCategory("SUV", new BigDecimal("200000"), new BigDecimal("1500000")));
-        TransmissionType transmission = transmissionRepository.saveAndFlush(new TransmissionType("AUTOMATIC", "Automatic"));
-        FuelType fuel = fuelRepository.saveAndFlush(new FuelType("GASOLINE", "Gasoline"));
-        VehicleStatus status = vehicleStatusRepository.saveAndFlush(new VehicleStatus("AVAILABLE", "Available", true));
+        VehicleBrand brand = brandRepository.saveAndFlush(new VehicleBrand("Toyota-Del"));
+        VehicleCategory category = categoryRepository.saveAndFlush(new VehicleCategory("SUV-Del", new BigDecimal("200000"), new BigDecimal("1500000")));
+        TransmissionType transmission = transmissionRepository.saveAndFlush(new TransmissionType("AUTO-DEL", "Automatic Del"));
+        FuelType fuel = fuelRepository.saveAndFlush(new FuelType("GAS-DEL", "Gasoline Del"));
+        VehicleStatus status = vehicleStatusRepository.saveAndFlush(new VehicleStatus("AVAIL-DEL", "Available Del", true));
 
         Vehicle vehicle = vehicleRepository.saveAndFlush(new Vehicle(
-                "ABC1234", "1HGCR2F83HA000888", brand, category, transmission, fuel, status, branch,
-                "Corolla Cross", (short) 2024, "Blanco", (short) 5, (short) 5, 500, 15000,
+                "DEL1234", "1HGCR2F83HA000999", brand, category, transmission, fuel, status, branch,
+                "Corolla Cross Del", (short) 2024, "Blanco", (short) 5, (short) 5, 500, 15000,
                 new BigDecimal("220000.00"), null, true
         ));
 
-        InsuranceCoverage insurance = insuranceRepository.saveAndFlush(new InsuranceCoverage("Básica", new BigDecimal("35000.00"), "Protección"));
-        MileagePlan mileagePlan = mileagePlanRepository.saveAndFlush(new MileagePlan("200km", 200, new BigDecimal("15000.00"), new BigDecimal("500.00")));
-        ReservationStatus confirmedStatus = reservationStatusRepository.saveAndFlush(new ReservationStatus("CONFIRMED", "Confirmed", true));
+        InsuranceCoverage insurance = insuranceRepository.saveAndFlush(new InsuranceCoverage("Básica Del", new BigDecimal("35000.00"), "Protección"));
+        MileagePlan mileagePlan = mileagePlanRepository.saveAndFlush(new MileagePlan("200km Del", 200, new BigDecimal("15000.00"), new BigDecimal("500.00")));
+        ReservationStatus confirmedStatus = reservationStatusRepository.saveAndFlush(new ReservationStatus("CONF-DEL", "Confirmed Del", true));
 
         Instant now = Instant.now();
         Reservation reservation = reservationRepository.saveAndFlush(new Reservation(
