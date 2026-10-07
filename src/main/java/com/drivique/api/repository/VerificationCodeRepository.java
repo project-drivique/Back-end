@@ -3,6 +3,7 @@ package com.drivique.api.repository;
 import com.drivique.api.model.User;
 import com.drivique.api.model.VerificationCode;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,4 +16,8 @@ public interface VerificationCodeRepository extends JpaRepository<VerificationCo
     Optional<VerificationCode> findLatestActiveCode(@Param("user") User user, @Param("purpose") String purpose);
 
     Optional<VerificationCode> findByUserAndPurposeAndCodeHash(User user, String purpose, String codeHash);
+
+    @Modifying
+    @Query("DELETE FROM VerificationCode vc WHERE vc.user = :user")
+    void deleteByUser(@Param("user") User user);
 }

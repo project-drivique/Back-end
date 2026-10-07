@@ -23,6 +23,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
 
     List<Reservation> findByCustomerOrderByCreatedAtDesc(User customer);
 
+    boolean existsByCustomerId(UUID customerId);
+    boolean existsByCustomer(User customer);
+
     long countByCodeStartingWith(String prefix);
 
     @Query("SELECT COUNT(r) > 0 FROM Reservation r " +
