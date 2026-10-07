@@ -42,7 +42,6 @@ public class SocialAuthService {
     private final PasswordEncoder passwordEncoder;
     private final BranchUserRepository branchUserRepository;
 
-    @org.springframework.beans.factory.annotation.Autowired
     public SocialAuthService(
             UserRepository userRepository,
             UserSocialAccountRepository socialAccountRepository,
@@ -63,19 +62,6 @@ public class SocialAuthService {
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
         this.branchUserRepository = branchUserRepository;
-    }
-
-    public SocialAuthService(
-            UserRepository userRepository,
-            UserSocialAccountRepository socialAccountRepository,
-            UserSessionRepository sessionRepository,
-            UserPreferenceRepository userPreferenceRepository,
-            RoleRepository roleRepository,
-            OAuthProviderService oAuthProviderService,
-            JwtService jwtService,
-            PasswordEncoder passwordEncoder
-    ) {
-        this(userRepository, socialAccountRepository, sessionRepository, userPreferenceRepository, roleRepository, oAuthProviderService, jwtService, passwordEncoder, null);
     }
 
     @Transactional
@@ -167,13 +153,11 @@ public class SocialAuthService {
 
         UUID branchId = null;
         String branchName = null;
-        if (branchUserRepository != null) {
-            var branchAssignment = branchUserRepository.findByUserId(user.getId());
-            if (branchAssignment.isPresent()) {
-                branchId = branchAssignment.get().getBranchId();
-                if (branchAssignment.get().getBranch() != null) {
-                    branchName = branchAssignment.get().getBranch().getName();
-                }
+        var branchAssignment = branchUserRepository.findByUserId(user.getId());
+        if (branchAssignment.isPresent()) {
+            branchId = branchAssignment.get().getBranchId();
+            if (branchAssignment.get().getBranch() != null) {
+                branchName = branchAssignment.get().getBranch().getName();
             }
         }
 
