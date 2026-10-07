@@ -42,6 +42,7 @@ public class SocialAuthService {
     private final PasswordEncoder passwordEncoder;
     private final BranchUserRepository branchUserRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public SocialAuthService(
             UserRepository userRepository,
             UserSocialAccountRepository socialAccountRepository,
