@@ -1,18 +1,18 @@
 package com.drivique.api.user.service;
 
-import com.drivique.api.service.*;
-
-import com.drivique.api.model.Role;
-import com.drivique.api.model.User;
-import com.drivique.api.repository.UserRepository;
-import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.dto.UpdateUserProfileRequestDTO;
 import com.drivique.api.dto.UserProfileDetailResponseDTO;
+import com.drivique.api.exception.ResourceNotFoundException;
+import com.drivique.api.model.Role;
+import com.drivique.api.model.User;
+import com.drivique.api.repository.*;
+import com.drivique.api.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
@@ -32,7 +32,43 @@ class UserServiceTests {
     private UserRepository userRepository;
 
     @Mock
-    private com.drivique.api.repository.UserSessionRepository userSessionRepository;
+    private UserSessionRepository userSessionRepository;
+
+    @Mock
+    private UserPreferenceRepository userPreferenceRepository;
+
+    @Mock
+    private UserSocialAccountRepository userSocialAccountRepository;
+
+    @Mock
+    private UserConsentRepository userConsentRepository;
+
+    @Mock
+    private VerificationCodeRepository verificationCodeRepository;
+
+    @Mock
+    private UserSavedPaymentMethodRepository userSavedPaymentMethodRepository;
+
+    @Mock
+    private UserFavoriteVehicleRepository userFavoriteVehicleRepository;
+
+    @Mock
+    private UserCouponUsageRepository userCouponUsageRepository;
+
+    @Mock
+    private NotificationRepository notificationRepository;
+
+    @Mock
+    private UserDocumentRepository userDocumentRepository;
+
+    @Mock
+    private BranchUserRepository branchUserRepository;
+
+    @Mock
+    private ReservationRepository reservationRepository;
+
+    @Mock
+    private RentalContractRepository rentalContractRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -42,7 +78,23 @@ class UserServiceTests {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, userSessionRepository, passwordEncoder);
+        userService = new UserService(
+                userRepository,
+                userSessionRepository,
+                userPreferenceRepository,
+                userSocialAccountRepository,
+                userConsentRepository,
+                verificationCodeRepository,
+                userSavedPaymentMethodRepository,
+                userFavoriteVehicleRepository,
+                userCouponUsageRepository,
+                notificationRepository,
+                userDocumentRepository,
+                branchUserRepository,
+                reservationRepository,
+                rentalContractRepository,
+                passwordEncoder
+        );
 
         Role customerRole = new Role(UUID.randomUUID(), "CUSTOMER", "Customer", "Customer role", true);
         testUser = new User("Carlos", "Gomez", "carlos@drivique.com", "$2a$12$hashedPassword");
@@ -98,21 +150,67 @@ class UserServiceTests {
         assertThat(updated.phone()).isEqualTo("+573119876543");
         assertThat(updated.birthDate()).isEqualTo(LocalDate.of(1994, 10, 12));
         assertThat(updated.profileComplete()).isTrue();
-        assertThat(testUser.getEmail()).isEqualTo("carlos@drivique.com"); // Email unchanged
+        assertThat(testUser.getEmail()).isEqualTo("carlos@drivique.com");
     }
 
     @Test
-    void deleteAccountWithValidPasswordRevokesSessionsAndMarksDeleted() {
+    void deleteAccountWithoutOperationsPerformsFullPhysicalDeletion() {
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("ValidPassword123", "$2a$12$hashedPassword")).thenReturn(true);
+        when(reservationRepository.existsByCustomerId(testUser.getId())).thenReturn(false);
+        when(rentalContractRepository.existsByCustomerId(testUser.getId())).thenReturn(false);
 
         userService.deleteAccount("carlos@drivique.com", "ValidPassword123");
 
         verify(userSessionRepository, times(1)).revokeAllActiveSessionsForUser(eq(testUser), any());
+        verify(userPreferenceRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(userSessionRepository, times(1)).deleteByUser(testUser);
+        verify(userSocialAccountRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(userConsentRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(verificationCodeRepository, times(1)).deleteByUser(testUser);
+        verify(userSavedPaymentMethodRepository, times(1)).deleteByUser(testUser);
+        verify(userFavoriteVehicleRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(userCouponUsageRepository, times(1)).deleteByUser(testUser);
+        verify(notificationRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(userDocumentRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(branchUserRepository, times(1)).deleteByUserId(testUser.getId());
+
+        verify(userRepository, times(1)).delete(testUser);
+        verify(userRepository, never()).save(any());
+        assertThat(testUser.getRoles()).isEmpty();
+    }
+
+    @Test
+    void deleteAccountWithOperationsAnonymizesProfileAndPreservesOperationalRecords() {
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
+                .thenReturn(Optional.of(testUser));
+        when(passwordEncoder.matches("ValidPassword123", "$2a$12$hashedPassword")).thenReturn(true);
+        when(reservationRepository.existsByCustomerId(testUser.getId())).thenReturn(true);
+
+        userService.deleteAccount("carlos@drivique.com", "ValidPassword123");
+
+        verify(userSessionRepository, times(1)).revokeAllActiveSessionsForUser(eq(testUser), any());
+        verify(userPreferenceRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(userSavedPaymentMethodRepository, times(1)).deleteByUser(testUser);
+        verify(userSocialAccountRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(userFavoriteVehicleRepository, times(1)).deleteByUserId(testUser.getId());
+        verify(verificationCodeRepository, times(1)).deleteByUser(testUser);
+        verify(notificationRepository, times(1)).deleteByUserId(testUser.getId());
+
+        verify(userRepository, never()).delete(any());
         verify(userRepository, times(1)).save(testUser);
+
         assertThat(testUser.getAccountStatus()).isEqualTo("DELETED");
         assertThat(testUser.getDeletedAt()).isNotNull();
+        assertThat(testUser.getFirstName()).isEqualTo("Usuario");
+        assertThat(testUser.getLastName()).isEqualTo("Eliminado");
+        assertThat(testUser.getPhone()).isNull();
+        assertThat(testUser.getBirthDate()).isNull();
+        assertThat(testUser.getNationalityId()).isNull();
+        assertThat(testUser.getPasswordHash()).startsWith("DELETED_");
+        assertThat(testUser.isLocked()).isTrue();
+        assertThat(testUser.getRoles()).isEmpty();
     }
 
     @Test
@@ -122,9 +220,10 @@ class UserServiceTests {
         when(passwordEncoder.matches("WrongPassword", "$2a$12$hashedPassword")).thenReturn(false);
 
         assertThatThrownBy(() -> userService.deleteAccount("carlos@drivique.com", "WrongPassword"))
-                .isInstanceOf(org.springframework.security.authentication.BadCredentialsException.class);
+                .isInstanceOf(BadCredentialsException.class);
 
         verify(userSessionRepository, never()).revokeAllActiveSessionsForUser(any(), any());
+        verify(userRepository, never()).delete(any());
         verify(userRepository, never()).save(any());
     }
 }
