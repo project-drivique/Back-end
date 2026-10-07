@@ -60,7 +60,7 @@ public class UserController {
 
     @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Eliminar cuenta propia", description = "Valida la contraseña y elimina permanentemente la cuenta autenticada y sus datos dependientes configurados con eliminación en cascada.")
+    @Operation(summary = "Eliminar cuenta propia", description = "Valida la contraseña y elimina permanentemente la cuenta y datos personales no retenibles si el usuario no tiene operaciones; si posee contratos, pagos o registros sujetos a conservación legal, revoca sesiones, anonimiza el perfil y preserva únicamente la traza requerida.")
     @ApiResponse(responseCode = "204", description = "Cuenta eliminada exitosamente")
     @ApiResponse(responseCode = "400", ref = "#/components/responses/Error400")
     @ApiResponse(responseCode = "401", description = "Contraseña inválida o usuario no autenticado")

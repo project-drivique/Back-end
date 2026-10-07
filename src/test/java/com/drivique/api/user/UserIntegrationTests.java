@@ -1,10 +1,8 @@
 package com.drivique.api.user;
 
 import com.drivique.api.DatabaseHealthTestSupport;
-import com.drivique.api.model.Role;
-import com.drivique.api.model.User;
-import com.drivique.api.repository.RoleRepository;
-import com.drivique.api.repository.UserRepository;
+import com.drivique.api.model.*;
+import com.drivique.api.repository.*;
 import com.drivique.api.service.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,14 +13,19 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ActiveProfiles("dev")
 @AutoConfigureMockMvc
@@ -36,6 +39,48 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private UserPreferenceRepository userPreferenceRepository;
+
+    @Autowired
+    private ReservationRepository reservationRepository;
+
+    @Autowired
+    private DepartmentRepository departmentRepository;
+
+    @Autowired
+    private CityRepository cityRepository;
+
+    @Autowired
+    private BranchRepository branchRepository;
+
+    @Autowired
+    private VehicleBrandRepository brandRepository;
+
+    @Autowired
+    private VehicleCategoryRepository categoryRepository;
+
+    @Autowired
+    private TransmissionTypeRepository transmissionRepository;
+
+    @Autowired
+    private FuelTypeRepository fuelRepository;
+
+    @Autowired
+    private VehicleStatusRepository vehicleStatusRepository;
+
+    @Autowired
+    private VehicleRepository vehicleRepository;
+
+    @Autowired
+    private InsuranceCoverageRepository insuranceRepository;
+
+    @Autowired
+    private MileagePlanRepository mileagePlanRepository;
+
+    @Autowired
+    private ReservationStatusRepository reservationStatusRepository;
 
     @Autowired
     private JwtService jwtService;
@@ -140,6 +185,80 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(status().isUnauthorized());
 
         assertThat(userRepository.findById(testUser.getId())).isPresent();
+    }
+
+    @Test
+    void deleteMyAccountWithOperationsAnonymizesProfileAndPreservesOperationalRecords() throws Exception {
+        Department department = departmentRepository.saveAndFlush(new Department("Antioquia"));
+        City city = cityRepository.saveAndFlush(new City(department, "Medellín", true, true));
+        Branch branch = branchRepository.saveAndFlush(new Branch(
+                "Sede Poblado",
+                "Cra 43A # 1-50",
+                city,
+                "3001234567",
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                true
+        ));
+
+        VehicleBrand brand = brandRepository.saveAndFlush(new VehicleBrand("Toyota"));
+        VehicleCategory category = categoryRepository.saveAndFlush(new VehicleCategory("SUV", new BigDecimal("200000"), new BigDecimal("1500000")));
+        TransmissionType transmission = transmissionRepository.saveAndFlush(new TransmissionType("AUTOMATIC", "Automatic"));
+        FuelType fuel = fuelRepository.saveAndFlush(new FuelType("GASOLINE", "Gasoline"));
+        VehicleStatus status = vehicleStatusRepository.saveAndFlush(new VehicleStatus("AVAILABLE", "Available", true));
+
+        Vehicle vehicle = vehicleRepository.saveAndFlush(new Vehicle(
+                "ABC1234", "1HGCR2F83HA000888", brand, category, transmission, fuel, status, branch,
+                "Corolla Cross", (short) 2024, "Blanco", (short) 5, (short) 5, 500, 15000,
+                new BigDecimal("220000.00"), null, true
+        ));
+
+        InsuranceCoverage insurance = insuranceRepository.saveAndFlush(new InsuranceCoverage("Básica", new BigDecimal("35000.00"), "Protección"));
+        MileagePlan mileagePlan = mileagePlanRepository.saveAndFlush(new MileagePlan("200km", 200, new BigDecimal("15000.00"), new BigDecimal("500.00")));
+        ReservationStatus confirmedStatus = reservationStatusRepository.saveAndFlush(new ReservationStatus("CONFIRMED", "Confirmed", true));
+
+        Instant now = Instant.now();
+        Reservation reservation = reservationRepository.saveAndFlush(new Reservation(
+                "RES-2026-DEL1",
+                testUser,
+                vehicle,
+                confirmedStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                now.plus(1, ChronoUnit.DAYS),
+                now.plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000.00"),
+                new BigDecimal("810000.00"),
+                null,
+                null,
+                true
+        ));
+
+        mvc.perform(delete("/api/v1/users/me")
+                        .contextPath("/api")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"password\":\"SecurePass123!\"}"))
+                .andExpect(status().isNoContent());
+
+        // El usuario permanece en BD para sostener la clave foránea de la reserva/contrato
+        User retainedUser = userRepository.findById(testUser.getId()).orElseThrow();
+        assertThat(retainedUser.getAccountStatus()).isEqualTo("DELETED");
+        assertThat(retainedUser.getDeletedAt()).isNotNull();
+        assertThat(retainedUser.getFirstName()).isEqualTo("Usuario");
+        assertThat(retainedUser.getLastName()).isEqualTo("Eliminado");
+        assertThat(retainedUser.getPhone()).isNull();
+        assertThat(retainedUser.getPasswordHash()).startsWith("DELETED_");
+
+        // La reserva permanece intacta
+        assertThat(reservationRepository.findById(reservation.getId())).isPresent();
+
+        // El usuario eliminado ya no puede consultar su perfil (404/401)
+        mvc.perform(get("/api/v1/users/me")
+                        .contextPath("/api")
+                        .header("Authorization", "Bearer " + jwtToken))
+                .andExpect(status().isNotFound());
     }
 
     @Test

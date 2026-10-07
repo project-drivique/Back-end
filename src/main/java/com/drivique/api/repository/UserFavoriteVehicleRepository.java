@@ -3,6 +3,7 @@ package com.drivique.api.repository;
 import com.drivique.api.model.UserFavoriteVehicle;
 import com.drivique.api.model.UserFavoriteVehicleId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -19,4 +20,8 @@ public interface UserFavoriteVehicleRepository extends JpaRepository<UserFavorit
     boolean existsByUserIdAndVehicleId(UUID userId, UUID vehicleId);
 
     void deleteByUserIdAndVehicleId(UUID userId, UUID vehicleId);
+
+    @Modifying
+    @Query("DELETE FROM UserFavoriteVehicle f WHERE f.user.id = :userId")
+    void deleteByUserId(@Param("userId") UUID userId);
 }
