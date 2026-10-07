@@ -92,6 +92,7 @@ public class SecurityConfig {
                                 "/v1/cities/*/branches",
                                 "/v1/branches",
                                 "/v1/branches/*",
+                                "/v1/branches/*/reviews",
                                 "/v1/vehicle-brands",
                                 "/v1/transmission-types",
                                 "/v1/fuel-types",
