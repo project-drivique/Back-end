@@ -9,6 +9,7 @@ import com.drivique.api.model.User;
 import com.drivique.api.model.UserPreference;
 import com.drivique.api.model.UserSession;
 import com.drivique.api.model.UserSocialAccount;
+import com.drivique.api.repository.BranchUserRepository;
 import com.drivique.api.repository.RoleRepository;
 import com.drivique.api.repository.UserPreferenceRepository;
 import com.drivique.api.repository.UserRepository;
@@ -61,6 +62,9 @@ class SocialAuthServiceTests {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private BranchUserRepository branchUserRepository;
+
     private SocialAuthService socialAuthService;
 
     private User testUser;
@@ -76,7 +80,8 @@ class SocialAuthServiceTests {
                 roleRepository,
                 oAuthProviderService,
                 jwtService,
-                passwordEncoder
+                passwordEncoder,
+                branchUserRepository
         );
 
         customerRole = new Role("CUSTOMER", "Cliente", "Rol de cliente", true);
