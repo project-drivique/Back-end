@@ -40,6 +40,10 @@ public class UserFavoriteService {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + vehicleId));
 
+        if (!vehicle.isActive()) {
+            throw new ResourceNotFoundException("Vehicle not found: " + vehicleId);
+        }
+
         if (!favoriteRepository.existsByUserIdAndVehicleId(user.getId(), vehicle.getId())) {
             favoriteRepository.save(new UserFavoriteVehicle(user, vehicle));
         }
