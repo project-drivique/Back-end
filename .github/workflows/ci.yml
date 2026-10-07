@@ -23,11 +23,19 @@ jobs:
       - name: Verify against PostgreSQL 17 with Testcontainers
         run: |
           ./mvnw --batch-mode clean verify || {
+            echo "================================================================"
+            echo "                 SUREFIRE TEST FAILURE REPORTS                  "
+            echo "================================================================"
             for f in target/surefire-reports/*.txt; do
-              if [ -f "$f" ] && grep -q "FAILURE\|ERROR" "$f"; then
-                while IFS= read -r line; do
-                  echo "::error title=TestFailure::$line"
-                done < "$f"
+              if [ -f "$f" ]; then
+                echo "=== FILE: $f ==="
+                cat "$f"
+              fi
+            done
+            for d in target/surefire-reports/*dump*; do
+              if [ -f "$d" ]; then
+                echo "=== DUMP: $d ==="
+                cat "$d"
               fi
             done
             exit 1
