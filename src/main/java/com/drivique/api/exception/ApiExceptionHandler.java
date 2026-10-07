@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -77,6 +78,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Object> badRequest(IllegalArgumentException ex, HttpServletRequest request) {
         return response(HttpStatus.BAD_REQUEST, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<Object> dataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
+        return response(HttpStatus.CONFLICT, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
     @ExceptionHandler(Exception.class)
