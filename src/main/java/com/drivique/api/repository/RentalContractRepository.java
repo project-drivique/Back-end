@@ -20,4 +20,6 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     long countByContractNumberStartingWith(String prefix);
 
     List<RentalContract> findByCustomerIdOrderByCreatedAtDesc(UUID customerId);
+
+    boolean existsByCustomerId(UUID customerId);
 }
