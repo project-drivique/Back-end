@@ -295,8 +295,9 @@ public class ReservationService {
              throw new AccessDeniedException("No puede confirmar una reserva de otro usuario");
         }
 
-        if (!r.getStatus().getCode().equals("PENDING_PAYMENT") || !r.getCode().startsWith("HLD-")) {
-            throw new ConflictException("La reserva ya fue confirmada o no es una retención válida.");
+        if (!r.getCode().startsWith("HLD-")) {
+            // Idempotency: if it's already a RES-, it was already confirmed. Return it.
+            return mapFromEntity(r);
         }
 
         String realCode = generateUniqueReservationCode();
