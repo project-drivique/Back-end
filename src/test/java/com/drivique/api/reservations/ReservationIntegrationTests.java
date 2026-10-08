@@ -171,13 +171,13 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 branchId
         );
 
-        mvc.perform(post("/api/v1/reservations")
+        mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
-                .andExpect(jsonPath("$.code", startsWith("RES-2026-")))
+                .andExpect(jsonPath("$.code", startsWith("HLD-")))
                 .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
                 .andExpect(jsonPath("$.rentalDays").value(3))
                 .andExpect(jsonPath("$.vehicleDailyRate").value(220000.00))
@@ -214,7 +214,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
         );
 
         // First reservation succeeds
-        mvc.perform(post("/api/v1/reservations")
+        mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request1)))
@@ -232,7 +232,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 null
         );
 
-        mvc.perform(post("/api/v1/reservations")
+        mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(overlappingRequest)))
@@ -256,7 +256,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 null
         );
 
-        mvc.perform(post("/api/v1/reservations")
+        mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request1)))
@@ -277,7 +277,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 null
         );
 
-        mvc.perform(post("/api/v1/reservations")
+        mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request2)))
@@ -301,7 +301,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 null
         );
 
-        String responseBody = mvc.perform(post("/api/v1/reservations")
+        String responseBody = mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -309,6 +309,12 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 .andReturn().getResponse().getContentAsString();
 
         String reservationId = objectMapper.readTree(responseBody).get("id").asText();
+
+        // Confirm it to see it in /me
+        responseBody = mvc.perform(post("/api/v1/reservations/checkout/confirm/{id}", reservationId).contextPath("/api"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        
         String code = objectMapper.readTree(responseBody).get("code").asText();
 
         // 1. Get my reservations
@@ -344,7 +350,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 null
         );
 
-        mvc.perform(post("/api/v1/reservations")
+        mvc.perform(post("/api/v1/reservations/checkout/initiate")
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
