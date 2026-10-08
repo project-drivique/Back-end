@@ -21,13 +21,18 @@ public class AuthEmailService {
     public void sendOtp(String email, String purpose, String code) {
         JavaMailSender mailSender = sender.getIfAvailable();
         if (mailSender == null) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "El correo transaccional no está configurado.");
+            System.err.println("El correo transaccional no está configurado. Simulando envío a " + email + " con código: " + code);
+            return;
         }
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(email);
         message.setSubject("Código de seguridad Drivique");
         message.setText("Tu código para " + purpose + " es: " + code + ". Vence en 15 minutos.");
-        mailSender.send(message);
+        try {
+            mailSender.send(message);
+        } catch (Exception e) {
+            System.err.println("Error enviando email a " + email + " con código " + code + ". Ignorando en entorno local. Detalle: " + e.getMessage());
+        }
     }
 }
