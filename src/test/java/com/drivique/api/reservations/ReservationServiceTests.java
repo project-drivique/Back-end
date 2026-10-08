@@ -36,6 +36,7 @@ class ReservationServiceTests {
     private final UserCouponUsageRepository userCouponUsageRepository = mock(UserCouponUsageRepository.class);
     private final PromotionValidationService promotionValidationService = mock(PromotionValidationService.class);
     private final BranchRepository branchRepository = mock(BranchRepository.class);
+    private final AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
 
     private final ReservationService service = new ReservationService(
             reservationRepository,
@@ -50,7 +51,8 @@ class ReservationServiceTests {
             promotionCatalogRepository,
             userCouponUsageRepository,
             promotionValidationService,
-            branchRepository
+            branchRepository,
+            auditLogRepository
     );
 
     private final UUID vehicleId = UUID.randomUUID();
@@ -322,4 +324,144 @@ class ReservationServiceTests {
 
         assertThat(response.code()).isEqualTo("RES-2026-0001");
     }
+
+    @Test
+    void cancelReservation_Success() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        ReservationStatus cancelledStatus = new ReservationStatus("CANCELLED_BY_USER", "Cancelled by user", false);
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        when(reservationStatusRepository.findByCodeIgnoreCase("CANCELLED_BY_USER")).thenReturn(Optional.of(cancelledStatus));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(r);
+
+        CancelReservationRequestDTO cancelReq = new CancelReservationRequestDTO("User requested cancellation");
+        ReservationResponseDTO resp = service.cancelReservation(reservationId, cancelReq, userEmail);
+
+        assertThat(resp).isNotNull();
+        assertThat(r.getStatus().getCode()).isEqualTo("CANCELLED_BY_USER");
+    }
+
+    @Test
+    void cancelReservation_ThrowsConflict_WhenAlreadyFinalState() {
+        ReservationStatus completedStatus = new ReservationStatus("COMPLETED", "Completed", false);
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                completedStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                false
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        CancelReservationRequestDTO cancelReq = new CancelReservationRequestDTO("Already done");
+        assertThatThrownBy(() -> service.cancelReservation(reservationId, cancelReq, userEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("estado final");
+    }
+
+    @Test
+    void getAllowedTransitions_Success() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        AllowedTransitionsResponseDTO result = service.getAllowedTransitions(reservationId, userEmail);
+
+        assertThat(result).isNotNull();
+        assertThat(result.allowedTransitions()).contains("CONFIRMED", "CANCELLED_BY_USER");
+    }
+
+    @Test
+    void modifyReservationDates_Success() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(r);
+
+        ModifyReservationDatesRequestDTO modReq = new ModifyReservationDatesRequestDTO(
+                Instant.now().plus(2, ChronoUnit.DAYS),
+                Instant.now().plus(6, ChronoUnit.DAYS)
+        );
+
+        ReservationResponseDTO response = service.modifyReservationDates(reservationId, modReq, userEmail);
+        assertThat(response).isNotNull();
+    }
+
+    @Test
+    void modifyReservationServices_Success() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        when(reservationRepository.save(any(Reservation.class))).thenReturn(r);
+
+        ModifyReservationServicesRequestDTO req = new ModifyReservationServicesRequestDTO(List.of(additionalServiceId), insuranceId, mileagePlanId);
+        ReservationResponseDTO response = service.modifyReservationServices(reservationId, req, userEmail);
+        assertThat(response).isNotNull();
+    }
 }
+
