@@ -141,6 +141,11 @@ public class Reservation {
     public List<ReservationPromotion> getPromotions() { return promotions; }
     public List<ReservationDeliveryPoint> getDeliveryPoints() { return deliveryPoints; }
 
+    public void setCode(String code) {
+        this.code = code;
+        this.updatedAt = Instant.now();
+    }
+
     public void setStatus(ReservationStatus status) {
         this.status = status;
         if (status != null) {

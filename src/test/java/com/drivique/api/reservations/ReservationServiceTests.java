@@ -164,7 +164,7 @@ class ReservationServiceTests {
         ReservationResponseDTO response = service.createReservation(request, userEmail);
 
         assertThat(response).isNotNull();
-        assertThat(response.code()).startsWith("RES-2026-");
+        assertThat(response.code()).startsWith("HLD-");
         assertThat(response.status()).isEqualTo("PENDING_PAYMENT");
         assertThat(response.rentalDays()).isEqualTo(3);
         assertThat(response.vehicleDailyRate()).isEqualByComparingTo("220000");
