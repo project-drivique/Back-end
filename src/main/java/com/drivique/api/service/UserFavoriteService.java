@@ -35,7 +35,7 @@ public class UserFavoriteService {
 
     @Transactional
     public void addFavorite(String userEmail, UUID vehicleId) {
-        User user = userRepository.findByEmailIgnoreCase(userEmail)
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userEmail));
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + vehicleId));
@@ -51,7 +51,7 @@ public class UserFavoriteService {
 
     @Transactional
     public void removeFavorite(String userEmail, UUID vehicleId) {
-        User user = userRepository.findByEmailIgnoreCase(userEmail)
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userEmail));
 
         favoriteRepository.deleteById(new UserFavoriteVehicleId(user.getId(), vehicleId));
@@ -59,10 +59,11 @@ public class UserFavoriteService {
 
     @Transactional(readOnly = true)
     public List<VehicleCardResponseDTO> listFavorites(String userEmail) {
-        User user = userRepository.findByEmailIgnoreCase(userEmail)
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userEmail));
 
         return favoriteRepository.findByUserIdWithVehicle(user.getId()).stream()
+                .filter(fav -> fav.getVehicle().isActive())
                 .map(fav -> VehicleMapper.toCardDTO(fav.getVehicle()))
                 .toList();
     }
