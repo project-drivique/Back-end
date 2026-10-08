@@ -15,9 +15,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * HU-INT-11: Checkout, pago aprobado y creación de la reserva.
+ */
 @RestController
 @RequestMapping("/v1/reservations")
-@Tag(name = "Reservations", description = "Endpoints para la gestión, bloqueo de disponibilidad y consulta de reservas")
+@Tag(name = "Reservations", description = "Endpoints para la gestión, bloqueo de disponibilidad y consulta de reservas (HU-INT-11)")
 @SecurityRequirement(name = "bearerAuth")
 public class ReservationController {
 
