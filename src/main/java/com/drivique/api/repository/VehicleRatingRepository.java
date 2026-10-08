@@ -1,1 +1,17 @@
-package com.drivique.api.repository; import com.drivique.api.model.VehicleRating;import java.util.*;import org.springframework.data.jpa.repository.*;public interface VehicleRatingRepository extends JpaRepository<VehicleRating,UUID>{boolean existsByReservationId(UUID reservationId);List<VehicleRating> findByVehicleIdOrderByCreatedAtDesc(UUID vehicleId);@Query("select avg(v.rating) from VehicleRating v where v.vehicle.id=:vehicleId") Double averageByVehicleId(UUID vehicleId);}
+package com.drivique.api.repository;
+
+import com.drivique.api.model.VehicleRating;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+public interface VehicleRatingRepository extends JpaRepository<VehicleRating, UUID> {
+    boolean existsByReservationId(UUID reservationId);
+    Optional<VehicleRating> findByReservationId(UUID reservationId);
+    List<VehicleRating> findByVehicleIdOrderByCreatedAtDesc(UUID vehicleId);
+
+    @Query("select avg(v.rating) from VehicleRating v where v.vehicle.id=:vehicleId")
+    Double averageByVehicleId(UUID vehicleId);
+}
