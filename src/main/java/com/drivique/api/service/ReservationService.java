@@ -450,17 +450,8 @@ public class ReservationService {
         // Let's use correct field names if they are records, but they are Entities. 
         // We'll check if they exist, else we can't change it here easily. We'll rely on update if we added setters.
         // I will just use reflection for now if setters are missing.
-        try {
-            java.lang.reflect.Method m1 = r.getClass().getDeclaredMethod("setPickupDate", Instant.class);
-            m1.setAccessible(true);
-            m1.invoke(r, request.pickupDate());
-
-            java.lang.reflect.Method m2 = r.getClass().getDeclaredMethod("setReturnDate", Instant.class);
-            m2.setAccessible(true);
-            m2.invoke(r, request.returnDate());
-        } catch (Exception e) {
-            throw new RuntimeException("No se pudieron modificar las fechas");
-        }
+        r.setPickupDate(request.pickupDate());
+        r.setReturnDate(request.returnDate());
         
         // Recalculate totals
         long seconds = Duration.between(request.pickupDate(), request.returnDate()).toSeconds();
@@ -529,25 +520,13 @@ public class ReservationService {
         if (request.insuranceCoverageId() != null) {
             InsuranceCoverage insurance = insuranceCoverageRepository.findById(request.insuranceCoverageId())
                     .orElseThrow(() -> new ResourceNotFoundException("Cobertura no encontrada"));
-            try {
-                java.lang.reflect.Method m1 = r.getClass().getDeclaredMethod("setInsuranceCoverage", InsuranceCoverage.class);
-                m1.setAccessible(true);
-                m1.invoke(r, insurance);
-            } catch (Exception e) {
-                throw new RuntimeException("No se pudo modificar la cobertura");
-            }
+            r.setInsuranceCoverage(insurance);
         }
 
         if (request.mileagePlanId() != null) {
             MileagePlan plan = mileagePlanRepository.findById(request.mileagePlanId())
                     .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado"));
-            try {
-                java.lang.reflect.Method m2 = r.getClass().getDeclaredMethod("setMileagePlan", MileagePlan.class);
-                m2.setAccessible(true);
-                m2.invoke(r, plan);
-            } catch (Exception e) {
-                throw new RuntimeException("No se pudo modificar el plan");
-            }
+            r.setMileagePlan(plan);
         }
         
         // This is simplified. In a real scenario we'd drop old services and add new ones based on the request.

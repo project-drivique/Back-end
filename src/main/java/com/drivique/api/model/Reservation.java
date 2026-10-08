@@ -159,8 +159,23 @@ public class Reservation {
         this.updatedAt = Instant.now();
     }
 
+    public void setPickupDate(Instant pickupDate) {
+        this.pickupDate = pickupDate;
+        this.updatedAt = Instant.now();
+    }
+
     public void setReturnDate(Instant returnDate) {
         this.returnDate = returnDate;
+        this.updatedAt = Instant.now();
+    }
+
+    public void setInsuranceCoverage(InsuranceCoverage insuranceCoverage) {
+        this.insuranceCoverage = insuranceCoverage;
+        this.updatedAt = Instant.now();
+    }
+
+    public void setMileagePlan(MileagePlan mileagePlan) {
+        this.mileagePlan = mileagePlan;
         this.updatedAt = Instant.now();
     }
 
