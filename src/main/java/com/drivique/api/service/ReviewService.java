@@ -13,13 +13,15 @@ public class ReviewService {
     private final ReservationRepository reservations;
     private final UserRepository users;
     private final BranchRepository branches;
+    private final VehicleRepository vehicles;
     private final VehicleRatingRepository ratings;
     private final BranchReviewRepository branchReviews;
 
-    public ReviewService(ReservationRepository reservations, UserRepository users, BranchRepository branches, VehicleRatingRepository ratings, BranchReviewRepository branchReviews) {
+    public ReviewService(ReservationRepository reservations, UserRepository users, BranchRepository branches, VehicleRepository vehicles, VehicleRatingRepository ratings, BranchReviewRepository branchReviews) {
         this.reservations = reservations;
         this.users = users;
         this.branches = branches;
+        this.vehicles = vehicles;
         this.ratings = ratings;
         this.branchReviews = branchReviews;
     }
@@ -71,6 +73,9 @@ public class ReviewService {
 
     @Transactional(readOnly = true)
     public VehicleReviewsResponseDTO vehicleReviews(UUID vehicleId) {
+        if (!vehicles.existsById(vehicleId)) {
+            throw new ResourceNotFoundException("Vehículo no encontrado");
+        }
         List<VehicleRating> all = ratings.findByVehicleIdOrderByCreatedAtDesc(vehicleId);
         List<VehicleReviewResponseDTO> list = all.stream().map(v -> new VehicleReviewResponseDTO(v.getId(), v.getUser().getFullName(), v.getRating(), v.getComment(), v.getCreatedAt())).toList();
         Double average = ratings.averageByVehicleId(vehicleId);
@@ -85,10 +90,26 @@ public class ReviewService {
         if (!r.getCustomer().getId().equals(u.getId()))
             throw new ResourceNotFoundException("Reserva no encontrada");
         boolean isCompleted = r.getStatus() != null && "COMPLETED".equalsIgnoreCase(r.getStatus().getCode());
-        boolean canReviewVehicle = isCompleted && !ratings.existsByReservationId(r.getId());
-        boolean canReviewBranch = isCompleted && branchReviews.findByBranchIdOrderByCreatedAtDesc(r.getVehicle().getCurrentBranch().getId()).stream()
-                .noneMatch(br -> br.getReservation().getId().equals(r.getId()));
-        return new ReviewEligibilityResponseDTO(canReviewVehicle, canReviewBranch);
+        Optional<VehicleRating> existingVehicleReview = ratings.findByReservationId(r.getId());
+        boolean canReviewVehicle = isCompleted && existingVehicleReview.isEmpty();
+
+        Set<UUID> reservationBranchIds = new HashSet<>();
+        if (r.getVehicle().getCurrentBranch() != null) {
+            reservationBranchIds.add(r.getVehicle().getCurrentBranch().getId());
+        }
+        r.getDeliveryPoints().stream()
+                .map(ReservationDeliveryPoint::getBranch)
+                .filter(Objects::nonNull)
+                .map(Branch::getId)
+                .forEach(reservationBranchIds::add);
+        boolean canReviewBranch = isCompleted && reservationBranchIds.stream().anyMatch(branchId ->
+                branchReviews.findByBranchIdOrderByCreatedAtDesc(branchId).stream()
+                        .noneMatch(review -> review.getReservation().getId().equals(r.getId())));
+
+        VehicleReviewResponseDTO existingReview = existingVehicleReview
+                .map(v -> new VehicleReviewResponseDTO(v.getId(), v.getUser().getFullName(), v.getRating(), v.getComment(), v.getCreatedAt()))
+                .orElse(null);
+        return new ReviewEligibilityResponseDTO(canReviewVehicle, canReviewBranch, existingReview);
     }
 
     private Reservation completedOwned(UUID id, String email) {
