@@ -152,6 +152,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
 
         // 5. Reservation Status
         reservationStatusRepository.saveAndFlush(new ReservationStatus("PENDING_PAYMENT", "Pending payment", true));
+        reservationStatusRepository.saveAndFlush(new ReservationStatus("CONFIRMED", "Confirmed", true));
     }
 
     @Test
