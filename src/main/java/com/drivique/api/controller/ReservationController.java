@@ -2,6 +2,10 @@ package com.drivique.api.controller;
 
 import com.drivique.api.dto.CreateReservationRequestDTO;
 import com.drivique.api.dto.ReservationResponseDTO;
+import com.drivique.api.dto.CancelReservationRequestDTO;
+import com.drivique.api.dto.ModifyReservationDatesRequestDTO;
+import com.drivique.api.dto.ModifyReservationServicesRequestDTO;
+import com.drivique.api.dto.AllowedTransitionsResponseDTO;
 import com.drivique.api.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -82,5 +86,61 @@ public class ReservationController {
             Authentication authentication
     ) {
         return reservationService.getReservationByCode(code, authentication.getName());
+    }
+
+    @PatchMapping("/{id}/cancel")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Cancelar reserva", description = "Cancela una reserva o retención. Libera el vehículo pero si estaba confirmada no genera reembolso.")
+    @ApiResponse(responseCode = "200", description = "Reserva cancelada exitosamente")
+    @ApiResponse(responseCode = "400", description = "Transición inválida")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "404", description = "Reserva no encontrada")
+    public ReservationResponseDTO cancelReservation(
+            @PathVariable UUID id,
+            @Valid @RequestBody CancelReservationRequestDTO request,
+            Authentication authentication
+    ) {
+        return reservationService.cancelReservation(id, request, authentication.getName());
+    }
+
+    @GetMapping("/{id}/allowed-transitions")
+    @Operation(summary = "Consultar transiciones permitidas", description = "Devuelve los estados a los que puede pasar esta reserva.")
+    @ApiResponse(responseCode = "200", description = "Lista de transiciones obtenida")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "404", description = "Reserva no encontrada")
+    public AllowedTransitionsResponseDTO getAllowedTransitions(
+            @PathVariable UUID id,
+            Authentication authentication
+    ) {
+        return reservationService.getAllowedTransitions(id, authentication.getName());
+    }
+
+    @PatchMapping("/{id}/dates")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Modificar fechas de reserva", description = "Modifica las fechas de recogida o devolución de una reserva.")
+    @ApiResponse(responseCode = "200", description = "Fechas modificadas exitosamente")
+    @ApiResponse(responseCode = "400", description = "Fechas inválidas o disponibilidad agotada")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "404", description = "Reserva no encontrada")
+    public ReservationResponseDTO modifyReservationDates(
+            @PathVariable UUID id,
+            @Valid @RequestBody ModifyReservationDatesRequestDTO request,
+            Authentication authentication
+    ) {
+        return reservationService.modifyReservationDates(id, request, authentication.getName());
+    }
+
+    @PatchMapping("/{id}/services")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Modificar servicios de reserva", description = "Modifica los servicios adicionales, cobertura o plan de kilometraje.")
+    @ApiResponse(responseCode = "200", description = "Servicios modificados exitosamente")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "404", description = "Reserva no encontrada")
+    public ReservationResponseDTO modifyReservationServices(
+            @PathVariable UUID id,
+            @Valid @RequestBody ModifyReservationServicesRequestDTO request,
+            Authentication authentication
+    ) {
+        return reservationService.modifyReservationServices(id, request, authentication.getName());
     }
 }
