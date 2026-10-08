@@ -25,6 +25,7 @@ public class ContractService {
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
     private final ClauseService clauseService;
+    private final FileStorageService storage;
 
     public ContractService(
             RentalContractRepository rentalContractRepository,
@@ -32,7 +33,8 @@ public class ContractService {
             ReservationRepository reservationRepository,
             UserRepository userRepository,
             BranchRepository branchRepository,
-            ClauseService clauseService
+            ClauseService clauseService,
+            FileStorageService storage
     ) {
         this.rentalContractRepository = rentalContractRepository;
         this.contractStatusRepository = contractStatusRepository;
@@ -40,6 +42,7 @@ public class ContractService {
         this.userRepository = userRepository;
         this.branchRepository = branchRepository;
         this.clauseService = clauseService;
+        this.storage = storage;
     }
 
     @Transactional
@@ -66,8 +69,11 @@ public class ContractService {
         Branch pickupBranch = resolvePickupBranch(reservation);
         Branch returnBranch = resolveReturnBranch(reservation, pickupBranch);
 
-        ContractStatus draftStatus = contractStatusRepository.findByCodeIgnoreCase("DRAFT")
-                .orElseGet(() -> contractStatusRepository.save(new ContractStatus("DRAFT", "Draft", false, false)));
+        String reservationStatus = reservation.getStatus() == null ? "" : reservation.getStatus().getCode();
+        String initialContractStatus = List.of("CONFIRMED", "IN_PROGRESS", "COMPLETED")
+                .contains(reservationStatus.toUpperCase()) ? "PENDING_SIGNATURE" : "DRAFT";
+        ContractStatus draftStatus = contractStatusRepository.findByCodeIgnoreCase(initialContractStatus)
+                .orElseThrow(() -> new IllegalStateException("Estado contractual no encontrado: " + initialContractStatus));
 
         List<ContractClause> activeClauses = clauseService.getOrSeedDefaultClauses();
 
@@ -135,6 +141,26 @@ public class ContractService {
         validateAccess(contract.getReservation(), user);
 
         return mapToDTO(contract);
+    }
+
+    @Transactional
+    public ContractResponseDTO getOrGenerateByReservationCode(String code, String userEmail) {
+        Reservation reservation = reservationRepository.findByCodeIgnoreCase(code)
+                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
+        return rentalContractRepository.findByReservationId(reservation.getId())
+                .map(this::mapToDTO)
+                .orElseGet(() -> generateContract(new GenerateContractRequestDTO(reservation.getId()), userEmail));
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] downloadPdf(UUID id, String userEmail) {
+        RentalContract contract = rentalContractRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        validateAccess(contract.getReservation(), user);
+        if (contract.getPdfUrl() == null) throw new ConflictException("El contrato aún no está firmado.");
+        return storage.read(contract.getPdfUrl());
     }
 
     private Branch resolvePickupBranch(Reservation reservation) {
@@ -223,6 +249,8 @@ public class ContractService {
                 c.getStatus().getName(),
                 c.getPickupBranch().getId(),
                 c.getPickupBranch().getName(),
+                c.getPickupBranch().getCity().getId(),
+                c.getPickupBranch().getCity().getName(),
                 c.getReturnBranch().getId(),
                 c.getReturnBranch().getName(),
                 c.getScheduledStartAt(),
@@ -232,6 +260,9 @@ public class ContractService {
                 c.getSignatureUrl(),
                 c.getPdfUrl(),
                 c.getSignedAt(),
+                c.getDocumentVersion(),
+                c.getAdditionalCharges(),
+                c.getBaseAmount().add(c.getAdditionalCharges()),
                 clauseDTOs,
                 c.getCreatedAt(),
                 c.getUpdatedAt()

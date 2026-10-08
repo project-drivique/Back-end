@@ -20,6 +20,8 @@ public record ContractResponseDTO(
         String statusName,
         UUID pickupBranchId,
         String pickupBranchName,
+        UUID pickupCityId,
+        String pickupCityName,
         UUID returnBranchId,
         String returnBranchName,
         Instant scheduledStartAt,
@@ -29,6 +31,9 @@ public record ContractResponseDTO(
         String signatureUrl,
         String pdfUrl,
         Instant signedAt,
+        String documentVersion,
+        BigDecimal additionalCharges,
+        BigDecimal finalAmount,
         List<ContractClauseResponseDTO> clauses,
         Instant createdAt,
         Instant updatedAt

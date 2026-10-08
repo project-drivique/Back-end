@@ -12,9 +12,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -53,16 +57,25 @@ public class ContractController {
         return contractService.generateContract(request, authentication.getName());
     }
 
+    @PostMapping("/generate/reservation-code/{code}")
+    public ContractResponseDTO getOrGenerateByReservationCode(@PathVariable String code, Authentication authentication) {
+        return contractService.getOrGenerateByReservationCode(code, authentication.getName());
+    }
+
     @PostMapping(path = "/{id}/sign", consumes = "multipart/form-data")
     @Operation(summary = "Firmar contrato y generar PDF oficial")
     public ContractResponseDTO sign(
             @PathVariable UUID id,
-            @RequestPart("signature") MultipartFile signature,
+            @RequestPart(value = "signature", required = false) MultipartFile signature,
             @RequestPart("signatureStrokeData") String signatureStrokeData,
             @RequestPart("signedCityId") String signedCityId,
+            @RequestPart("consentAccepted") Boolean consentAccepted,
+            @RequestPart("documentVersion") String documentVersion,
+            HttpServletRequest servletRequest,
             Authentication authentication
     ) {
-        return signatureService.sign(id, signature, signatureStrokeData, UUID.fromString(signedCityId), authentication.getName());
+        return signatureService.sign(id, signature, signatureStrokeData, UUID.fromString(signedCityId),
+                Boolean.TRUE.equals(consentAccepted), documentVersion, servletRequest.getRemoteAddr(), authentication.getName());
     }
 
     @GetMapping("/clauses")
@@ -118,5 +131,13 @@ public class ContractController {
             Authentication authentication
     ) {
         return contractService.getContractByNumber(contractNumber, authentication.getName());
+    }
+
+    @GetMapping(value = "/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadPdf(@PathVariable UUID id, Authentication authentication) {
+        byte[] pdf = contractService.downloadPdf(id, authentication.getName());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=contract-" + id + ".pdf")
+                .body(pdf);
     }
 }

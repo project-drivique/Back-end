@@ -7,4 +7,5 @@ public interface FileStorageService {
     String storePdf(byte[] content, String subDirectory);
     String storeBytes(byte[] content, String filenameWithExtension, String subDirectory);
     void validateFile(MultipartFile file);
+    byte[] read(String storedPath);
 }
