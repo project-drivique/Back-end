@@ -5,6 +5,7 @@ import com.drivique.api.exception.*;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -186,7 +187,7 @@ public class ReservationService {
             cashPaymentExpiresAt = standard72h.isBefore(request.pickupDate()) ? standard72h : request.pickupDate();
         }
 
-        String reservationCode = generateUniqueReservationCode();
+        String reservationCode = "HLD-" + UUID.randomUUID().toString().substring(0, 15).toUpperCase();
 
         ReservationStatus initialStatus = reservationStatusRepository.findByCodeIgnoreCase("PENDING_PAYMENT")
                 .orElseGet(() -> reservationStatusRepository.save(new ReservationStatus("PENDING_PAYMENT", "Pending payment", true)));
@@ -277,8 +278,37 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         return reservationRepository.findByCustomerOrderByCreatedAtDesc(user)
                 .stream()
+                .filter(r -> !r.getCode().startsWith("HLD-"))
                 .map(this::mapFromEntity)
                 .toList();
+    }
+
+    @Transactional
+    public ReservationResponseDTO confirmReservationPayment(UUID holdId, String userEmail) {
+        Reservation r = reservationRepository.findById(holdId)
+                .orElseThrow(() -> new ResourceNotFoundException("Retención no encontrada"));
+        
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+                
+        if (!r.getCustomer().getId().equals(user.getId())) {
+             throw new AccessDeniedException("No puede confirmar una reserva de otro usuario");
+        }
+
+        if (!r.getCode().startsWith("HLD-")) {
+            // Idempotency: if it's already a RES-, it was already confirmed. Return it.
+            return mapFromEntity(r);
+        }
+
+        String realCode = generateUniqueReservationCode();
+        r.setCode(realCode);
+        
+        ReservationStatus confirmedStatus = reservationStatusRepository.findByCodeIgnoreCase("CONFIRMED")
+                .orElseThrow(() -> new IllegalStateException("Estado CONFIRMED no encontrado"));
+        r.setStatus(confirmedStatus);
+        
+        Reservation saved = reservationRepository.save(r);
+        return mapFromEntity(saved);
     }
 
     private String generateUniqueReservationCode() {

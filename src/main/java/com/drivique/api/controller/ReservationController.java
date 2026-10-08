@@ -27,19 +27,26 @@ public class ReservationController {
         this.reservationService = reservationService;
     }
 
-    @PostMapping
+    @PostMapping("/checkout/initiate")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Crear nueva reserva", description = "Crea una reserva bajo transacción, bloquea disponibilidad del vehículo en tiempo real y calcula tarifas congeladas.")
-    @ApiResponse(responseCode = "201", description = "Reserva creada exitosamente")
-    @ApiResponse(responseCode = "400", description = "Parámetros inválidos")
-    @ApiResponse(responseCode = "401", description = "No autenticado")
-    @ApiResponse(responseCode = "404", description = "Recurso (vehículo, seguro, plan) no encontrado")
-    @ApiResponse(responseCode = "409", description = "Conflicto por sobreventa / vehículo no disponible en las fechas")
-    public ReservationResponseDTO createReservation(
+    @Operation(summary = "Iniciar checkout", description = "Crea una retención técnica (Hold) que no es una reserva confirmada y bloquea la disponibilidad temporalmente.")
+    @ApiResponse(responseCode = "201", description = "Retención creada exitosamente")
+    public ReservationResponseDTO initiateCheckout(
             @Valid @RequestBody CreateReservationRequestDTO request,
             Authentication authentication
     ) {
         return reservationService.createReservation(request, authentication.getName());
+    }
+
+    @PostMapping("/checkout/confirm/{holdId}")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Confirmar reserva tras pago", description = "Convierte una retención técnica en una reserva oficial, generando su código.")
+    @ApiResponse(responseCode = "200", description = "Reserva confirmada exitosamente")
+    public ReservationResponseDTO confirmPayment(
+            @PathVariable UUID holdId,
+            Authentication authentication
+    ) {
+        return reservationService.confirmReservationPayment(holdId, authentication.getName());
     }
 
     @GetMapping("/me")
