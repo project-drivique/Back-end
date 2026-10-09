@@ -17,6 +17,8 @@ public interface UserDocumentRepository extends JpaRepository<UserDocument, UUID
     List<UserDocument> findByUserId(UUID userId);
     Optional<UserDocument> findByUserIdAndDocumentType_Id(UUID userId, UUID documentTypeId);
     List<UserDocument> findByStatus_CodeOrderByCreatedAtDesc(String statusCode);
+    List<UserDocument> findByBranch_IdAndStatus_CodeOrderByCreatedAtDesc(UUID branchId, String statusCode);
+    List<UserDocument> findByBranch_IdOrderByCreatedAtDesc(UUID branchId);
     List<UserDocument> findAllByOrderByCreatedAtDesc();
 
     @Modifying

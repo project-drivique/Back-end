@@ -2,7 +2,10 @@ package com.drivique.api.kyc.service;
 
 import com.drivique.api.service.*;
 
+import com.drivique.api.model.Branch;
 import com.drivique.api.model.User;
+import com.drivique.api.repository.BranchRepository;
+import com.drivique.api.repository.BranchUserRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.dto.ReviewDocumentRequestDTO;
 import com.drivique.api.dto.UserDocumentResponseDTO;
@@ -45,12 +48,22 @@ class UserDocumentServiceTests {
     private UserRepository userRepository;
 
     @Mock
+    private BranchRepository branchRepository;
+
+    @Mock
+    private BranchUserRepository branchUserRepository;
+
+    @Mock
     private FileStorageService fileStorageService;
+
+    @Mock
+    private NotificationService notificationService;
 
     private UserDocumentService userDocumentService;
 
     private User user;
     private User reviewer;
+    private Branch branch;
     private DocumentType docType;
     private DocumentStatus pendingStatus;
     private DocumentStatus approvedStatus;
@@ -62,7 +75,10 @@ class UserDocumentServiceTests {
                 documentTypeRepository,
                 documentStatusRepository,
                 userRepository,
-                fileStorageService
+                branchRepository,
+                branchUserRepository,
+                fileStorageService,
+                notificationService
         );
 
         user = new User("John", "Doe", "john.doe@example.com", "hash");
@@ -70,6 +86,10 @@ class UserDocumentServiceTests {
 
         reviewer = new User("Auditor", "Agent", "agent@drivique.com", "hash");
         reviewer.setId(UUID.randomUUID());
+
+        branch = mock(Branch.class);
+        lenient().when(branch.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(branchRepository.findById(any())).thenReturn(Optional.of(branch));
 
         docType = new DocumentType(UUID.randomUUID(), "CC", "Cédula de Ciudadanía", "Cédula", true, true, true);
         pendingStatus = new DocumentStatus(UUID.randomUUID(), "PENDING", "Pendiente", "Pendiente");
@@ -83,7 +103,7 @@ class UserDocumentServiceTests {
 
         MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", "content".getBytes());
 
-        assertThatThrownBy(() -> userDocumentService.uploadDocument(user.getEmail(), docType.getId(), "123456", front, null))
+        assertThatThrownBy(() -> userDocumentService.uploadDocument(user.getEmail(), docType.getId(), "123456", branch.getId(), front, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("reverso");
     }
@@ -100,7 +120,7 @@ class UserDocumentServiceTests {
         MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", "content".getBytes());
         MockMultipartFile back = new MockMultipartFile("backFile", "back.jpg", "image/jpeg", "content".getBytes());
 
-        UserDocumentResponseDTO response = userDocumentService.uploadDocument(user.getEmail(), docType.getId(), "10203040", front, back);
+        UserDocumentResponseDTO response = userDocumentService.uploadDocument(user.getEmail(), docType.getId(), "10203040", branch.getId(), front, back);
 
         assertThat(response).isNotNull();
         assertThat(response.statusCode()).isEqualTo("PENDING");

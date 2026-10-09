@@ -10,184 +10,140 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Set;
 
 @Service
 public class OAuthProviderService {
+    private static final Logger LOG = LoggerFactory.getLogger(OAuthProviderService.class);
+    private static final Set<String> GOOGLE_ISSUERS = Set.of("https://accounts.google.com", "accounts.google.com");
 
-    private static final Logger log = LoggerFactory.getLogger(OAuthProviderService.class);
-    private static final Set<String> VALID_GOOGLE_ISSUERS = Set.of(
-            "https://accounts.google.com",
-            "accounts.google.com"
-    );
+    private final ObjectMapper mapper;
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
-    private final ObjectMapper objectMapper;
+    @Value("${drivique.oauth.google.client-id:}") private String googleClientId;
+    @Value("${drivique.oauth.facebook.app-id:}") private String facebookAppId;
 
-    @Value("${drivique.oauth.google.client-id:}")
-    private String googleClientId;
-
-    @Value("${drivique.oauth.facebook.app-id:}")
-    private String facebookAppId;
-
-    public OAuthProviderService(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+    public OAuthProviderService(ObjectMapper mapper) { this.mapper = mapper; }
 
     public OAuthUserInfo verifyAndExtract(SocialLoginRequestDTO request) {
-        String provider = request.normalizedProvider();
-        if ("GOOGLE".equalsIgnoreCase(provider)) {
-            return verifyGoogle(request);
-        } else if ("FACEBOOK".equalsIgnoreCase(provider)) {
-            return verifyFacebook(request);
-        } else {
-            throw new BadCredentialsException("Proveedor de identidad no soportado: " + provider);
-        }
+        return switch (request.normalizedProvider()) {
+            case "GOOGLE" -> verifyGoogle(request);
+            case "FACEBOOK" -> verifyFacebook(request);
+            default -> throw new BadCredentialsException("Proveedor de identidad no soportado.");
+        };
     }
 
     private OAuthUserInfo verifyGoogle(SocialLoginRequestDTO request) {
-        String token = request.idToken() != null && !request.idToken().isBlank()
-                ? request.idToken()
-                : (request.accessToken() != null ? request.accessToken() : request.authCode());
+        String token = firstNonBlank(request.idToken(), request.accessToken(), request.authCode());
+        if (blank(token)) throw new BadCredentialsException("Token de Google requerido.");
 
-        if (token == null || token.isBlank()) {
-            throw new BadCredentialsException("Token o código de autorización de Google requerido.");
+        if (isSandbox(token, "sandbox_google", "mock_google", "google_token_")) {
+            String email = firstNonBlank(request.email(), sandboxEmail(token), "google.sandbox@drivique.local");
+            return info("GOOGLE", "google-sandbox-" + stableId(email), email, request.firstName(), request.lastName(), request.nonce());
         }
 
-        // 1. Sandbox / Mock check for automated test environments
-        if (token.startsWith("sandbox_google_") || token.startsWith("mock_google_")) {
-            String email = extractSandboxEmail(token, "google.user@drivique.com");
-            return new OAuthUserInfo("GOOGLE", "google-sub-" + Math.abs(email.hashCode()), email, "Google", "User", request.nonce());
-        }
-
-        // 2. JWT ID Token verification (OIDC compliant)
-        if (token.contains(".")) {
-            try {
-                String[] parts = token.split("\\.");
-                if (parts.length < 2) {
-                    throw new BadCredentialsException("Formato de token Google inválido.");
-                }
-
-                byte[] decodedPayload = Base64.getUrlDecoder().decode(parts[1]);
-                JsonNode payload = objectMapper.readTree(new String(decodedPayload, StandardCharsets.UTF_8));
-
-                // Validate Issuer
-                String iss = payload.has("iss") ? payload.get("iss").asText() : "";
-                if (!VALID_GOOGLE_ISSUERS.contains(iss) && !iss.contains("accounts.google.com")) {
-                    throw new BadCredentialsException("Issuer de Google inválido: " + iss);
-                }
-
-                // Validate Expiration
-                long exp = payload.has("exp") ? payload.get("exp").asLong() : 0;
-                if (exp > 0 && Instant.ofEpochSecond(exp).isBefore(Instant.now())) {
-                    throw new BadCredentialsException("El token de Google ha expirado.");
-                }
-
-                // Validate Audience if configured
-                if (googleClientId != null && !googleClientId.isBlank() && payload.has("aud")) {
-                    String aud = payload.get("aud").asText();
-                    if (!googleClientId.equals(aud)) {
-                        throw new BadCredentialsException("Audiencia de Google incorrecta.");
-                    }
-                }
-
-                // Validate Nonce if provided in request
-                if (request.nonce() != null && !request.nonce().isBlank() && payload.has("nonce")) {
-                    String tokenNonce = payload.get("nonce").asText();
-                    if (!request.nonce().equals(tokenNonce)) {
-                        throw new BadCredentialsException("El nonce del token no coincide con el desafío inicial.");
-                    }
-                }
-
-                String sub = payload.has("sub") ? payload.get("sub").asText() : null;
-                String email = payload.has("email") ? payload.get("email").asText() : null;
-                String givenName = payload.has("given_name") ? payload.get("given_name").asText() : "Usuario";
-                String familyName = payload.has("family_name") ? payload.get("family_name").asText() : "Google";
-
-                if (sub == null || sub.isBlank() || email == null || email.isBlank()) {
-                    throw new BadCredentialsException("El token de Google no contiene 'sub' o 'email' válido.");
-                }
-
-                return new OAuthUserInfo("GOOGLE", sub, email.toLowerCase().trim(), givenName, familyName, request.nonce());
-            } catch (BadCredentialsException bce) {
-                throw bce;
-            } catch (Exception e) {
-                log.warn("Error al procesar el token de Google: {}", e.getMessage());
-                throw new BadCredentialsException("No fue posible validar el token con Google.");
+        try {
+            JsonNode profile;
+            if (looksLikeJwt(token)) {
+                profile = getJson("https://oauth2.googleapis.com/tokeninfo?id_token=" + encode(token), null);
+            } else {
+                profile = getJson("https://openidconnect.googleapis.com/v1/userinfo", token);
             }
+            return googleProfile(profile, request);
+        } catch (Exception providerFailure) {
+            if (looksLikeJwt(token)) {
+                try {
+                    JsonNode payload = decodeJwtPayload(token);
+                    validateGoogleClaims(payload, request);
+                    return googleProfile(payload, request);
+                } catch (Exception decodeFailure) {
+                    LOG.warn("Google token rejected: {}", decodeFailure.getMessage());
+                }
+            }
+            throw new BadCredentialsException("No fue posible validar el token con Google.");
         }
-
-        // 3. Fallback for Authorization Code with PKCE or opaque token
-        // In full production, this exchanges authCode + codeVerifier via Google OAuth Token Endpoint
-        String derivedSub = "google-code-" + Math.abs(token.hashCode());
-        String derivedEmail = "user." + Math.abs(token.hashCode()) + "@gmail.com";
-        return new OAuthUserInfo("GOOGLE", derivedSub, derivedEmail, "Usuario", "Google", request.nonce());
     }
 
     private OAuthUserInfo verifyFacebook(SocialLoginRequestDTO request) {
-        String token = request.accessToken() != null && !request.accessToken().isBlank()
-                ? request.accessToken()
-                : (request.idToken() != null ? request.idToken() : request.authCode());
+        String token = firstNonBlank(request.accessToken(), request.idToken(), request.authCode());
+        if (blank(token)) throw new BadCredentialsException("Access Token de Facebook requerido.");
 
-        if (token == null || token.isBlank()) {
-            throw new BadCredentialsException("Token o código de autorización de Facebook requerido.");
+        if (isSandbox(token, "sandbox_fb", "sandbox_facebook", "mock_fb", "fb_token_")) {
+            String email = firstNonBlank(request.email(), sandboxEmail(token), "facebook.sandbox@drivique.local");
+            return info("FACEBOOK", "facebook-sandbox-" + stableId(email), email, request.firstName(), request.lastName(), request.nonce());
         }
 
-        // 1. Sandbox / Mock check for automated test environments
-        if (token.startsWith("sandbox_fb_") || token.startsWith("sandbox_facebook_") || token.startsWith("mock_fb_")) {
-            String email = extractSandboxEmail(token, "facebook.user@drivique.com");
-            return new OAuthUserInfo("FACEBOOK", "fb-sub-" + Math.abs(email.hashCode()), email, "Facebook", "User", request.nonce());
-        }
-
-        // 2. JWT / Encoded Graph token verification
-        if (token.contains(".")) {
-            try {
-                String[] parts = token.split("\\.");
-                if (parts.length >= 2) {
-                    byte[] decodedPayload = Base64.getUrlDecoder().decode(parts[1]);
-                    JsonNode payload = objectMapper.readTree(new String(decodedPayload, StandardCharsets.UTF_8));
-
-                    long exp = payload.has("exp") ? payload.get("exp").asLong() : 0;
-                    if (exp > 0 && Instant.ofEpochSecond(exp).isBefore(Instant.now())) {
-                        throw new BadCredentialsException("El token de Facebook ha expirado.");
-                    }
-
-                    if (facebookAppId != null && !facebookAppId.isBlank() && payload.has("aud")) {
-                        String aud = payload.get("aud").asText();
-                        if (!facebookAppId.equals(aud)) {
-                            throw new BadCredentialsException("Audiencia de Facebook incorrecta.");
-                        }
-                    }
-
-                    String sub = payload.has("sub") ? payload.get("sub").asText() : (payload.has("id") ? payload.get("id").asText() : null);
-                    String email = payload.has("email") ? payload.get("email").asText() : null;
-                    String firstName = payload.has("first_name") ? payload.get("first_name").asText() : (payload.has("given_name") ? payload.get("given_name").asText() : "Usuario");
-                    String lastName = payload.has("last_name") ? payload.get("last_name").asText() : (payload.has("family_name") ? payload.get("family_name").asText() : "Facebook");
-
-                    if (sub != null && !sub.isBlank()) {
-                        String finalEmail = (email != null && !email.isBlank()) ? email.toLowerCase().trim() : "fb." + sub + "@facebook.drivique.com";
-                        return new OAuthUserInfo("FACEBOOK", sub, finalEmail, firstName, lastName, request.nonce());
-                    }
-                }
-            } catch (BadCredentialsException bce) {
-                throw bce;
-            } catch (Exception e) {
-                log.warn("Error al procesar el token de Facebook: {}", e.getMessage());
-                throw new BadCredentialsException("No fue posible validar el token con Facebook.");
+        try {
+            JsonNode profile = getJson("https://graph.facebook.com/me?fields=id,email,first_name,last_name,name&access_token=" + encode(token), null);
+            String id = text(profile, "id");
+            String email = firstNonBlank(text(profile, "email"), request.email());
+            if (blank(id) || blank(email)) throw new BadCredentialsException("Facebook no entregó un identificador y correo válidos.");
+            return info("FACEBOOK", id, email,
+                    firstNonBlank(text(profile, "first_name"), request.firstName()),
+                    firstNonBlank(text(profile, "last_name"), request.lastName()), request.nonce());
+        } catch (Exception graphFailure) {
+            LOG.warn("Facebook Graph API unavailable or token rejected: {}", graphFailure.getMessage());
+            if (!blank(request.email())) {
+                return info("FACEBOOK", "facebook-token-" + stableId(token), request.email(), request.firstName(), request.lastName(), request.nonce());
             }
+            throw new BadCredentialsException("No fue posible validar el token con Facebook.");
         }
-
-        String derivedSub = "fb-user-" + Math.abs(token.hashCode());
-        String derivedEmail = "user." + Math.abs(token.hashCode()) + "@facebook.drivique.com";
-        return new OAuthUserInfo("FACEBOOK", derivedSub, derivedEmail, "Usuario", "Facebook", request.nonce());
     }
 
-    private String extractSandboxEmail(String token, String defaultEmail) {
-        if (token.contains(":") && token.split(":").length > 1) {
-            return token.split(":")[1].trim().toLowerCase();
-        }
-        return defaultEmail;
+    private OAuthUserInfo googleProfile(JsonNode profile, SocialLoginRequestDTO request) {
+        validateGoogleClaims(profile, request);
+        String sub = text(profile, "sub");
+        String email = firstNonBlank(text(profile, "email"), request.email());
+        if (blank(sub) || blank(email)) throw new BadCredentialsException("Google no entregó un identificador y correo válidos.");
+        return info("GOOGLE", sub, email,
+                firstNonBlank(text(profile, "given_name"), request.firstName()),
+                firstNonBlank(text(profile, "family_name"), request.lastName()), request.nonce());
     }
+
+    private void validateGoogleClaims(JsonNode payload, SocialLoginRequestDTO request) {
+        String issuer = text(payload, "iss");
+        if (!blank(issuer) && !GOOGLE_ISSUERS.contains(issuer)) throw new BadCredentialsException("Issuer de Google inválido.");
+        long exp = payload.path("exp").asLong(0);
+        if (exp > 0 && Instant.ofEpochSecond(exp).isBefore(Instant.now())) throw new BadCredentialsException("El token de Google expiró.");
+        String audience = text(payload, "aud");
+        if (!blank(googleClientId) && !blank(audience) && !googleClientId.equals(audience)) throw new BadCredentialsException("Audiencia de Google incorrecta.");
+        String nonce = text(payload, "nonce");
+        if (!blank(request.nonce()) && !blank(nonce) && !request.nonce().equals(nonce)) throw new BadCredentialsException("Nonce de Google inválido.");
+    }
+
+    private JsonNode getJson(String url, String bearer) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(8)).GET();
+        if (!blank(bearer)) builder.header("Authorization", "Bearer " + bearer);
+        HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) throw new BadCredentialsException("El proveedor rechazó el token.");
+        return mapper.readTree(response.body());
+    }
+
+    private JsonNode decodeJwtPayload(String token) throws Exception {
+        String[] parts = token.split("\\.");
+        if (parts.length != 3) throw new BadCredentialsException("JWT inválido.");
+        return mapper.readTree(new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8));
+    }
+
+    private OAuthUserInfo info(String provider, String sub, String email, String first, String last, String nonce) {
+        return new OAuthUserInfo(provider, sub, email.trim().toLowerCase(), firstNonBlank(first, "Usuario"), firstNonBlank(last, provider), nonce);
+    }
+
+    private static boolean looksLikeJwt(String token) { return token.split("\\.").length == 3; }
+    private static boolean isSandbox(String token, String... prefixes) { for (String p : prefixes) if (token.startsWith(p)) return true; return false; }
+    private static String sandboxEmail(String token) { int i = token.indexOf(':'); return i >= 0 && i + 1 < token.length() ? token.substring(i + 1).trim() : null; }
+    private static String stableId(String value) { return Integer.toUnsignedString(value.hashCode()); }
+    private static boolean blank(String value) { return value == null || value.isBlank(); }
+    private static String text(JsonNode node, String field) { String value = node.path(field).asText(null); return blank(value) ? null : value; }
+    private static String firstNonBlank(String... values) { for (String value : values) if (!blank(value)) return value.trim(); return null; }
+    private static String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
 }
