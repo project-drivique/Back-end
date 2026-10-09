@@ -20,11 +20,9 @@ public record CreateReservationRequestDTO(
         @Schema(description = "Fecha y hora de devolución", example = "2026-10-18T10:00:00Z")
         Instant returnDate,
 
-        @NotNull(message = "La cobertura de seguro es obligatoria")
         @Schema(description = "ID de la cobertura de seguro seleccionada", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
         UUID insuranceCoverageId,
 
-        @NotNull(message = "El plan de kilometraje es obligatorio")
         @Schema(description = "ID del plan de kilometraje seleccionado", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
         UUID mileagePlanId,
 

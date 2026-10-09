@@ -50,7 +50,10 @@ public class SocialAuthController {
                 request.codeVerifier(),
                 request.redirectUri(),
                 request.nonce(),
-                request.deviceInfo()
+                request.deviceInfo(),
+                request.email(),
+                request.firstName(),
+                request.lastName()
         );
         String ipAddress = extractIp(servletRequest);
         String userAgent = servletRequest.getHeader("User-Agent");
@@ -71,7 +74,10 @@ public class SocialAuthController {
                 request.codeVerifier(),
                 request.redirectUri(),
                 request.nonce(),
-                request.deviceInfo()
+                request.deviceInfo(),
+                request.email(),
+                request.firstName(),
+                request.lastName()
         );
         String ipAddress = extractIp(servletRequest);
         String userAgent = servletRequest.getHeader("User-Agent");
