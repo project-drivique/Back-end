@@ -5,6 +5,7 @@ import com.drivique.api.exception.ConflictException;
 import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
+import com.drivique.api.service.NotificationService;
 import com.drivique.api.service.PromotionValidationService;
 import com.drivique.api.service.ReservationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,7 @@ class ReservationServiceTests {
     private final PromotionValidationService promotionValidationService = mock(PromotionValidationService.class);
     private final BranchRepository branchRepository = mock(BranchRepository.class);
     private final AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
 
     private final ReservationService service = new ReservationService(
             reservationRepository,
@@ -52,7 +54,8 @@ class ReservationServiceTests {
             userCouponUsageRepository,
             promotionValidationService,
             branchRepository,
-            auditLogRepository
+            auditLogRepository,
+            notificationService
     );
 
     private final UUID vehicleId = UUID.randomUUID();
