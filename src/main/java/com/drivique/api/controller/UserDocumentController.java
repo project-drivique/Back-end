@@ -56,6 +56,9 @@ public class UserDocumentController {
             @Parameter(description = "Número o serial del documento (opcional)", required = false)
             @RequestParam(value = "documentNumber", required = false) String documentNumber,
 
+            @Parameter(description = "Sucursal que revisará el documento para esta reserva", required = true)
+            @RequestParam("branchId") UUID branchId,
+
             @Parameter(description = "Archivo con la foto o scan frontal del documento (JPG, PNG o PDF, máx 5MB)", required = true)
             @RequestParam("frontFile") MultipartFile frontFile,
 
@@ -68,6 +71,7 @@ public class UserDocumentController {
                 authentication.getName(),
                 documentTypeId,
                 documentNumber,
+                branchId,
                 frontFile,
                 backFile
         );

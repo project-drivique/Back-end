@@ -30,7 +30,16 @@ public record SocialLoginRequestDTO(
         String nonce,
 
         @Schema(description = "Identificador o descripción del dispositivo", example = "Chrome 128 on Windows 11")
-        String deviceInfo
+        String deviceInfo,
+
+        @Schema(description = "Correo obtenido del perfil del proveedor")
+        String email,
+
+        @Schema(description = "Nombre obtenido del perfil del proveedor")
+        String firstName,
+
+        @Schema(description = "Apellido obtenido del perfil del proveedor")
+        String lastName
 ) {
     public String normalizedProvider() {
         return provider != null ? provider.trim().toUpperCase() : "";

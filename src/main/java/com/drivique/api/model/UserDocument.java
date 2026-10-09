@@ -40,6 +40,10 @@ public class UserDocument {
     @JoinColumn(name = "reviewed_by")
     private User reviewedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
+
     @Column(name = "reviewed_at")
     private Instant reviewedAt;
 
@@ -88,6 +92,9 @@ public class UserDocument {
 
     public User getReviewedBy() { return reviewedBy; }
     public void setReviewedBy(User reviewedBy) { this.reviewedBy = reviewedBy; }
+
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
 
     public Instant getReviewedAt() { return reviewedAt; }
     public void setReviewedAt(Instant reviewedAt) { this.reviewedAt = reviewedAt; }
