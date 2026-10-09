@@ -41,6 +41,19 @@ public record SocialLoginRequestDTO(
         @Schema(description = "Apellido obtenido del perfil del proveedor")
         String lastName
 ) {
+    public SocialLoginRequestDTO(
+            String provider,
+            String idToken,
+            String accessToken,
+            String authCode,
+            String codeVerifier,
+            String redirectUri,
+            String nonce,
+            String deviceInfo
+    ) {
+        this(provider, idToken, accessToken, authCode, codeVerifier, redirectUri, nonce, deviceInfo, null, null, null);
+    }
+
     public String normalizedProvider() {
         return provider != null ? provider.trim().toUpperCase() : "";
     }

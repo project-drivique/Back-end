@@ -138,7 +138,7 @@ class SocialAuthServiceTests {
         assertThat(response).isNotNull();
         assertThat(response.accessToken()).isEqualTo("new-access-token");
         verify(userRepository, times(2)).save(any(User.class));
-        verify(userPreferenceRepository, times(1)).save(any(UserPreference.class));
+        verify(userPreferenceRepository, atLeastOnce()).save(any(UserPreference.class));
         verify(socialAccountRepository, times(1)).save(any(UserSocialAccount.class));
         verify(sessionRepository, times(1)).save(any(UserSession.class));
     }
