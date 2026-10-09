@@ -83,6 +83,24 @@ public class RentalContract {
     @Column(name = "pdf_url", length = 1000)
     private String pdfUrl;
 
+    @Column(name = "document_version", nullable = false, length = 30)
+    private String documentVersion = "v1.0";
+
+    @Column(name = "consent_text", length = 500)
+    private String consentText;
+
+    @Column(name = "signer_ip_hash", length = 64)
+    private String signerIpHash;
+
+    @Column(name = "signature_sha256", length = 64)
+    private String signatureSha256;
+
+    @Column(name = "pdf_sha256", length = 64)
+    private String pdfSha256;
+
+    @Column(name = "additional_charges", nullable = false, precision = 12, scale = 2)
+    private BigDecimal additionalCharges = BigDecimal.ZERO;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "contract_clause_assignments",
@@ -149,6 +167,12 @@ public class RentalContract {
     public City getSignedCity() { return signedCity; }
     public Instant getSignedAt() { return signedAt; }
     public String getPdfUrl() { return pdfUrl; }
+    public String getDocumentVersion() { return documentVersion; }
+    public String getConsentText() { return consentText; }
+    public String getSignerIpHash() { return signerIpHash; }
+    public String getSignatureSha256() { return signatureSha256; }
+    public String getPdfSha256() { return pdfSha256; }
+    public BigDecimal getAdditionalCharges() { return additionalCharges; }
     public List<ContractClause> getClauses() { return clauses; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
@@ -180,6 +204,19 @@ public class RentalContract {
 
     public void setPdfUrl(String pdfUrl) {
         this.pdfUrl = pdfUrl;
+        this.updatedAt = Instant.now();
+    }
+
+    public void recordConsent(String consentText, String signerIpHash, String signatureSha256, String pdfSha256) {
+        this.consentText = consentText;
+        this.signerIpHash = signerIpHash;
+        this.signatureSha256 = signatureSha256;
+        this.pdfSha256 = pdfSha256;
+        this.updatedAt = Instant.now();
+    }
+
+    public void setAdditionalCharges(BigDecimal value) {
+        this.additionalCharges = value == null ? BigDecimal.ZERO : value;
         this.updatedAt = Instant.now();
     }
 

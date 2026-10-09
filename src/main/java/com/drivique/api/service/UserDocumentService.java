@@ -1,6 +1,9 @@
 package com.drivique.api.service;
 
 import com.drivique.api.model.User;
+import com.drivique.api.model.Branch;
+import com.drivique.api.repository.BranchRepository;
+import com.drivique.api.repository.BranchUserRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.exception.ResourceNotFoundException;
 import com.drivique.api.dto.DocumentTypeResponseDTO;
@@ -30,20 +33,29 @@ public class UserDocumentService {
     private final DocumentTypeRepository documentTypeRepository;
     private final DocumentStatusRepository documentStatusRepository;
     private final UserRepository userRepository;
+    private final BranchRepository branchRepository;
+    private final BranchUserRepository branchUserRepository;
     private final FileStorageService fileStorageService;
+    private final NotificationService notificationService;
 
     public UserDocumentService(
             UserDocumentRepository userDocumentRepository,
             DocumentTypeRepository documentTypeRepository,
             DocumentStatusRepository documentStatusRepository,
             UserRepository userRepository,
-            FileStorageService fileStorageService
+            BranchRepository branchRepository,
+            BranchUserRepository branchUserRepository,
+            FileStorageService fileStorageService,
+            NotificationService notificationService
     ) {
         this.userDocumentRepository = userDocumentRepository;
         this.documentTypeRepository = documentTypeRepository;
         this.documentStatusRepository = documentStatusRepository;
         this.userRepository = userRepository;
+        this.branchRepository = branchRepository;
+        this.branchUserRepository = branchUserRepository;
         this.fileStorageService = fileStorageService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +80,7 @@ public class UserDocumentService {
             String userEmail,
             UUID documentTypeId,
             String documentNumber,
+            UUID branchId,
             MultipartFile frontFile,
             MultipartFile backFile
     ) {
@@ -76,13 +89,21 @@ public class UserDocumentService {
 
         DocumentType docType = documentTypeRepository.findById(documentTypeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tipo de documento no encontrado con id: " + documentTypeId));
+        Branch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada con id: " + branchId));
 
-        if (docType.isRequiresFrontAndBack() && (backFile == null || backFile.isEmpty())) {
+        boolean frontIsPdf = frontFile != null && ("application/pdf".equalsIgnoreCase(frontFile.getContentType())
+                || frontFile.getOriginalFilename() != null && frontFile.getOriginalFilename().toLowerCase().endsWith(".pdf"));
+        if (docType.isRequiresFrontAndBack() && (backFile == null || backFile.isEmpty()) && !frontIsPdf) {
             throw new IllegalArgumentException("El tipo de documento '" + docType.getName() + "' requiere adjuntar tanto el anverso como el reverso.");
         }
 
         String frontUrl = fileStorageService.storeFile(frontFile, "kyc");
-        String backUrl = (backFile != null && !backFile.isEmpty()) ? fileStorageService.storeFile(backFile, "kyc") : null;
+        // Un único PDF puede contener anverso y reverso; se conserva el mismo
+        // archivo para ambas referencias y se satisface la regla de integridad.
+        String backUrl = (backFile != null && !backFile.isEmpty())
+                ? fileStorageService.storeFile(backFile, "kyc")
+                : (docType.isRequiresFrontAndBack() && frontIsPdf ? frontUrl : null);
 
         DocumentStatus pendingStatus = getOrCreateStatus("PENDING", "Pendiente de Revisión");
 
@@ -101,6 +122,7 @@ public class UserDocumentService {
         } else {
             doc = new UserDocument(user, docType, pendingStatus, documentNumber, frontUrl, backUrl);
         }
+        doc.setBranch(branch);
 
         if (documentNumber != null && !documentNumber.isBlank() && (user.getDocumentNumber() == null || user.getDocumentNumber().isBlank())) {
             user.setDocumentNumber(documentNumber);
@@ -125,6 +147,11 @@ public class UserDocumentService {
 
         User reviewer = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(reviewerEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Revisor no encontrado con email: " + reviewerEmail));
+        branchUserRepository.findByUserId(reviewer.getId()).ifPresent(assignment -> {
+            if (doc.getBranch() == null || !assignment.getBranchId().equals(doc.getBranch().getId())) {
+                throw new IllegalArgumentException("No puedes revisar documentos de otra sucursal");
+            }
+        });
 
         String statusCode = request.status().toUpperCase();
         DocumentStatus newStatus = getOrCreateStatus(statusCode, statusCode.equals("APPROVED") ? "Aprobado" : "Rechazado");
@@ -139,13 +166,28 @@ public class UserDocumentService {
 
         updateUserProfileCompletion(doc.getUser());
 
+        boolean approved = "APPROVED".equals(statusCode);
+        String subject = approved ? "Documento aprobado" : "Documento rechazado";
+        String message = approved
+                ? "Tu documento " + doc.getDocumentType().getName() + " fue aprobado por " + (doc.getBranch() != null ? doc.getBranch().getName() : "la sucursal") + ". Ya puedes continuar con tu reserva cuando toda tu documentación esté aprobada."
+                : "Tu documento " + doc.getDocumentType().getName() + " fue rechazado. Motivo: " + (request.reviewNotes() == null || request.reviewNotes().isBlank() ? "Debes cargar nuevamente un documento válido." : request.reviewNotes());
+        notificationService.send(doc.getUser(), "EMAIL", approved ? "DOCUMENT_APPROVED" : "DOCUMENT_REJECTED", subject, message, saved.getId());
+
         return UserDocumentResponseDTO.fromEntity(saved);
     }
 
     @Transactional(readOnly = true)
-    public List<UserDocumentResponseDTO> getDocuments(String statusCode) {
+    public List<UserDocumentResponseDTO> getDocuments(String statusCode, String reviewerEmail) {
         List<UserDocument> docs;
-        if (statusCode != null && !statusCode.isBlank()) {
+        User reviewer = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(reviewerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Revisor no encontrado con email: " + reviewerEmail));
+        var branchAssignment = branchUserRepository.findByUserId(reviewer.getId());
+        if (branchAssignment.isPresent()) {
+            UUID branchId = branchAssignment.get().getBranchId();
+            docs = statusCode != null && !statusCode.isBlank()
+                    ? userDocumentRepository.findByBranch_IdAndStatus_CodeOrderByCreatedAtDesc(branchId, statusCode.toUpperCase())
+                    : userDocumentRepository.findByBranch_IdOrderByCreatedAtDesc(branchId);
+        } else if (statusCode != null && !statusCode.isBlank()) {
             docs = userDocumentRepository.findByStatus_CodeOrderByCreatedAtDesc(statusCode.toUpperCase());
         } else {
             docs = userDocumentRepository.findAllByOrderByCreatedAtDesc();

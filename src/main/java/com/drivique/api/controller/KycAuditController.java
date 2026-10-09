@@ -42,9 +42,10 @@ public class KycAuditController {
     @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
     @ApiResponse(responseCode = "403", ref = "#/components/responses/Error403")
     public List<UserDocumentResponseDTO> getDocuments(
-            @RequestParam(value = "status", required = false) String status
+            @RequestParam(value = "status", required = false) String status,
+            Authentication authentication
     ) {
-        return userDocumentService.getDocuments(status);
+        return userDocumentService.getDocuments(status, authentication.getName());
     }
 
     @PatchMapping("/documents/{id}/review")

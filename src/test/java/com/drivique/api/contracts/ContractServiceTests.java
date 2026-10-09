@@ -8,6 +8,7 @@ import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
 import com.drivique.api.service.ClauseService;
 import com.drivique.api.service.ContractService;
+import com.drivique.api.service.FileStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,6 +33,7 @@ class ContractServiceTests {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final BranchRepository branchRepository = mock(BranchRepository.class);
     private final ClauseService clauseService = mock(ClauseService.class);
+    private final FileStorageService fileStorageService = mock(FileStorageService.class);
 
     private ContractService service;
 
@@ -56,7 +58,8 @@ class ContractServiceTests {
                 reservationRepository,
                 userRepository,
                 branchRepository,
-                clauseService
+                clauseService,
+                fileStorageService
         );
 
         customer = mock(User.class);
