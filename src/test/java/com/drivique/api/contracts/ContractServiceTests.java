@@ -75,6 +75,11 @@ class ContractServiceTests {
         when(branch.getId()).thenReturn(UUID.randomUUID());
         when(branch.getName()).thenReturn("Sede Poblado");
 
+        City city = mock(City.class);
+        when(city.getId()).thenReturn(UUID.randomUUID());
+        when(city.getName()).thenReturn("Medellín");
+        when(branch.getCity()).thenReturn(city);
+
         category = mock(VehicleCategory.class);
         when(category.getSecurityDeposit()).thenReturn(new BigDecimal("1500000.00"));
 
@@ -108,6 +113,8 @@ class ContractServiceTests {
 
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
         when(contractStatusRepository.findByCodeIgnoreCase("DRAFT")).thenReturn(Optional.of(draftStatus));
+        when(contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE"))
+                .thenReturn(Optional.of(new ContractStatus("PENDING_SIGNATURE", "Pending signature", true, false)));
 
         clauses = List.of(
                 new ContractClause("v1.0", (short) 1, "Objeto", "Contenido objeto", true),
@@ -129,7 +136,7 @@ class ContractServiceTests {
         assertThat(response).isNotNull();
         assertThat(response.contractNumber()).startsWith("CTR-");
         assertThat(response.reservationCode()).isEqualTo("RES-2026-0001");
-        assertThat(response.statusCode()).isEqualTo("DRAFT");
+        assertThat(response.statusCode()).isEqualTo("PENDING_SIGNATURE");
         assertThat(response.baseAmount()).isEqualByComparingTo("800000.00");
         assertThat(response.securityDeposit()).isEqualByComparingTo("1500000.00");
         assertThat(response.clauses()).hasSize(2);
