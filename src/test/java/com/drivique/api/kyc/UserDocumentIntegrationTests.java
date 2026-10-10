@@ -12,6 +12,12 @@ import com.drivique.api.model.UserDocument;
 import com.drivique.api.repository.DocumentStatusRepository;
 import com.drivique.api.repository.DocumentTypeRepository;
 import com.drivique.api.repository.UserDocumentRepository;
+import com.drivique.api.model.Branch;
+import com.drivique.api.model.City;
+import com.drivique.api.model.Department;
+import com.drivique.api.repository.BranchRepository;
+import com.drivique.api.repository.CityRepository;
+import com.drivique.api.repository.DepartmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +29,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
 
@@ -58,6 +65,17 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private DepartmentRepository departmentRepository;
+
+    @Autowired
+    private CityRepository cityRepository;
+
+    @Autowired
+    private BranchRepository branchRepository;
+
+    private Branch branch;
+
     private User customerUser;
     private User employeeUser;
     private String customerToken;
@@ -70,6 +88,19 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
     @BeforeEach
     void setUp() {
         resetIamTables();
+        resetLocationTables();
+
+        Department department = departmentRepository.saveAndFlush(new Department("Antioquia"));
+        City city = cityRepository.saveAndFlush(new City(department, "Medellín", true, true));
+        branch = branchRepository.saveAndFlush(new Branch(
+                "Sede Poblado",
+                "Cra 43A # 1-50",
+                city,
+                "3001234567",
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                true
+        ));
 
         pendingStatus = documentStatusRepository.save(new DocumentStatus("PENDING", "Pendiente", "Pendiente de revisión"));
         approvedStatus = documentStatusRepository.save(new DocumentStatus("APPROVED", "Aprobado", "Aprobado"));
@@ -140,6 +171,7 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
                         .file(back)
                         .param("documentTypeId", ccDocType.getId().toString())
                         .param("documentNumber", "123456789")
+                        .param("branchId", branch.getId().toString())
                         .header("Authorization", "Bearer " + customerToken)
                         .contextPath("/api"))
                 .andExpect(status().isCreated())
