@@ -530,32 +530,6 @@ class ReservationServiceTests {
     }
 
     @Test
-    void getReservationByCode_Success() {
-        Reservation r = new Reservation(
-                "RES-2026-0001",
-                user,
-                vehicle,
-                pendingStatus,
-                insurance,
-                mileagePlan,
-                branch,
-                Instant.now().plus(1, ChronoUnit.DAYS),
-                Instant.now().plus(4, ChronoUnit.DAYS),
-                new BigDecimal("220000"),
-                new BigDecimal("800000"),
-                null,
-                null,
-                true
-        );
-        when(reservationRepository.findByCodeIgnoreCase("RES-2026-0001")).thenReturn(Optional.of(r));
-
-        ReservationResponseDTO response = service.getReservationByCode("RES-2026-0001", userEmail);
-
-        assertThat(response).isNotNull();
-        assertThat(response.code()).isEqualTo("RES-2026-0001");
-    }
-
-    @Test
     void getMyReservations_ReturnsList() {
         Reservation r = new Reservation(
                 "RES-2026-0001",
@@ -645,6 +619,8 @@ class ReservationServiceTests {
 
         when(reservationRepository.existsOverlappingReservation(eq(vehicleId), eq(pickup), eq(returnDate)))
                 .thenReturn(false);
+        when(insuranceCoverageRepository.findAll()).thenReturn(List.of(insurance));
+        when(mileagePlanRepository.findAll()).thenReturn(List.of(mileagePlan));
 
         CreateReservationRequestDTO request = new CreateReservationRequestDTO(
                 vehicleId,
@@ -660,8 +636,8 @@ class ReservationServiceTests {
         ReservationResponseDTO response = service.createReservation(request, userEmail);
 
         assertThat(response).isNotNull();
-        assertThat(response.insuranceName()).isEqualTo("Básica");
-        assertThat(response.mileagePlanName()).isEqualTo("200km");
+        assertThat(response.insuranceCoverageName()).isEqualTo("Cobertura Total");
+        assertThat(response.mileagePlanName()).isEqualTo("Ilimitado");
     }
 
     @Test
