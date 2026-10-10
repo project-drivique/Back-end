@@ -286,6 +286,7 @@ class ContractServiceTests {
     @Test
     void getOrGenerateByReservationCode_Generates_WhenNotFound() {
         when(reservationRepository.findByCodeIgnoreCase("RES-2026-0001")).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findById(reservation.getId())).thenReturn(Optional.of(reservation));
         when(rentalContractRepository.findByReservationId(reservation.getId())).thenReturn(Optional.empty());
         when(rentalContractRepository.existsByReservationId(reservation.getId())).thenReturn(false);
         when(rentalContractRepository.save(any(RentalContract.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -438,10 +439,15 @@ class ContractServiceTests {
         Branch returnPtBranch = mock(Branch.class);
         when(returnPtBranch.getId()).thenReturn(UUID.randomUUID());
         when(returnPtBranch.getName()).thenReturn("Sede Centro");
+        City returnCity = mock(City.class);
+        when(returnCity.getId()).thenReturn(UUID.randomUUID());
+        when(returnCity.getName()).thenReturn("Medellín");
+        when(returnPtBranch.getCity()).thenReturn(returnCity);
 
-        ReservationDeliveryPoint pt1 = new ReservationDeliveryPoint(reservation, "PICKUP", pickupPtBranch, "Aeropuerto", new BigDecimal("50000"));
-        ReservationDeliveryPoint pt2 = new ReservationDeliveryPoint(reservation, "RETURN", returnPtBranch, "Centro", new BigDecimal("30000"));
-        reservation.setDeliveryPoints(List.of(pt1, pt2));
+        ReservationDeliveryPoint pt1 = new ReservationDeliveryPoint(reservation, "PICKUP", "BRANCH", pickupPtBranch, null, null, null, null, null);
+        ReservationDeliveryPoint pt2 = new ReservationDeliveryPoint(reservation, "RETURN", "BRANCH", returnPtBranch, null, null, null, null, null);
+        reservation.addDeliveryPoint(pt1);
+        reservation.addDeliveryPoint(pt2);
 
         GenerateContractRequestDTO request = new GenerateContractRequestDTO(reservationId);
         when(rentalContractRepository.existsByReservationId(reservation.getId())).thenReturn(false);
