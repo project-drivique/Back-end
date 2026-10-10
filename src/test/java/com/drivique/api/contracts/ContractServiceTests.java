@@ -75,6 +75,11 @@ class ContractServiceTests {
         when(branch.getId()).thenReturn(UUID.randomUUID());
         when(branch.getName()).thenReturn("Sede Poblado");
 
+        City city = mock(City.class);
+        when(city.getId()).thenReturn(UUID.randomUUID());
+        when(city.getName()).thenReturn("Medellín");
+        when(branch.getCity()).thenReturn(city);
+
         category = mock(VehicleCategory.class);
         when(category.getSecurityDeposit()).thenReturn(new BigDecimal("1500000.00"));
 
@@ -108,6 +113,8 @@ class ContractServiceTests {
 
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
         when(contractStatusRepository.findByCodeIgnoreCase("DRAFT")).thenReturn(Optional.of(draftStatus));
+        when(contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE"))
+                .thenReturn(Optional.of(new ContractStatus("PENDING_SIGNATURE", "Pending signature", true, false)));
 
         clauses = List.of(
                 new ContractClause("v1.0", (short) 1, "Objeto", "Contenido objeto", true),
@@ -129,7 +136,7 @@ class ContractServiceTests {
         assertThat(response).isNotNull();
         assertThat(response.contractNumber()).startsWith("CTR-");
         assertThat(response.reservationCode()).isEqualTo("RES-2026-0001");
-        assertThat(response.statusCode()).isEqualTo("DRAFT");
+        assertThat(response.statusCode()).isEqualTo("PENDING_SIGNATURE");
         assertThat(response.baseAmount()).isEqualByComparingTo("800000.00");
         assertThat(response.securityDeposit()).isEqualByComparingTo("1500000.00");
         assertThat(response.clauses()).hasSize(2);
@@ -249,5 +256,220 @@ class ContractServiceTests {
         assertThatThrownBy(() -> service.getContractByNumber("CTR-INVALID", customerEmail))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Contrato no encontrado");
+    }
+
+    @Test
+    void getOrGenerateByReservationCode_ReturnsExisting_WhenFound() {
+        RentalContract contract = new RentalContract(
+                "CTR-2026-0001",
+                reservation,
+                customer,
+                vehicle,
+                draftStatus,
+                branch,
+                branch,
+                reservation.getPickupDate(),
+                reservation.getReturnDate(),
+                reservation.getTotalEstimated(),
+                new BigDecimal("1500000.00"),
+                clauses
+        );
+        when(reservationRepository.findByCodeIgnoreCase("RES-2026-0001")).thenReturn(Optional.of(reservation));
+        when(rentalContractRepository.findByReservationId(reservation.getId())).thenReturn(Optional.of(contract));
+
+        ContractResponseDTO response = service.getOrGenerateByReservationCode("RES-2026-0001", customerEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.contractNumber()).isEqualTo("CTR-2026-0001");
+    }
+
+    @Test
+    void getOrGenerateByReservationCode_Generates_WhenNotFound() {
+        when(reservationRepository.findByCodeIgnoreCase("RES-2026-0001")).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(rentalContractRepository.findByReservationId(reservation.getId())).thenReturn(Optional.empty());
+        when(rentalContractRepository.existsByReservationId(reservation.getId())).thenReturn(false);
+        when(rentalContractRepository.save(any(RentalContract.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ContractResponseDTO response = service.getOrGenerateByReservationCode("RES-2026-0001", customerEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.reservationCode()).isEqualTo("RES-2026-0001");
+    }
+
+    @Test
+    void getOrGenerateByReservationCode_ThrowsNotFound_WhenReservationDoesNotExist() {
+        when(reservationRepository.findByCodeIgnoreCase("RES-INVALID")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getOrGenerateByReservationCode("RES-INVALID", customerEmail))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Reserva no encontrada");
+    }
+
+    @Test
+    void downloadPdf_Success() {
+        RentalContract contract = new RentalContract(
+                "CTR-2026-0001",
+                reservation,
+                customer,
+                vehicle,
+                draftStatus,
+                branch,
+                branch,
+                reservation.getPickupDate(),
+                reservation.getReturnDate(),
+                reservation.getTotalEstimated(),
+                new BigDecimal("1500000.00"),
+                clauses
+        );
+        contract.setPdfUrl("/uploads/contracts/ctr.pdf");
+        byte[] expectedBytes = "PDF_CONTENT".getBytes();
+
+        when(rentalContractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+        when(fileStorageService.read("/uploads/contracts/ctr.pdf")).thenReturn(expectedBytes);
+
+        byte[] result = service.downloadPdf(contractId, customerEmail);
+
+        assertThat(result).isEqualTo(expectedBytes);
+    }
+
+    @Test
+    void downloadPdf_ThrowsConflict_WhenNotSigned() {
+        RentalContract contract = new RentalContract(
+                "CTR-2026-0001",
+                reservation,
+                customer,
+                vehicle,
+                draftStatus,
+                branch,
+                branch,
+                reservation.getPickupDate(),
+                reservation.getReturnDate(),
+                reservation.getTotalEstimated(),
+                new BigDecimal("1500000.00"),
+                clauses
+        );
+        contract.setPdfUrl(null);
+
+        when(rentalContractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+
+        assertThatThrownBy(() -> service.downloadPdf(contractId, customerEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("El contrato aún no está firmado");
+    }
+
+    @Test
+    void downloadPdf_ThrowsNotFound_WhenContractNotFound() {
+        when(rentalContractRepository.findById(contractId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.downloadPdf(contractId, customerEmail))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Contrato no encontrado");
+    }
+
+    @Test
+    void validateAccess_AllowsStaffUser() {
+        User staffUser = mock(User.class);
+        when(staffUser.getId()).thenReturn(UUID.randomUUID());
+        Role staffRole = mock(Role.class);
+        when(staffRole.getCode()).thenReturn("ADMIN");
+        when(staffUser.getRoles()).thenReturn(java.util.Set.of(staffRole));
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("admin@drivique.com")).thenReturn(Optional.of(staffUser));
+
+        RentalContract contract = new RentalContract(
+                "CTR-2026-0001",
+                reservation,
+                customer,
+                vehicle,
+                draftStatus,
+                branch,
+                branch,
+                reservation.getPickupDate(),
+                reservation.getReturnDate(),
+                reservation.getTotalEstimated(),
+                new BigDecimal("1500000.00"),
+                clauses
+        );
+        when(rentalContractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+
+        ContractResponseDTO response = service.getContractById(contractId, "admin@drivique.com");
+        assertThat(response).isNotNull();
+    }
+
+    @Test
+    void validateAccess_ThrowsNotFound_WhenUnrelatedUser() {
+        User otherUser = mock(User.class);
+        when(otherUser.getId()).thenReturn(UUID.randomUUID());
+        when(otherUser.getRoles()).thenReturn(Collections.emptySet());
+
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("intruder@drivique.com")).thenReturn(Optional.of(otherUser));
+
+        RentalContract contract = new RentalContract(
+                "CTR-2026-0001",
+                reservation,
+                customer,
+                vehicle,
+                draftStatus,
+                branch,
+                branch,
+                reservation.getPickupDate(),
+                reservation.getReturnDate(),
+                reservation.getTotalEstimated(),
+                new BigDecimal("1500000.00"),
+                clauses
+        );
+        when(rentalContractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+
+        assertThatThrownBy(() -> service.getContractById(contractId, "intruder@drivique.com"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Reserva no encontrada");
+    }
+
+    @Test
+    void generateContract_ResolvesBranchesFromDeliveryPoints() {
+        Branch pickupPtBranch = mock(Branch.class);
+        when(pickupPtBranch.getId()).thenReturn(UUID.randomUUID());
+        when(pickupPtBranch.getName()).thenReturn("Sede Aeropuerto");
+        City pickupCity = mock(City.class);
+        when(pickupCity.getId()).thenReturn(UUID.randomUUID());
+        when(pickupCity.getName()).thenReturn("Rionegro");
+        when(pickupPtBranch.getCity()).thenReturn(pickupCity);
+
+        Branch returnPtBranch = mock(Branch.class);
+        when(returnPtBranch.getId()).thenReturn(UUID.randomUUID());
+        when(returnPtBranch.getName()).thenReturn("Sede Centro");
+        City returnCity = mock(City.class);
+        when(returnCity.getId()).thenReturn(UUID.randomUUID());
+        when(returnCity.getName()).thenReturn("Medellín");
+        when(returnPtBranch.getCity()).thenReturn(returnCity);
+
+        ReservationDeliveryPoint pt1 = new ReservationDeliveryPoint(reservation, "PICKUP", "BRANCH", pickupPtBranch, null, null, null, null, null);
+        ReservationDeliveryPoint pt2 = new ReservationDeliveryPoint(reservation, "RETURN", "BRANCH", returnPtBranch, null, null, null, null, null);
+        reservation.addDeliveryPoint(pt1);
+        reservation.addDeliveryPoint(pt2);
+
+        GenerateContractRequestDTO request = new GenerateContractRequestDTO(reservationId);
+        when(rentalContractRepository.existsByReservationId(reservation.getId())).thenReturn(false);
+        when(rentalContractRepository.save(any(RentalContract.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ContractResponseDTO response = service.generateContract(request, customerEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.pickupBranchName()).isEqualTo("Sede Aeropuerto");
+        assertThat(response.returnBranchName()).isEqualTo("Sede Centro");
+    }
+
+    @Test
+    void generateContract_ThrowsConflict_WhenCancelledByTimeout() {
+        ReservationStatus cancelledTimeout = new ReservationStatus("CANCELLED_BY_TIMEOUT", "Cancelled by timeout", false);
+        reservation.setStatus(cancelledTimeout);
+
+        GenerateContractRequestDTO request = new GenerateContractRequestDTO(reservationId);
+        when(rentalContractRepository.existsByReservationId(reservation.getId())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.generateContract(request, customerEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No es posible emitir un contrato para una reserva cancelada");
     }
 }

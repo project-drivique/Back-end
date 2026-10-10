@@ -442,6 +442,205 @@ class ReservationServiceTests {
     }
 
     @Test
+    void getReservationById_Success_ForOwner() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        ReservationResponseDTO response = service.getReservationById(reservationId, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo("RES-2026-0001");
+    }
+
+    @Test
+    void getReservationById_Success_ForStaff() {
+        User staffUser = mock(User.class);
+        when(staffUser.getId()).thenReturn(UUID.randomUUID());
+        Role staffRole = mock(Role.class);
+        when(staffRole.getCode()).thenReturn("AGENT");
+        when(staffUser.getRoles()).thenReturn(Set.of(staffRole));
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("agent@drivique.com")).thenReturn(Optional.of(staffUser));
+
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        ReservationResponseDTO response = service.getReservationById(reservationId, "agent@drivique.com");
+
+        assertThat(response).isNotNull();
+    }
+
+    @Test
+    void getReservationById_ThrowsNotFound_WhenUnrelatedUser() {
+        User intruder = mock(User.class);
+        when(intruder.getId()).thenReturn(UUID.randomUUID());
+        when(intruder.getRoles()).thenReturn(Collections.emptySet());
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("intruder@drivique.com")).thenReturn(Optional.of(intruder));
+
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        assertThatThrownBy(() -> service.getReservationById(reservationId, "intruder@drivique.com"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Reserva no encontrada");
+    }
+
+    @Test
+    void getMyReservations_ReturnsList() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findByCustomerOrderByCreatedAtDesc(user)).thenReturn(List.of(r));
+
+        List<ReservationResponseDTO> list = service.getMyReservations(userEmail);
+
+        assertThat(list).hasSize(1);
+        assertThat(list.get(0).code()).isEqualTo("RES-2026-0001");
+    }
+
+    @Test
+    void confirmReservationPayment_Success_WhenHold() {
+        Reservation r = new Reservation(
+                "HLD-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        when(reservationRepository.countByCodeStartingWith(any())).thenReturn(0L);
+        when(reservationStatusRepository.findByCodeIgnoreCase("CONFIRMED"))
+                .thenReturn(Optional.of(new ReservationStatus("CONFIRMED", "Confirmed", true)));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ReservationResponseDTO response = service.confirmReservationPayment(reservationId, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).startsWith("RES-");
+        assertThat(response.status()).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    void confirmReservationPayment_ReturnsImmediately_WhenAlreadyConfirmed() {
+        Reservation r = new Reservation(
+                "RES-2026-0001",
+                user,
+                vehicle,
+                pendingStatus,
+                insurance,
+                mileagePlan,
+                branch,
+                Instant.now().plus(1, ChronoUnit.DAYS),
+                Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"),
+                new BigDecimal("800000"),
+                null,
+                null,
+                true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        ReservationResponseDTO response = service.confirmReservationPayment(reservationId, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.code()).isEqualTo("RES-2026-0001");
+    }
+
+    @Test
+    void createReservation_PicksFirstActiveInsuranceAndMileage_WhenNullProvided() {
+        Instant pickup = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant returnDate = pickup.plus(3, ChronoUnit.DAYS);
+
+        when(reservationRepository.existsOverlappingReservation(eq(vehicleId), eq(pickup), eq(returnDate)))
+                .thenReturn(false);
+        when(insuranceCoverageRepository.findAll()).thenReturn(List.of(insurance));
+        when(mileagePlanRepository.findAll()).thenReturn(List.of(mileagePlan));
+
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(
+                vehicleId,
+                pickup,
+                returnDate,
+                null,
+                null,
+                null,
+                null,
+                branchId
+        );
+
+        ReservationResponseDTO response = service.createReservation(request, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.insuranceCoverageName()).isEqualTo("Cobertura Total");
+        assertThat(response.mileagePlanName()).isEqualTo("Ilimitado");
+    }
+
+    @Test
     void modifyReservationServices_Success() {
         Reservation r = new Reservation(
                 "RES-2026-0001",
@@ -467,4 +666,5 @@ class ReservationServiceTests {
         assertThat(response).isNotNull();
     }
 }
+
 
