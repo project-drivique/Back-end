@@ -5,6 +5,7 @@ on:
     branches: [dev, qa, main]
   push:
     branches: [dev, qa, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,6 +21,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+
+      - name: Pre-pull PostgreSQL 17 image
+        run: docker pull postgres:17-alpine
 
       - name: Verify against PostgreSQL 17 with Testcontainers
         run: ./mvnw --batch-mode clean verify -DtrimStackTrace=false
