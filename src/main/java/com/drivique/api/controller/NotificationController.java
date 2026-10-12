@@ -42,6 +42,24 @@ public class NotificationController {
         return notificationService.getNotifications(authentication.getName(), filter);
     }
 
+    @GetMapping("/unread-count")
+    @Operation(summary = "Contador de notificaciones no leídas", description = "Obtiene la cantidad de notificaciones pendientes por leer.")
+    @ApiResponse(responseCode = "200", description = "Contador obtenido exitosamente")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    public com.drivique.api.dto.NotificationUnreadCountDTO getUnreadCount(Authentication authentication) {
+        long count = notificationService.getUnreadCount(authentication.getName());
+        return new com.drivique.api.dto.NotificationUnreadCountDTO(count);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Consultar detalle de una notificación", description = "Obtiene los detalles de una notificación específica del usuario autenticado.")
+    @ApiResponse(responseCode = "200", description = "Notificación obtenida exitosamente")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @ApiResponse(responseCode = "404", description = "Notificación no encontrada")
+    public NotificationResponseDTO getNotificationById(@PathVariable UUID id, Authentication authentication) {
+        return notificationService.getNotificationById(id, authentication.getName());
+    }
+
     @PatchMapping("/{id}/read")
     @Operation(summary = "Marcar notificación como leída", description = "Actualiza el estado de una notificación a leída para el usuario autenticado.")
     @ApiResponse(responseCode = "200", description = "Notificación marcada como leída")

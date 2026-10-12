@@ -128,6 +128,15 @@ public class LocalFileStorageService implements FileStorageService {
         }
     }
 
+    @Override
+    public byte[] read(String storedPath) {
+        if (storedPath == null || !storedPath.startsWith("/uploads/")) throw new IllegalArgumentException("Ruta de archivo inválida.");
+        Path file = rootLocation.resolve(storedPath.substring("/uploads/".length())).normalize();
+        if (!file.startsWith(rootLocation) || !Files.isRegularFile(file)) throw new IllegalArgumentException("Archivo no encontrado.");
+        try { return Files.readAllBytes(file); }
+        catch (IOException ex) { throw new IllegalStateException("No fue posible leer el archivo.", ex); }
+    }
+
     private String getFileExtension(String filename) {
         int dotIndex = filename.lastIndexOf('.');
         if (dotIndex >= 0 && dotIndex < filename.length() - 1) {

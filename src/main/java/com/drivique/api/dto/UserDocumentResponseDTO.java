@@ -9,6 +9,9 @@ import java.util.UUID;
 public record UserDocumentResponseDTO(
         UUID id,
         UUID userId,
+        String userName,
+        UUID branchId,
+        String branchName,
         DocumentTypeResponseDTO documentType,
         String documentNumber,
         String frontUrl,
@@ -27,6 +30,9 @@ public record UserDocumentResponseDTO(
         return new UserDocumentResponseDTO(
                 doc.getId(),
                 doc.getUser() != null ? doc.getUser().getId() : null,
+                doc.getUser() != null ? doc.getUser().getFullName() : null,
+                doc.getBranch() != null ? doc.getBranch().getId() : null,
+                doc.getBranch() != null ? doc.getBranch().getName() : null,
                 DocumentTypeResponseDTO.fromEntity(doc.getDocumentType()),
                 doc.getDocumentNumber(),
                 doc.getFrontUrl(),

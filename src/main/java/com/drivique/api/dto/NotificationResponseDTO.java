@@ -15,8 +15,27 @@ public record NotificationResponseDTO(
         boolean isRead,
         Instant sentAt,
         Instant readAt,
-        Instant createdAt
+        Instant createdAt,
+        String eventType,
+        String criticality,
+        String metadata
 ) {
+    public NotificationResponseDTO(
+            UUID id,
+            UUID userId,
+            String channel,
+            String type,
+            String subject,
+            String message,
+            UUID referenceId,
+            boolean isRead,
+            Instant sentAt,
+            Instant readAt,
+            Instant createdAt
+    ) {
+        this(id, userId, channel, type, subject, message, referenceId, isRead, sentAt, readAt, createdAt, null, "NORMAL", null);
+    }
+
     public static NotificationResponseDTO fromEntity(Notification notification) {
         return new NotificationResponseDTO(
                 notification.getId(),
@@ -29,7 +48,10 @@ public record NotificationResponseDTO(
                 notification.isRead(),
                 notification.getSentAt(),
                 notification.getReadAt(),
-                notification.getCreatedAt()
+                notification.getCreatedAt(),
+                notification.getEventType(),
+                notification.getCriticality(),
+                notification.getMetadata()
         );
     }
 }
