@@ -20,5 +20,24 @@ public record UpdateUserPreferenceRequestDTO(
         Boolean emailNotifications,
 
         @Schema(example = "false")
-        Boolean smsNotifications
-) {}
+        Boolean smsNotifications,
+
+        @Schema(example = "true")
+        Boolean pushNotifications,
+
+        @Schema(example = "true")
+        Boolean inAppNotifications,
+
+        @Schema(example = "false")
+        Boolean marketingNotifications
+) {
+    public UpdateUserPreferenceRequestDTO(
+            UUID languageId,
+            UUID currencyId,
+            String themePreference,
+            Boolean emailNotifications,
+            Boolean smsNotifications
+    ) {
+        this(languageId, currencyId, themePreference, emailNotifications, smsNotifications, null, null, null);
+    }
+}

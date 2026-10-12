@@ -34,6 +34,7 @@ public class ReservationService {
     private final PromotionValidationService promotionValidationService;
     private final BranchRepository branchRepository;
     private final AuditLogRepository auditLogRepository;
+    private final NotificationService notificationService;
 
     @Autowired
     public ReservationService(
@@ -50,7 +51,8 @@ public class ReservationService {
             UserCouponUsageRepository userCouponUsageRepository,
             PromotionValidationService promotionValidationService,
             BranchRepository branchRepository,
-            AuditLogRepository auditLogRepository
+            AuditLogRepository auditLogRepository,
+            NotificationService notificationService
     ) {
         this.reservationRepository = reservationRepository;
         this.reservationStatusRepository = reservationStatusRepository;
@@ -66,6 +68,7 @@ public class ReservationService {
         this.promotionValidationService = promotionValidationService;
         this.branchRepository = branchRepository;
         this.auditLogRepository = auditLogRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -104,11 +107,11 @@ public class ReservationService {
             throw new ConflictException("El vehículo no se encuentra disponible en las fechas seleccionadas debido a otra reserva activa");
         }
 
-        InsuranceCoverage insurance = insuranceCoverageRepository.findById(request.insuranceCoverageId())
+        InsuranceCoverage insurance = (request.insuranceCoverageId() == null ? insuranceCoverageRepository.findAll().stream().filter(InsuranceCoverage::isActive).findFirst() : insuranceCoverageRepository.findById(request.insuranceCoverageId()))
                 .filter(InsuranceCoverage::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Cobertura de seguro no encontrada o inactiva"));
 
-        MileagePlan mileagePlan = mileagePlanRepository.findById(request.mileagePlanId())
+        MileagePlan mileagePlan = (request.mileagePlanId() == null ? mileagePlanRepository.findAll().stream().filter(MileagePlan::isActive).findFirst() : mileagePlanRepository.findById(request.mileagePlanId()))
                 .filter(MileagePlan::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado o inactivo"));
 
@@ -214,6 +217,28 @@ public class ReservationService {
 
         Reservation savedReservation = reservationRepository.save(reservation);
 
+        notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_PAYMENT",
+                "Reserva recibida - pago pendiente",
+                "Recibimos tu reserva " + savedReservation.getCode() + ". Quedará pendiente hasta que el pago sea validado en la sucursal. Después podrás firmar el contrato y recibir el PDF.",
+                savedReservation.getId());
+
+        try {
+            notificationService.emitDomainEvent(
+                    savedReservation.getCustomer(),
+                    "RESERVATION",
+                    "HIGH",
+                    savedReservation.getId(),
+                    java.util.Map.of(
+                            "bookingCode", savedReservation.getCode(),
+                            "pickupDate", savedReservation.getPickupDate().toString(),
+                            "returnDate", savedReservation.getReturnDate().toString()
+                    ),
+                    "RES-" + savedReservation.getId()
+            );
+        } catch (Exception e) {
+            // No bloquear la creación de la reserva
+        }
+
         for (ReservationAdditionalServiceItemDTO item : serviceItems) {
             AdditionalService s = additionalServiceCatalogRepository.findById(item.additionalServiceId()).orElseThrow();
             ReservationAdditionalService ras = new ReservationAdditionalService(
@@ -281,7 +306,6 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         return reservationRepository.findByCustomerOrderByCreatedAtDesc(user)
                 .stream()
-                .filter(r -> !r.getCode().startsWith("HLD-"))
                 .map(this::mapFromEntity)
                 .toList();
     }
@@ -368,6 +392,22 @@ public class ReservationService {
                 null,
                 null
         ));
+
+        try {
+            notificationService.emitDomainEvent(
+                    saved.getCustomer(),
+                    "CANCELLATION",
+                    "HIGH",
+                    saved.getId(),
+                    java.util.Map.of(
+                            "bookingCode", saved.getCode(),
+                            "reason", request.reason() != null ? request.reason() : "Cancelada por el usuario"
+                    ),
+                    "CANCEL-" + saved.getId()
+            );
+        } catch (Exception e) {
+            // No bloquear la cancelación
+        }
 
         return mapFromEntity(saved);
     }
