@@ -132,6 +132,7 @@ class ContractIntegrationTests extends DatabaseHealthTestSupport {
         ));
 
         contractStatusRepository.saveAndFlush(new ContractStatus("DRAFT", "Draft", true, false));
+        contractStatusRepository.saveAndFlush(new ContractStatus("PENDING_SIGNATURE", "Pending signature", true, false));
         contractClauseRepository.saveAndFlush(new ContractClause("v1.0", (short) 1, "Objeto del Contrato", "Texto objeto", true));
         contractClauseRepository.saveAndFlush(new ContractClause("v1.0", (short) 2, "Uso y Destinación", "Texto uso", true));
     }
@@ -147,7 +148,7 @@ class ContractIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.contractNumber", startsWith("CTR-")))
                 .andExpect(jsonPath("$.reservationCode", is("RES-2026-CTR1")))
-                .andExpect(jsonPath("$.statusCode", is("DRAFT")))
+                .andExpect(jsonPath("$.statusCode", is("PENDING_SIGNATURE")))
                 .andExpect(jsonPath("$.baseAmount", is(810000.00)))
                 .andExpect(jsonPath("$.securityDeposit", is(1500000.00)))
                 .andExpect(jsonPath("$.clauses", hasSize(2)));

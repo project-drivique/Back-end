@@ -27,7 +27,11 @@ public record SocialLinkRequestDTO(
         String redirectUri,
 
         @Schema(description = "Nonce criptográfico anti-replay", example = "n-0S6_WzA2Mj")
-        String nonce
+        String nonce,
+
+        String email,
+        String firstName,
+        String lastName
 ) {
     public String normalizedProvider() {
         return provider != null ? provider.trim().toUpperCase() : "";
