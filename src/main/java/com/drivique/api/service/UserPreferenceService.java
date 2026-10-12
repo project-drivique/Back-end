@@ -53,6 +53,15 @@ public class UserPreferenceService {
         if (request.smsNotifications() != null) {
             preference.setSmsNotifications(request.smsNotifications());
         }
+        if (request.pushNotifications() != null) {
+            preference.setPushNotifications(request.pushNotifications());
+        }
+        if (request.inAppNotifications() != null) {
+            preference.setInAppNotifications(request.inAppNotifications());
+        }
+        if (request.marketingNotifications() != null) {
+            preference.setMarketingNotifications(request.marketingNotifications());
+        }
         preference.setUpdatedAt(Instant.now());
 
         UserPreference saved = preferenceRepository.save(preference);
@@ -72,6 +81,9 @@ public class UserPreferenceService {
                 preference.getThemePreference(),
                 preference.isEmailNotifications(),
                 preference.isSmsNotifications(),
+                preference.isPushNotifications(),
+                preference.isInAppNotifications(),
+                preference.isMarketingNotifications(),
                 preference.getUpdatedAt()
         );
     }
