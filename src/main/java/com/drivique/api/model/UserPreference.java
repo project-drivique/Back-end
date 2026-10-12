@@ -37,6 +37,15 @@ public class UserPreference implements Persistable<UUID> {
     @Column(name = "sms_notifications", nullable = false)
     private boolean smsNotifications = true;
 
+    @Column(name = "push_notifications", nullable = false)
+    private boolean pushNotifications = true;
+
+    @Column(name = "in_app_notifications", nullable = false)
+    private boolean inAppNotifications = true;
+
+    @Column(name = "marketing_notifications", nullable = false)
+    private boolean marketingNotifications = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -51,6 +60,9 @@ public class UserPreference implements Persistable<UUID> {
         this.themePreference = "SYSTEM";
         this.emailNotifications = true;
         this.smsNotifications = true;
+        this.pushNotifications = true;
+        this.inAppNotifications = true;
+        this.marketingNotifications = false;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }
@@ -80,6 +92,15 @@ public class UserPreference implements Persistable<UUID> {
 
     public boolean isSmsNotifications() { return smsNotifications; }
     public void setSmsNotifications(boolean smsNotifications) { this.smsNotifications = smsNotifications; }
+
+    public boolean isPushNotifications() { return pushNotifications; }
+    public void setPushNotifications(boolean pushNotifications) { this.pushNotifications = pushNotifications; }
+
+    public boolean isInAppNotifications() { return inAppNotifications; }
+    public void setInAppNotifications(boolean inAppNotifications) { this.inAppNotifications = inAppNotifications; }
+
+    public boolean isMarketingNotifications() { return marketingNotifications; }
+    public void setMarketingNotifications(boolean marketingNotifications) { this.marketingNotifications = marketingNotifications; }
 
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
