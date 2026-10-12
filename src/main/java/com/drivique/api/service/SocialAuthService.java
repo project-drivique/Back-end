@@ -110,8 +110,9 @@ public class SocialAuthService {
                 user.setProfileComplete(false);
 
                 // Assign default CUSTOMER role
-                Optional<Role> customerRole = roleRepository.findByCode("CUSTOMER");
-                customerRole.ifPresent(role -> user.setRoles(Set.of(role)));
+                Role customerRole = roleRepository.findByCode("CUSTOMER")
+                        .orElseThrow(() -> new IllegalStateException("El rol CUSTOMER no está configurado."));
+                user.setRoles(Set.of(customerRole));
 
                 userRepository.save(user);
 
@@ -128,6 +129,10 @@ public class SocialAuthService {
                 );
                 socialAccountRepository.save(newSocial);
             }
+        }
+
+        if (userPreferenceRepository.findByUserId(user.getId()).isEmpty()) {
+            userPreferenceRepository.save(new UserPreference(user));
         }
 
         // Account status & lockout validation
@@ -206,7 +211,10 @@ public class SocialAuthService {
                 request.codeVerifier(),
                 request.redirectUri(),
                 request.nonce(),
-                null
+                null,
+                request.email(),
+                request.firstName(),
+                request.lastName()
         );
 
         OAuthUserInfo oauthUser = oAuthProviderService.verifyAndExtract(loginReq);
