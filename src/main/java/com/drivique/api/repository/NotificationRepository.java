@@ -28,4 +28,8 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @Modifying
     @Query("DELETE FROM Notification n WHERE n.user.id = :userId")
     void deleteByUserId(@Param("userId") UUID userId);
+
+    boolean existsByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
+
+    Optional<Notification> findByUserIdAndIdempotencyKey(UUID userId, String idempotencyKey);
 }

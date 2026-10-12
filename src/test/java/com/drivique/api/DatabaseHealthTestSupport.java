@@ -103,6 +103,8 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM audit.audit_logs");
         jdbc.execute("DELETE FROM audit.generated_reports");
         jdbc.execute("DELETE FROM audit.administrative_report_types");
+        jdbc.execute("DELETE FROM support.notification_delivery_attempts");
+        jdbc.execute("DELETE FROM support.notification_outbox");
         jdbc.execute("DELETE FROM support.notifications");
         jdbc.execute("DELETE FROM support.incident_responses");
         jdbc.execute("DELETE FROM support.incident_reports");

@@ -19,9 +19,13 @@ public class VehicleInspectionService {
     private final RentalContractRepository contracts; private final VehicleInspectionRepository inspections;
     private final InspectionChecklistItemRepository checklistItems; private final InspectionChecklistAnswerRepository answers;
     private final UserRepository users; private final FileStorageService storage; private final ContractStatusRepository contractStatuses;
-    private final ReservationStatusRepository reservationStatuses; private final BigDecimal fuelRate; private final BigDecimal damageRate;
-    public VehicleInspectionService(RentalContractRepository contracts, VehicleInspectionRepository inspections, InspectionChecklistItemRepository checklistItems, InspectionChecklistAnswerRepository answers, UserRepository users, FileStorageService storage, ContractStatusRepository contractStatuses, ReservationStatusRepository reservationStatuses, @Value("${app.inspection.fuel-charge-per-percent:5000}") BigDecimal fuelRate, @Value("${app.inspection.damage-charge-per-item:200000}") BigDecimal damageRate) {
-        this.contracts=contracts; this.inspections=inspections; this.checklistItems=checklistItems; this.answers=answers; this.users=users; this.storage=storage; this.contractStatuses=contractStatuses; this.reservationStatuses=reservationStatuses; this.fuelRate=fuelRate; this.damageRate=damageRate;
+    private final ReservationStatusRepository reservationStatuses; private final BigDecimal fuelRate; private final BigDecimal damageRate; private final NotificationService notificationService;
+    @org.springframework.beans.factory.annotation.Autowired
+    public VehicleInspectionService(RentalContractRepository contracts, VehicleInspectionRepository inspections, InspectionChecklistItemRepository checklistItems, InspectionChecklistAnswerRepository answers, UserRepository users, FileStorageService storage, ContractStatusRepository contractStatuses, ReservationStatusRepository reservationStatuses, @Value("${app.inspection.fuel-charge-per-percent:5000}") BigDecimal fuelRate, @Value("${app.inspection.damage-charge-per-item:200000}") BigDecimal damageRate, @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationService notificationService) {
+        this.contracts=contracts; this.inspections=inspections; this.checklistItems=checklistItems; this.answers=answers; this.users=users; this.storage=storage; this.contractStatuses=contractStatuses; this.reservationStatuses=reservationStatuses; this.fuelRate=fuelRate; this.damageRate=damageRate; this.notificationService=notificationService;
+    }
+    public VehicleInspectionService(RentalContractRepository contracts, VehicleInspectionRepository inspections, InspectionChecklistItemRepository checklistItems, InspectionChecklistAnswerRepository answers, UserRepository users, FileStorageService storage, ContractStatusRepository contractStatuses, ReservationStatusRepository reservationStatuses, BigDecimal fuelRate, BigDecimal damageRate) {
+        this(contracts, inspections, checklistItems, answers, users, storage, contractStatuses, reservationStatuses, fuelRate, damageRate, null);
     }
     @Transactional
     public VehicleInspectionResponseDTO register(UUID contractId, VehicleInspectionRequestDTO request, List<MultipartFile> evidencePhotos, String email) {
@@ -41,7 +45,31 @@ public class VehicleInspectionService {
         Integer kmDiff=null; BigDecimal fuelDiff=null;
         if(checkIn!=null){kmDiff=request.mileage()-checkIn.getMileage();fuelDiff=checkIn.getFuelLevelPercent().subtract(request.fuelLevelPercent()).max(BigDecimal.ZERO).setScale(2,RoundingMode.HALF_UP);BigDecimal mileage=calculateExtraMileageCharge(contract.getReservation().getMileagePlan(),kmDiff);BigDecimal fuel=fuelDiff.multiply(fuelRate).setScale(2,RoundingMode.HALF_UP);long damaged=inspection.getAnswers().stream().filter(a -> !a.isCompliant()).count();BigDecimal damage=damageRate.multiply(BigDecimal.valueOf(damaged)).setScale(2,RoundingMode.HALF_UP);inspection.setCharges(mileage,fuel,damage);contract.setAdditionalCharges(inspection.getTotalCharge());contract.setStatus(contractStatuses.findByCodeIgnoreCase("FINALIZED").orElseThrow(() -> new ResourceNotFoundException("Estado FINALIZED no configurado")));contract.getReservation().setStatus(reservationStatuses.findByCodeIgnoreCase("COMPLETED").orElseThrow(() -> new ResourceNotFoundException("Estado COMPLETED no configurado")));contract.getVehicle().setMileage(request.mileage());}
         else{contract.getReservation().setStatus(reservationStatuses.findByCodeIgnoreCase("IN_PROGRESS").orElseThrow(() -> new ResourceNotFoundException("Estado IN_PROGRESS no configurado")));}
-        return map(inspections.saveAndFlush(inspection),kmDiff,fuelDiff);
+        VehicleInspection saved = inspections.saveAndFlush(inspection);
+        if (notificationService != null && contract.getCustomer() != null) {
+            try {
+                if ("CHECK_IN".equals(type)) {
+                    notificationService.emitDomainEvent(
+                            contract.getCustomer(),
+                            "DELIVERY",
+                            "HIGH",
+                            saved.getId(),
+                            java.util.Map.of("licensePlate", contract.getVehicle() != null ? contract.getVehicle().getPlate() : "N/A", "mileage", saved.getMileage()),
+                            "DELIVERY-" + saved.getId()
+                    );
+                } else if ("CHECK_OUT".equals(type)) {
+                    notificationService.emitDomainEvent(
+                            contract.getCustomer(),
+                            "RETURN",
+                            "HIGH",
+                            saved.getId(),
+                            java.util.Map.of("licensePlate", contract.getVehicle() != null ? contract.getVehicle().getPlate() : "N/A", "totalCharges", saved.getTotalCharge() != null ? saved.getTotalCharge() : BigDecimal.ZERO),
+                            "RETURN-" + saved.getId()
+                    );
+                }
+            } catch (Exception e) {}
+        }
+        return map(saved,kmDiff,fuelDiff);
     }
     @Transactional(readOnly=true) public List<VehicleInspectionResponseDTO> list(UUID contractId,String email){RentalContract c=contracts.findById(contractId).orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));validateAccess(c,user(email));return inspections.findByContractIdOrderByCreatedAtAsc(contractId).stream().map(i -> map(i,null,null)).toList();}
     @Transactional(readOnly=true) public List<InspectionChecklistItemResponseDTO> checklist(){return checklistItems.findAll().stream().filter(InspectionChecklistItem::isActive).map(i -> new InspectionChecklistItemResponseDTO(i.getId(),i.getName(),i.getDescription())).toList();}
