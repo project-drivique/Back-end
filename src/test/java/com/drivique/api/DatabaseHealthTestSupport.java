@@ -10,7 +10,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-import java.time.Duration;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,9 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class DatabaseHealthTestSupport {
     // Shared only within the test JVM; Ryuk removes this temporary database afterward.
-    public static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
-            .withStartupTimeout(Duration.ofMinutes(3))
-            .withConnectTimeoutSeconds(120);
+    public static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
     static {
         POSTGRES.start();
     }
