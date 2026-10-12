@@ -3,15 +3,19 @@ package com.drivique.api.service;
 import com.drivique.api.dto.NotificationResponseDTO;
 import com.drivique.api.dto.SendNotificationRequestDTO;
 import com.drivique.api.exception.ResourceNotFoundException;
-import com.drivique.api.model.Notification;
-import com.drivique.api.model.User;
-import com.drivique.api.model.UserPreference;
+import com.drivique.api.model.*;
+import com.drivique.api.repository.NotificationOutboxRepository;
 import com.drivique.api.repository.NotificationRepository;
+import com.drivique.api.repository.NotificationTemplateRepository;
 import com.drivique.api.repository.UserPreferenceRepository;
 import com.drivique.api.repository.UserRepository;
+import com.drivique.api.service.notification.NotificationOutboxProcessor;
+import com.drivique.api.service.notification.NotificationTemplateService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
@@ -19,20 +23,44 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 @Service
 public class NotificationService {
 
     private static final Logger LOG = LoggerFactory.getLogger(NotificationService.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final UserPreferenceRepository userPreferenceRepository;
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
+    private final NotificationOutboxRepository outboxRepository;
+    private final NotificationTemplateRepository templateRepository;
+    private final NotificationTemplateService templateService;
+    private final NotificationOutboxProcessor outboxProcessor;
+
+    @Autowired
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            UserRepository userRepository,
+            UserPreferenceRepository userPreferenceRepository,
+            ObjectProvider<JavaMailSender> mailSenderProvider,
+            NotificationOutboxRepository outboxRepository,
+            NotificationTemplateRepository templateRepository,
+            NotificationTemplateService templateService,
+            NotificationOutboxProcessor outboxProcessor
+    ) {
+        this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
+        this.userPreferenceRepository = userPreferenceRepository;
+        this.mailSenderProvider = mailSenderProvider;
+        this.outboxRepository = outboxRepository;
+        this.templateRepository = templateRepository;
+        this.templateService = templateService;
+        this.outboxProcessor = outboxProcessor;
+    }
 
     public NotificationService(
             NotificationRepository notificationRepository,
@@ -40,10 +68,7 @@ public class NotificationService {
             UserPreferenceRepository userPreferenceRepository,
             ObjectProvider<JavaMailSender> mailSenderProvider
     ) {
-        this.notificationRepository = notificationRepository;
-        this.userRepository = userRepository;
-        this.userPreferenceRepository = userPreferenceRepository;
-        this.mailSenderProvider = mailSenderProvider;
+        this(notificationRepository, userRepository, userPreferenceRepository, mailSenderProvider, null, null, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -56,6 +81,20 @@ public class NotificationService {
             notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         }
         return notifications.stream().map(NotificationResponseDTO::fromEntity).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public NotificationResponseDTO getNotificationById(UUID id, String email) {
+        User user = findUserByEmail(email);
+        Notification notification = notificationRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Notificación no encontrada con id: " + id));
+        return NotificationResponseDTO.fromEntity(notification);
+    }
+
+    @Transactional(readOnly = true)
+    public long getUnreadCount(String email) {
+        User user = findUserByEmail(email);
+        return notificationRepository.countByUserIdAndIsReadFalse(user.getId());
     }
 
     @Transactional
@@ -78,7 +117,7 @@ public class NotificationService {
     public NotificationResponseDTO sendNotification(SendNotificationRequestDTO request) {
         User user = userRepository.findById(request.userId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con id: " + request.userId()));
-        return dispatchNotification(user, request.channel(), request.type(), request.subject(), request.message(), request.referenceId());
+        return dispatchNotification(user, request.channel(), request.type(), request.subject(), request.message(), request.referenceId(), null, "NORMAL", null, null);
     }
 
     @Async
@@ -101,20 +140,102 @@ public class NotificationService {
 
     @Transactional
     public NotificationResponseDTO send(User user, String channel, String type, String subject, String message, UUID referenceId) {
-        return dispatchNotification(user, channel, type, subject, message, referenceId);
+        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", null, null);
     }
 
-    private NotificationResponseDTO dispatchNotification(User user, String channel, String type, String subject, String message, UUID referenceId) {
+    @Transactional
+    public NotificationResponseDTO emitDomainEvent(
+            User user,
+            String eventType,
+            String criticality,
+            UUID referenceId,
+            Map<String, Object> params,
+            String idempotencyKey
+    ) {
+        if (user == null) {
+            LOG.warn("No se puede emitir evento '{}' sin usuario.", eventType);
+            return null;
+        }
+
+        String normalizedEventType = eventType != null ? eventType.trim().toUpperCase() : "GENERAL";
+        String normalizedCriticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
+
+        // 1. Verificación de Idempotencia
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Notification> existing = notificationRepository.findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey.trim());
+            if (existing.isPresent()) {
+                LOG.info("Notificación duplicada ignorada para evento '{}' con idempotencyKey '{}'", normalizedEventType, idempotencyKey);
+                return NotificationResponseDTO.fromEntity(existing.get());
+            }
+        }
+
+        String metadataJson = serializeMetadata(params);
+
+        // 2. Buscar plantillas activas para este evento
+        List<NotificationTemplate> templates = templateRepository != null
+                ? templateRepository.findByEventTypeAndIsActiveTrue(normalizedEventType)
+                : Collections.emptyList();
+
+        if (templates.isEmpty()) {
+            // Fallback genérico si no hay plantillas específicas registradas
+            String subject = "Notificación de " + normalizedEventType;
+            String message = "Actualización referente a tu cuenta o servicio (" + normalizedEventType + ").";
+            return dispatchNotification(user, "IN_APP", "GENERAL", subject, message, referenceId, normalizedEventType, normalizedCriticality, metadataJson, idempotencyKey);
+        }
+
+        NotificationResponseDTO primaryResponse = null;
+
+        for (NotificationTemplate template : templates) {
+            String channel = template.getChannel().toUpperCase();
+
+            // 3. Evaluar permisos de canal y criticidad
+            if (!isChannelAllowed(user, channel, normalizedCriticality, normalizedEventType)) {
+                LOG.info("Notificación '{}' canal '{}' omitida para '{}' por preferencias de usuario.",
+                        normalizedEventType, channel, user.getEmail());
+                continue;
+            }
+
+            // 4. Renderizar plantilla
+            String subject = templateService != null ? templateService.render(template.getSubjectTemplate(), params) : template.getSubjectTemplate();
+            String message = templateService != null ? templateService.render(template.getBodyTemplate(), params) : template.getBodyTemplate();
+
+            String channelIdempotencyKey = idempotencyKey != null ? idempotencyKey.trim() + "-" + channel : null;
+            NotificationResponseDTO response = dispatchNotification(
+                    user,
+                    channel,
+                    determineNotificationType(normalizedEventType),
+                    subject,
+                    message,
+                    referenceId,
+                    normalizedEventType,
+                    normalizedCriticality,
+                    metadataJson,
+                    channelIdempotencyKey
+            );
+
+            if (primaryResponse == null || "IN_APP".equalsIgnoreCase(channel)) {
+                primaryResponse = response;
+            }
+        }
+
+        return primaryResponse;
+    }
+
+    private NotificationResponseDTO dispatchNotification(
+            User user,
+            String channel,
+            String type,
+            String subject,
+            String message,
+            UUID referenceId,
+            String eventType,
+            String criticality,
+            String metadata,
+            String idempotencyKey
+    ) {
         String normalizedChannel = channel != null ? channel.trim().toUpperCase() : "IN_APP";
         String normalizedType = type != null ? type.trim().toUpperCase() : "GENERAL";
-
-        switch (normalizedChannel) {
-            case "EMAIL" -> sendEmailChannel(user, subject, message);
-            case "SMS" -> sendSmsChannel(user, message);
-            case "PUSH" -> sendPushChannel(user, subject, message);
-            case "IN_APP" -> LOG.debug("Notificación In-App registrada para usuario: {}", user.getEmail());
-            default -> LOG.warn("Canal no reconocido '{}', registrando como IN_APP", channel);
-        }
+        String normalizedCriticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
 
         Notification notification = new Notification(
                 user,
@@ -122,21 +243,100 @@ public class NotificationService {
                 normalizedType,
                 subject,
                 message,
-                referenceId
+                referenceId,
+                eventType,
+                normalizedCriticality,
+                metadata,
+                idempotencyKey
         );
         Notification saved = notificationRepository.save(notification);
+
+        // Verificar si el canal está permitido según preferencias y criticidad
+        boolean channelAllowed = isChannelAllowed(user, normalizedChannel, normalizedCriticality, normalizedType);
+
+        // Si es canal outbox (EMAIL, SMS, PUSH), encolar en el outbox transaccional
+        if (channelAllowed && !"IN_APP".equalsIgnoreCase(normalizedChannel) && outboxRepository != null) {
+            String recipient = resolveRecipient(user, normalizedChannel);
+            if (recipient != null && !recipient.isBlank()) {
+                String outboxKey = idempotencyKey != null ? idempotencyKey : UUID.randomUUID().toString();
+                NotificationOutbox outbox = new NotificationOutbox(saved, normalizedChannel, recipient, outboxKey, metadata);
+                NotificationOutbox savedOutbox = outboxRepository.save(outbox);
+
+                // Procesamiento asíncrono inmediato si está disponible el processor
+                if (outboxProcessor != null) {
+                    try {
+                        outboxProcessor.processOutboxIdAsync(savedOutbox.getId());
+                    } catch (Exception e) {
+                        LOG.debug("Outbox id '{}' encolado para procesador programado.", savedOutbox.getId());
+                    }
+                }
+            }
+        } else if (channelAllowed && "EMAIL".equalsIgnoreCase(normalizedChannel) && mailSenderProvider != null) {
+            // Compatibilidad legacy si outboxRepository no está configurado (tests unitarios)
+            sendLegacyEmailChannel(user, subject, message);
+        } else if (channelAllowed && "SMS".equalsIgnoreCase(normalizedChannel)) {
+            LOG.info("SMS enviado exitosamente al número '{}' del usuario '{}': {}", user.getPhone(), user.getEmail(), message);
+        }
+
         return NotificationResponseDTO.fromEntity(saved);
     }
 
-    private void sendEmailChannel(User user, String subject, String message) {
-        Optional<UserPreference> pref = userPreferenceRepository.findByUserId(user.getId());
-        boolean emailAllowed = pref.map(UserPreference::isEmailNotifications).orElse(true);
-
-        if (!emailAllowed) {
-            LOG.info("Notificación por correo omitida para '{}' debido a preferencias de usuario.", user.getEmail());
-            return;
+    private boolean isChannelAllowed(User user, String channel, String criticality, String eventType) {
+        if ("CRITICAL".equalsIgnoreCase(criticality)) {
+            return true;
         }
 
+        Optional<UserPreference> prefOpt = userPreferenceRepository.findByUserId(user.getId());
+        if (prefOpt.isEmpty()) {
+            return true;
+        }
+
+        UserPreference pref = prefOpt.get();
+
+        if ("PROMOTION".equalsIgnoreCase(eventType) && !pref.isMarketingNotifications()) {
+            return false;
+        }
+
+        return switch (channel.toUpperCase()) {
+            case "EMAIL" -> pref.isEmailNotifications();
+            case "SMS" -> pref.isSmsNotifications();
+            case "PUSH" -> pref.isPushNotifications();
+            case "IN_APP" -> pref.isInAppNotifications();
+            default -> true;
+        };
+    }
+
+    private String resolveRecipient(User user, String channel) {
+        return switch (channel.toUpperCase()) {
+            case "EMAIL" -> user.getEmail();
+            case "SMS" -> user.getPhone();
+            case "PUSH" -> user.getEmail(); // Identificador push / subject para el bus
+            default -> user.getEmail();
+        };
+    }
+
+    private String determineNotificationType(String eventType) {
+        return switch (eventType.toUpperCase()) {
+            case "SECURITY" -> "SECURITY";
+            case "RESERVATION", "CANCELLATION", "DELIVERY", "RETURN", "CONTRACT" -> "RESERVATION";
+            case "PROMOTION" -> "PROMOTION";
+            default -> "GENERAL";
+        };
+    }
+
+    private String serializeMetadata(Map<String, Object> params) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+        try {
+            return MAPPER.writeValueAsString(params);
+        } catch (Exception e) {
+            LOG.warn("No se pudo serializar metadata de notificación: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void sendLegacyEmailChannel(User user, String subject, String message) {
         JavaMailSender mailSender = mailSenderProvider.getIfAvailable();
         if (mailSender != null && user.getEmail() != null) {
             try {
@@ -149,31 +349,7 @@ public class NotificationService {
             } catch (Exception e) {
                 LOG.error("Error al enviar correo electrónico a {}: {}", user.getEmail(), e.getMessage());
             }
-        } else {
-            LOG.info("JavaMailSender no disponible o correo vacío. Simulando envío de email a '{}': [{}] {}",
-                    user.getEmail(), subject, message);
         }
-    }
-
-    private void sendSmsChannel(User user, String message) {
-        Optional<UserPreference> pref = userPreferenceRepository.findByUserId(user.getId());
-        boolean smsAllowed = pref.map(UserPreference::isSmsNotifications).orElse(true);
-
-        if (!smsAllowed) {
-            LOG.info("Notificación por SMS omitida para '{}' debido a preferencias de usuario.", user.getEmail());
-            return;
-        }
-
-        String phone = user.getPhone();
-        if (phone != null && !phone.isBlank()) {
-            LOG.info("SMS enviado exitosamente al número '{}' del usuario '{}': {}", phone, user.getEmail(), message);
-        } else {
-            LOG.info("Usuario '{}' no tiene número telefónico configurado para SMS. Notificación registrada.", user.getEmail());
-        }
-    }
-
-    private void sendPushChannel(User user, String subject, String message) {
-        LOG.info("Push notification enviada para el usuario '{}': [{}] {}", user.getEmail(), subject, message);
     }
 
     private User findUserByEmail(String email) {

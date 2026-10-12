@@ -34,6 +34,32 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final AuthEmailService authEmailService;
     private final BranchUserRepository branchUserRepository;
+    private final NotificationService notificationService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AuthService(
+            UserRepository userRepository,
+            UserSessionRepository sessionRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            VerificationCodeService verificationCodeService,
+            PasswordValidatorService passwordValidatorService,
+            RoleRepository roleRepository,
+            AuthEmailService authEmailService,
+            BranchUserRepository branchUserRepository,
+            NotificationService notificationService
+    ) {
+        this.userRepository = userRepository;
+        this.sessionRepository = sessionRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+        this.verificationCodeService = verificationCodeService;
+        this.passwordValidatorService = passwordValidatorService;
+        this.roleRepository = roleRepository;
+        this.authEmailService = authEmailService;
+        this.branchUserRepository = branchUserRepository;
+        this.notificationService = notificationService;
+    }
 
     public AuthService(
             UserRepository userRepository,
@@ -46,15 +72,8 @@ public class AuthService {
             AuthEmailService authEmailService,
             BranchUserRepository branchUserRepository
     ) {
-        this.userRepository = userRepository;
-        this.sessionRepository = sessionRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
-        this.verificationCodeService = verificationCodeService;
-        this.passwordValidatorService = passwordValidatorService;
-        this.roleRepository = roleRepository;
-        this.authEmailService = authEmailService;
-        this.branchUserRepository = branchUserRepository;
+        this(userRepository, sessionRepository, passwordEncoder, jwtService, verificationCodeService,
+                passwordValidatorService, roleRepository, authEmailService, branchUserRepository, null);
     }
 
     @Transactional
@@ -291,6 +310,21 @@ public class AuthService {
         user.setEmailVerifiedAt(Instant.now());
         user.setAccountStatus("ACTIVE");
         userRepository.save(user);
+
+        if (notificationService != null) {
+            try {
+                notificationService.emitDomainEvent(
+                        user,
+                        "REGISTRATION",
+                        "HIGH",
+                        user.getId(),
+                        java.util.Map.of("firstName", user.getFirstName() != null ? user.getFirstName() : "Usuario"),
+                        "REG-" + user.getId()
+                );
+            } catch (Exception e) {
+                // Notificación no bloquea la verificación
+            }
+        }
 
         return MessageResponseDTO.of("Correo electrónico verificado exitosamente.");
     }
