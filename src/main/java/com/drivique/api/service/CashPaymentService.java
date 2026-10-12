@@ -83,6 +83,24 @@ public class CashPaymentService {
                 "Pago aprobado - contrato disponible",
                 "El pago de tu reserva " + reservation.getCode() + " fue aprobado. Ya puedes firmar el contrato; el PDF estará disponible después de la firma.",
                 reservation.getId());
+
+        try {
+            notificationService.emitDomainEvent(
+                    reservation.getCustomer(),
+                    "PAYMENT",
+                    "HIGH",
+                    saved.getId(),
+                    java.util.Map.of(
+                            "bookingCode", reservation.getCode(),
+                            "amount", saved.getAmount(),
+                            "currency", "COP"
+                    ),
+                    "PAY-" + saved.getId()
+            );
+        } catch (Exception e) {
+            // No bloquear confirmación de pago
+        }
+
         return new CashPaymentConfirmationResponseDTO(saved.getId(), saved.getGatewayReference(), saved.getAmount(), "APPROVED", saved.getPaidAt());
     }
 }
