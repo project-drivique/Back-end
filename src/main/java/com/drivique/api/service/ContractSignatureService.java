@@ -13,8 +13,10 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class ContractSignatureService {
     private final RentalContractRepository contracts; private final UserRepository users; private final CityRepository cities; private final PaymentRepository payments;
-    private final ContractStatusRepository statuses; private final FileStorageService storage; private final PdfContractGeneratorService pdfs; private final ContractService contractService;
-    public ContractSignatureService(RentalContractRepository contracts, UserRepository users, CityRepository cities, ContractStatusRepository statuses, FileStorageService storage, PdfContractGeneratorService pdfs, ContractService contractService, PaymentRepository payments) { this.contracts=contracts; this.users=users; this.cities=cities; this.statuses=statuses; this.storage=storage; this.pdfs=pdfs; this.contractService=contractService; this.payments=payments; }
+    private final ContractStatusRepository statuses; private final FileStorageService storage; private final PdfContractGeneratorService pdfs; private final ContractService contractService; private final NotificationService notificationService;
+    @org.springframework.beans.factory.annotation.Autowired
+    public ContractSignatureService(RentalContractRepository contracts, UserRepository users, CityRepository cities, ContractStatusRepository statuses, FileStorageService storage, PdfContractGeneratorService pdfs, ContractService contractService, PaymentRepository payments, @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationService notificationService) { this.contracts=contracts; this.users=users; this.cities=cities; this.statuses=statuses; this.storage=storage; this.pdfs=pdfs; this.contractService=contractService; this.payments=payments; this.notificationService=notificationService; }
+    public ContractSignatureService(RentalContractRepository contracts, UserRepository users, CityRepository cities, ContractStatusRepository statuses, FileStorageService storage, PdfContractGeneratorService pdfs, ContractService contractService, PaymentRepository payments) { this(contracts, users, cities, statuses, storage, pdfs, contractService, payments, null); }
     @Transactional
     public ContractResponseDTO sign(UUID id, MultipartFile signature, String strokes, UUID cityId, boolean consentAccepted, String documentVersion, String remoteAddress, String email) {
         if (strokes == null || strokes.isBlank()) throw new IllegalArgumentException("Los trazos biométricos son obligatorios.");
@@ -34,7 +36,20 @@ public class ContractSignatureService {
         contract.setSignatureUrl(signatureUrl); contract.setSignatureStrokeData(strokes); contract.setSignedCity(city); contract.setSignedAt(Instant.now());
         contract.setPdfUrl(pdfUrl); contract.setStatus(statuses.findByCodeIgnoreCase("ACTIVE").orElseThrow(()->new ResourceNotFoundException("Estado ACTIVE no encontrado")));
         contract.recordConsent("Acepto el contrato de arrendamiento y sus cláusulas.", sha256(remoteAddress.getBytes(java.nio.charset.StandardCharsets.UTF_8)), sha256(signatureBytes), sha256(pdf));
-        return contractService.mapToDTO(contracts.saveAndFlush(contract));
+        RentalContract saved = contracts.saveAndFlush(contract);
+        if (notificationService != null) {
+            try {
+                notificationService.emitDomainEvent(
+                        saved.getCustomer(),
+                        "CONTRACT",
+                        "HIGH",
+                        saved.getId(),
+                        java.util.Map.of("contractNumber", saved.getContractNumber() != null ? saved.getContractNumber() : saved.getId().toString()),
+                        "CONT-SIGN-" + saved.getId()
+                );
+            } catch (Exception e) {}
+        }
+        return contractService.mapToDTO(saved);
     }
     private byte[] bytes(MultipartFile signature) { try { return signature.getBytes(); } catch (java.io.IOException e) { throw new IllegalStateException("No fue posible leer la firma.", e); } }
     private byte[] renderStrokes(String strokes) {

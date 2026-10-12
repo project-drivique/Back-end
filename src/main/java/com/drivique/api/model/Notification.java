@@ -1,6 +1,8 @@
 package com.drivique.api.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -40,6 +42,19 @@ public class Notification {
     @Column(name = "read_at")
     private Instant readAt;
 
+    @Column(name = "event_type", length = 50)
+    private String eventType;
+
+    @Column(name = "criticality", nullable = false, length = 20)
+    private String criticality = "NORMAL";
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metadata", columnDefinition = "jsonb")
+    private String metadata;
+
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -60,6 +75,15 @@ public class Notification {
         this.sentAt = Instant.now();
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+    }
+
+    public Notification(User user, String channel, String type, String subject, String message, UUID referenceId,
+                        String eventType, String criticality, String metadata, String idempotencyKey) {
+        this(user, channel, type, subject, message, referenceId);
+        this.eventType = eventType;
+        this.criticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
+        this.metadata = metadata;
+        this.idempotencyKey = idempotencyKey;
     }
 
     public void markAsRead() {
@@ -154,6 +178,38 @@ public class Notification {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public void setEventType(String eventType) {
+        this.eventType = eventType;
+    }
+
+    public String getCriticality() {
+        return criticality;
+    }
+
+    public void setCriticality(String criticality) {
+        this.criticality = criticality;
+    }
+
+    public String getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public void setUpdatedAt(Instant updatedAt) {

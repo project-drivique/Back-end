@@ -222,6 +222,23 @@ public class ReservationService {
                 "Recibimos tu reserva " + savedReservation.getCode() + ". Quedará pendiente hasta que el pago sea validado en la sucursal. Después podrás firmar el contrato y recibir el PDF.",
                 savedReservation.getId());
 
+        try {
+            notificationService.emitDomainEvent(
+                    savedReservation.getCustomer(),
+                    "RESERVATION",
+                    "HIGH",
+                    savedReservation.getId(),
+                    java.util.Map.of(
+                            "bookingCode", savedReservation.getCode(),
+                            "pickupDate", savedReservation.getPickupDate().toString(),
+                            "returnDate", savedReservation.getReturnDate().toString()
+                    ),
+                    "RES-" + savedReservation.getId()
+            );
+        } catch (Exception e) {
+            // No bloquear la creación de la reserva
+        }
+
         for (ReservationAdditionalServiceItemDTO item : serviceItems) {
             AdditionalService s = additionalServiceCatalogRepository.findById(item.additionalServiceId()).orElseThrow();
             ReservationAdditionalService ras = new ReservationAdditionalService(
@@ -375,6 +392,22 @@ public class ReservationService {
                 null,
                 null
         ));
+
+        try {
+            notificationService.emitDomainEvent(
+                    saved.getCustomer(),
+                    "CANCELLATION",
+                    "HIGH",
+                    saved.getId(),
+                    java.util.Map.of(
+                            "bookingCode", saved.getCode(),
+                            "reason", request.reason() != null ? request.reason() : "Cancelada por el usuario"
+                    ),
+                    "CANCEL-" + saved.getId()
+            );
+        } catch (Exception e) {
+            // No bloquear la cancelación
+        }
 
         return mapFromEntity(saved);
     }

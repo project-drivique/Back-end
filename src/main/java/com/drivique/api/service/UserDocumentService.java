@@ -173,6 +173,18 @@ public class UserDocumentService {
                 : "Tu documento " + doc.getDocumentType().getName() + " fue rechazado. Motivo: " + (request.reviewNotes() == null || request.reviewNotes().isBlank() ? "Debes cargar nuevamente un documento válido." : request.reviewNotes());
         notificationService.send(doc.getUser(), "EMAIL", approved ? "DOCUMENT_APPROVED" : "DOCUMENT_REJECTED", subject, message, saved.getId());
 
+        try {
+            notificationService.emitDomainEvent(
+                    doc.getUser(),
+                    "DOCUMENT",
+                    "NORMAL",
+                    saved.getId(),
+                    java.util.Map.of("documentType", doc.getDocumentType() != null ? doc.getDocumentType().getName() : "Documento",
+                            "status", approved ? "Aprobado" : "Rechazado"),
+                    "DOC-" + saved.getId() + "-" + statusCode
+            );
+        } catch (Exception e) {}
+
         return UserDocumentResponseDTO.fromEntity(saved);
     }
 
