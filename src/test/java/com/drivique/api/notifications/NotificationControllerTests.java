@@ -164,4 +164,49 @@ class NotificationControllerTests {
                 .andExpect(jsonPath("$.id").value(notifId.toString()))
                 .andExpect(jsonPath("$.subject").value("Aviso importante"));
     }
+
+    @Test
+    void getUnreadCount_ReturnsCount() throws Exception {
+        when(authentication.getName()).thenReturn("user@drivique.com");
+        when(notificationService.getUnreadCount("user@drivique.com")).thenReturn(5L);
+
+        mvc.perform(get("/v1/notifications/unread-count").principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unreadCount").value(5));
+
+        verify(notificationService).getUnreadCount("user@drivique.com");
+    }
+
+    @Test
+    void getNotificationById_ReturnsDetail() throws Exception {
+        when(authentication.getName()).thenReturn("user@drivique.com");
+        UUID notifId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        NotificationResponseDTO dto = new NotificationResponseDTO(
+                notifId,
+                userId,
+                "PUSH",
+                "RESERVATION",
+                "Entrega confirmada",
+                "Vehículo entregado con éxito",
+                null,
+                false,
+                Instant.now(),
+                null,
+                Instant.now(),
+                "DELIVERY",
+                "HIGH",
+                "{\"licensePlate\":\"XYZ-123\"}"
+        );
+
+        when(notificationService.getNotificationById(notifId, "user@drivique.com")).thenReturn(dto);
+
+        mvc.perform(get("/v1/notifications/" + notifId).principal(authentication))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(notifId.toString()))
+                .andExpect(jsonPath("$.eventType").value("DELIVERY"))
+                .andExpect(jsonPath("$.criticality").value("HIGH"));
+
+        verify(notificationService).getNotificationById(notifId, "user@drivique.com");
+    }
 }

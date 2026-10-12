@@ -12,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.*;
 
 @RestController
 @RequestMapping("/v1/contracts/{contractId}/inspections")
@@ -29,5 +30,15 @@ public class VehicleInspectionController {
             @RequestPart(value = "evidencePhotos", required = false) List<MultipartFile> evidencePhotos,
             Authentication authentication) {
         return service.register(contractId, request, evidencePhotos, authentication.getName());
+    }
+
+    @GetMapping
+    public List<VehicleInspectionResponseDTO> list(@PathVariable UUID contractId, Authentication authentication) {
+        return service.list(contractId, authentication.getName());
+    }
+
+    @GetMapping("/evidence/{answerId}")
+    public ResponseEntity<byte[]> evidence(@PathVariable UUID contractId, @PathVariable UUID answerId, Authentication authentication) {
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_OCTET_STREAM).body(service.evidence(answerId, authentication.getName()));
     }
 }
