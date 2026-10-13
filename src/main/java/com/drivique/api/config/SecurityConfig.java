@@ -46,7 +46,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers
-                        .frameOptions(frame -> frame.disable())
+                        .frameOptions(frame -> frame.deny())
                         .contentTypeOptions(contentType -> {})
                         .xssProtection(xss -> xss.headerValue(
                                 org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
@@ -54,7 +54,7 @@ public class SecurityConfig {
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31536000))
                         .contentSecurityPolicy(csp -> csp
-                                .policyDirectives("default-src 'self' http://localhost:* ws://localhost:*; frame-ancestors 'self' http://localhost:* http://127.0.0.1:*; script-src 'self' 'unsafe-inline'"))
+                                .policyDirectives("default-src 'self'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'"))
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
