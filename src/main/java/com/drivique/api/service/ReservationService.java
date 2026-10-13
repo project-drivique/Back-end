@@ -477,14 +477,15 @@ public class ReservationService {
             throw new IllegalArgumentException("La fecha de devolución debe ser posterior a la fecha de recogida");
         }
 
-        boolean hasOverlap = reservationRepository.existsOverlappingReservation(
+        boolean hasOverlap = reservationRepository.existsOverlappingReservationExcluding(
                 r.getVehicle().getId(),
+                r.getId(),
                 request.pickupDate(),
                 request.returnDate()
         );
-        
-        // This is a simplified check. Ideally we'd exclude the current reservation.
-        // Assuming the repository has a method to check overlap excluding current, but if not we'll just catch it later.
+        if (hasOverlap) {
+            throw new ConflictException("El vehículo no está disponible para las fechas seleccionadas");
+        }
         
         // Use reflection or direct field access if setter does not exist. Wait, no setPickupDate?
         // Let's use correct field names if they are records, but they are Entities. 
