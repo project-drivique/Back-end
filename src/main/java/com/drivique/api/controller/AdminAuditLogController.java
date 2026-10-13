@@ -17,7 +17,7 @@ import java.util.UUID;
 @RequestMapping("/v1/admin/audit-logs")
 @Tag(name = "Admin Audit Logs", description = "Trazabilidad forense y consulta de bitácoras transaccionales de auditoría")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_ADMIN')")
 public class AdminAuditLogController {
 
     private final AuditService auditService;

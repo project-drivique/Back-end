@@ -22,7 +22,7 @@ public class VehicleInspectionController {
     public VehicleInspectionController(VehicleInspectionService service) { this.service = service; }
 
     @PostMapping(consumes = "multipart/form-data")
-    @PreAuthorize("hasAuthority('fleet:manage') or hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('fleet:manage') or hasAuthority('FLEET_MANAGE') or hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_ADMIN')")
     @Operation(summary = "Registrar inspección de entrega o devolución", description = "Registra CHECK_IN o CHECK_OUT con checklist y fotografías. Para ítems no conformes se exige observación y evidencia; CHECK_OUT calcula excesos de kilometraje.")
     public VehicleInspectionResponseDTO register(
             @PathVariable UUID contractId,

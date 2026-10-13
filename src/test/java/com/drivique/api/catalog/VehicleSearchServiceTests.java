@@ -78,6 +78,7 @@ class VehicleSearchServiceTests {
         return vehicle;
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     void searchReturnsPagedVehicleCardDTOs() {
         UUID vehicleId = UUID.randomUUID();

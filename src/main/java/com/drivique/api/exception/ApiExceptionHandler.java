@@ -85,6 +85,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return response(HttpStatus.CONFLICT, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    ResponseEntity<Object> handleResponseStatus(org.springframework.web.server.ResponseStatusException ex, HttpServletRequest request) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        String reason = ex.getReason() != null ? ex.getReason() : status.getReasonPhrase();
+        return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(status, request.getRequestURI(), reason, List.of()));
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> unexpected(Exception ex, HttpServletRequest request) {
         LOG.error("Unexpected API error", ex);

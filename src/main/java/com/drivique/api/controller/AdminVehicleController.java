@@ -16,7 +16,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/admin/vehicles")
 @Tag(name = "Fleet Admin", description = "Administrative management of fleet vehicles, plates, and VINs")
-@PreAuthorize("hasAuthority('fleet:manage') or hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasAuthority('fleet:manage') or hasAuthority('FLEET_MANAGE') or hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_ADMIN')")
 public class AdminVehicleController {
 
     private final AdminVehicleService service;
