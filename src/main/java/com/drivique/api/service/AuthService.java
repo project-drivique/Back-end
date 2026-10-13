@@ -79,8 +79,24 @@ public class AuthService {
     @Transactional
     public MessageResponseDTO register(RegisterRequestDTO request) {
         String email = request.email().trim().toLowerCase();
-        if (userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email).isPresent()) {
-            throw new ConflictException("No fue posible procesar el registro.");
+        var existing = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email);
+        if (existing.isPresent()) {
+            User existingUser = existing.get();
+            if ("PENDING_VERIFICATION".equalsIgnoreCase(existingUser.getAccountStatus())) {
+                passwordValidatorService.validate(request.password());
+                existingUser.setPasswordHash(passwordEncoder.encode(request.password()));
+                if (request.firstName() != null && !request.firstName().isBlank()) {
+                    existingUser.setFirstName(request.firstName().trim());
+                }
+                if (request.lastName() != null && !request.lastName().isBlank()) {
+                    existingUser.setLastName(request.lastName().trim());
+                }
+                userRepository.save(existingUser);
+                String code = verificationCodeService.createVerificationCode(existingUser, "ACCOUNT_VERIFICATION", 15);
+                authEmailService.sendOtp(email, "verificar tu cuenta", code);
+                return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
+            }
+            throw new ConflictException("El correo ya se encuentra registrado. Inicia sesión o recupera tu contraseña.");
         }
         passwordValidatorService.validate(request.password());
         User user = new User(request.firstName().trim(), request.lastName().trim(), email, passwordEncoder.encode(request.password()));
@@ -123,6 +139,18 @@ public class AuthService {
 
         user.resetFailedAttempts();
         userRepository.save(user);
+
+        if ("PENDING_VERIFICATION".equalsIgnoreCase(user.getAccountStatus())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "Debes verificar tu correo electrónico antes de iniciar sesión.");
+        }
+
+        if ("INACTIVE".equalsIgnoreCase(user.getAccountStatus()) || "SUSPENDED".equalsIgnoreCase(user.getAccountStatus())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "La cuenta no está autorizada para iniciar sesión.");
+        }
 
         List<String> roleCodes = user.getRoles().stream().map(Role::getCode).toList();
         List<String> permissions = user.getRoles().stream()
@@ -335,7 +363,6 @@ public class AuthService {
             String code = verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
             authEmailService.sendOtp(user.getEmail(), "restablecer tu contraseña", code);
         });
-
         return MessageResponseDTO.of("Si el correo está registrado, se ha enviado un código de verificación.");
     }
 
