@@ -40,6 +40,20 @@ public class ReservationExpirationService {
         Instant now = Instant.now();
         List<Reservation> expiredReservations = reservationRepository.findExpiredPendingReservations(PENDING_PAYMENT_STATUS, now);
 
+        // Aviso a reservas pendientes con vencimiento próximo (próximas 24 horas)
+        try {
+            Instant warningWindow = now.plus(24, java.time.temporal.ChronoUnit.HOURS);
+            List<Reservation> expiringSoon = reservationRepository.findExpiringPendingReservations(PENDING_PAYMENT_STATUS, now, warningWindow);
+            for (Reservation reservation : expiringSoon) {
+                if (reservation.getCashPaymentExpiresAt() != null) {
+                    long hoursRemaining = Math.max(1, java.time.Duration.between(now, reservation.getCashPaymentExpiresAt()).toHours());
+                    notificationService.sendPaymentWarningNotification(reservation, hoursRemaining);
+                }
+            }
+        } catch (Exception ex) {
+            LOG.warn("Error al procesar advertencias de plazo de pago: {}", ex.getMessage());
+        }
+
         if (expiredReservations.isEmpty()) {
             LOG.debug("No expired pending reservations found at {}", now);
             return new ExpiredReservationsSummaryDTO(0, List.of(), now);
@@ -59,7 +73,7 @@ public class ReservationExpirationService {
 
             expiredCodes.add(reservation.getCode());
 
-            // Emit client notification
+            // Emit client notification (Email + In-App multi-channel)
             notificationService.sendExpirationNotification(reservation);
 
             // Audit log

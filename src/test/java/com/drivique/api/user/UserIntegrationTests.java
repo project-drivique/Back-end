@@ -41,9 +41,6 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
     private RoleRepository roleRepository;
 
     @Autowired
-    private UserPreferenceRepository userPreferenceRepository;
-
-    @Autowired
     private ReservationRepository reservationRepository;
 
     @Autowired
