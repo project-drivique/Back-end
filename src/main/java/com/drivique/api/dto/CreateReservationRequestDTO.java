@@ -36,7 +36,10 @@ public record CreateReservationRequestDTO(
         UUID cashPaymentBranchId,
 
         @Schema(description = "Puntos y modalidades de entrega/devolución opcionales configurados al crear la reserva")
-        List<DeliveryPointRequestDTO> deliveryPoints
+        List<DeliveryPointRequestDTO> deliveryPoints,
+
+        @Schema(description = "Indica si el usuario aceptó registrar la reserva fuera del horario de atención de la sucursal", example = "true")
+        Boolean outsideScheduleAccepted
 ) {
     public CreateReservationRequestDTO(
             UUID vehicleId,
@@ -48,6 +51,20 @@ public record CreateReservationRequestDTO(
             String couponCode,
             UUID cashPaymentBranchId
     ) {
-        this(vehicleId, pickupDate, returnDate, insuranceCoverageId, mileagePlanId, additionalServiceIds, couponCode, cashPaymentBranchId, null);
+        this(vehicleId, pickupDate, returnDate, insuranceCoverageId, mileagePlanId, additionalServiceIds, couponCode, cashPaymentBranchId, null, false);
+    }
+
+    public CreateReservationRequestDTO(
+            UUID vehicleId,
+            Instant pickupDate,
+            Instant returnDate,
+            UUID insuranceCoverageId,
+            UUID mileagePlanId,
+            List<UUID> additionalServiceIds,
+            String couponCode,
+            UUID cashPaymentBranchId,
+            List<DeliveryPointRequestDTO> deliveryPoints
+    ) {
+        this(vehicleId, pickupDate, returnDate, insuranceCoverageId, mileagePlanId, additionalServiceIds, couponCode, cashPaymentBranchId, deliveryPoints, false);
     }
 }

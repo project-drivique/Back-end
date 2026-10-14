@@ -144,6 +144,20 @@ public class NotificationService {
     }
 
     @Transactional
+    public NotificationResponseDTO sendWithMetadata(
+            User user,
+            String channel,
+            String type,
+            String subject,
+            String message,
+            UUID referenceId,
+            Map<String, Object> metadata
+    ) {
+        String metadataJson = serializeMetadata(metadata);
+        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", metadataJson, null);
+    }
+
+    @Transactional
     public NotificationResponseDTO emitDomainEvent(
             User user,
             String eventType,
