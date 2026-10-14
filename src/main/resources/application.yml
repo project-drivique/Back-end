@@ -6,13 +6,16 @@ spring:
   application:
     name: drivique-api
   mail:
-    host: ${SPRING_MAIL_HOST:}
+    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
     port: ${SPRING_MAIL_PORT:587}
-    username: ${SPRING_MAIL_USERNAME:}
+    username: ${SPRING_MAIL_USERNAME:odrivique@gmail.com}
     password: ${SPRING_MAIL_PASSWORD:}
     properties:
       mail.smtp.auth: ${SPRING_MAIL_SMTP_AUTH:true}
       mail.smtp.starttls.enable: ${SPRING_MAIL_STARTTLS:true}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   profiles:
     default: dev
   datasource:
@@ -34,6 +37,7 @@ spring:
       ddl-auto: validate
 
 app:
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:5173}
   auth:
     mail-from: ${APP_AUTH_MAIL_FROM:no-reply@drivique.com}
   cors:

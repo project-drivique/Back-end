@@ -66,6 +66,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
 
         // 1. Customer User
         User customer = new User("Carlos", "Gomez", "customer@drivique.com", "$2a$10$hash");
+        customer.setProfileComplete(true);
         userRepository.saveAndFlush(customer);
 
         // 2. Location
