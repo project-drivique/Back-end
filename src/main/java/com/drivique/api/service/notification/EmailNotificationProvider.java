@@ -70,6 +70,11 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
 
                 String actionLabel = null;
                 String actionUrl = null;
+                String paymentStatus = null;
+                String bookingCode = null;
+                String amount = null;
+                String currency = null;
+
                 if (metadata != null && !metadata.isBlank()) {
                     try {
                         com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(metadata);
@@ -83,9 +88,72 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                             String base = (frontendUrl != null ? frontendUrl : "http://localhost:5173").replaceAll("/+$", "");
                             actionUrl = base + (path.startsWith("/") ? "" : "/") + path;
                         }
+                        if (root.hasNonNull("status")) {
+                            paymentStatus = root.get("status").asText();
+                        }
+                        if (root.hasNonNull("bookingCode")) {
+                            bookingCode = root.get("bookingCode").asText();
+                        }
+                        if (root.hasNonNull("amount")) {
+                            amount = root.get("amount").asText();
+                        }
+                        if (root.hasNonNull("currency")) {
+                            currency = root.get("currency").asText();
+                        }
                     } catch (Exception e) {
                         LOG.debug("No se pudo parsear metadata en EmailNotificationProvider: {}", e.getMessage());
                     }
+                }
+
+                String receiptCardHtml = "";
+                if (paymentStatus != null || safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante")) {
+                    boolean isApproved = paymentStatus == null || "APPROVED".equalsIgnoreCase(paymentStatus);
+                    String badgeBg = isApproved ? "#ecfdf5" : "#fef2f2";
+                    String badgeBorder = isApproved ? "#10b981" : "#ef4444";
+                    String badgeColor = isApproved ? "#047857" : "#b91c1c";
+                    String badgeText = isApproved ? "✓ TRANSACCIÓN APROBADA · PAGO EXITOSO" : "✕ TRANSACCIÓN DECLINADA · PAGO RECHAZADO";
+                    String statusText = isApproved ? "APROBADO" : "DECLINADO / RECHAZADO";
+                    String statusColor = isApproved ? "#047857" : "#dc2626";
+
+                    String formattedAmount = amount != null ? amount : "";
+                    try {
+                        if (amount != null && !amount.isBlank()) {
+                            double val = Double.parseDouble(amount);
+                            formattedAmount = String.format("%,.0f", val).replace(',', '.');
+                        }
+                    } catch (Exception ignored) {}
+
+                    String curr = currency != null ? currency : "COP";
+
+                    receiptCardHtml = String.format("""
+                        <div style="margin: 18px 0;">
+                          <div style="display: inline-block; background-color: %s; border: 1px solid %s; color: %s; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 9999px; letter-spacing: 0.5px;">
+                            %s
+                          </div>
+                          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-top: 14px;">
+                            <div style="border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 12px;">
+                              <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; display: block;">Monto Total de la Transacción</span>
+                              <span style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 2px; display: block;">$ %s %s</span>
+                            </div>
+                            <table style="width: 100%%; border-collapse: collapse; font-size: 13px;">
+                              %s
+                              <tr>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Estado de la Transacción:</td>
+                                <td style="color: %s; padding: 5px 0; font-weight: 800; text-align: right;">%s</td>
+                              </tr>
+                              <tr>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Pasarela de Pago:</td>
+                                <td style="color: #0f172a; padding: 5px 0; font-weight: 600; text-align: right;">Wompi Colombia (Segura)</td>
+                              </tr>
+                            </table>
+                          </div>
+                        </div>
+                        """,
+                        badgeBg, badgeBorder, badgeColor, badgeText,
+                        formattedAmount, curr,
+                        bookingCode != null && !bookingCode.isBlank() ? "<tr><td style=\"color: #64748b; padding: 5px 0; font-weight: 500;\">Código de Reserva:</td><td style=\"color: #0f172a; padding: 5px 0; font-weight: 700; text-align: right;\">" + bookingCode + "</td></tr>" : "",
+                        statusColor, statusText
+                    );
                 }
 
                 String actionButtonHtml = "";
@@ -114,9 +182,10 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                         </div>
                         <div style="padding: 28px 30px 24px;">
                           <h2 style="color: #0f172a; margin: 0 0 14px; font-size: 17px; font-weight: 700;">{{SUBJECT}}</h2>
-                          <div style="color: #334155; font-size: 14px; line-height: 1.6; margin: 0 0 20px; white-space: pre-line;">
+                          <div style="color: #334155; font-size: 14px; line-height: 1.6; margin: 0 0 10px; white-space: pre-line;">
                             {{MESSAGE}}
                           </div>
+                          {{RECEIPT_CARD}}
                           {{ACTION_BUTTON}}
                           <div style="border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 20px;">
                             <p style="color: #94a3b8; font-size: 12px; margin: 0;">
@@ -130,6 +199,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     """
                         .replace("{{SUBJECT}}", safeSubject)
                         .replace("{{MESSAGE}}", safeMessage)
+                        .replace("{{RECEIPT_CARD}}", receiptCardHtml)
                         .replace("{{ACTION_BUTTON}}", actionButtonHtml);
 
                 helper.setText(textMessage, html);

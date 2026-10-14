@@ -456,7 +456,9 @@ public class ReservationService {
                             "bookingCode", saved.getCode(),
                             "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "398000",
                             "currency", "COP",
-                            "status", "APPROVED"
+                            "status", "APPROVED",
+                            "actionPath", "/contrato/" + saved.getId(),
+                            "actionLabel", "Continuar y Firmar mi Contrato"
                     ),
                     "PAY-CONF-" + saved.getId()
             );
@@ -484,7 +486,9 @@ public class ReservationService {
                             "bookingCode", r.getCode(),
                             "amount", r.getTotalEstimated() != null ? r.getTotalEstimated().toString() : "0",
                             "currency", "COP",
-                            "status", "DECLINED"
+                            "status", "DECLINED",
+                            "actionPath", "/reservas",
+                            "actionLabel", "Reintentar Pago en Mis Reservas"
                     ),
                     "PAY-FAIL-" + UUID.randomUUID()
             );
