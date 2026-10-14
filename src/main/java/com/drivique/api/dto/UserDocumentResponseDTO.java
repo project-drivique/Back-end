@@ -23,9 +23,15 @@ public record UserDocumentResponseDTO(
         String reviewedByName,
         Instant reviewedAt,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String reservationCode,
+        String vehicleName
 ) {
     public static UserDocumentResponseDTO fromEntity(UserDocument doc) {
+        return fromEntity(doc, null, null);
+    }
+
+    public static UserDocumentResponseDTO fromEntity(UserDocument doc, String reservationCode, String vehicleName) {
         if (doc == null) return null;
         return new UserDocumentResponseDTO(
                 doc.getId(),
@@ -44,7 +50,9 @@ public record UserDocumentResponseDTO(
                 doc.getReviewedBy() != null ? doc.getReviewedBy().getFullName() : null,
                 doc.getReviewedAt(),
                 doc.getCreatedAt(),
-                doc.getUpdatedAt()
+                doc.getUpdatedAt(),
+                reservationCode,
+                vehicleName
         );
     }
 }

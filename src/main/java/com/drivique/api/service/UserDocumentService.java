@@ -37,6 +37,8 @@ public class UserDocumentService {
     private final BranchUserRepository branchUserRepository;
     private final FileStorageService fileStorageService;
     private final NotificationService notificationService;
+    private final ReservationDocumentReviewService reservationDocumentReviewService;
+    private final com.drivique.api.repository.ReservationRepository reservationRepository;
 
     public UserDocumentService(
             UserDocumentRepository userDocumentRepository,
@@ -48,6 +50,38 @@ public class UserDocumentService {
             FileStorageService fileStorageService,
             NotificationService notificationService
     ) {
+        this(userDocumentRepository, documentTypeRepository, documentStatusRepository, userRepository,
+                branchRepository, branchUserRepository, fileStorageService, notificationService, null, null);
+    }
+
+    public UserDocumentService(
+            UserDocumentRepository userDocumentRepository,
+            DocumentTypeRepository documentTypeRepository,
+            DocumentStatusRepository documentStatusRepository,
+            UserRepository userRepository,
+            BranchRepository branchRepository,
+            BranchUserRepository branchUserRepository,
+            FileStorageService fileStorageService,
+            NotificationService notificationService,
+            ReservationDocumentReviewService reservationDocumentReviewService
+    ) {
+        this(userDocumentRepository, documentTypeRepository, documentStatusRepository, userRepository,
+                branchRepository, branchUserRepository, fileStorageService, notificationService, reservationDocumentReviewService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public UserDocumentService(
+            UserDocumentRepository userDocumentRepository,
+            DocumentTypeRepository documentTypeRepository,
+            DocumentStatusRepository documentStatusRepository,
+            UserRepository userRepository,
+            BranchRepository branchRepository,
+            BranchUserRepository branchUserRepository,
+            FileStorageService fileStorageService,
+            NotificationService notificationService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) ReservationDocumentReviewService reservationDocumentReviewService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) com.drivique.api.repository.ReservationRepository reservationRepository
+    ) {
         this.userDocumentRepository = userDocumentRepository;
         this.documentTypeRepository = documentTypeRepository;
         this.documentStatusRepository = documentStatusRepository;
@@ -56,6 +90,25 @@ public class UserDocumentService {
         this.branchUserRepository = branchUserRepository;
         this.fileStorageService = fileStorageService;
         this.notificationService = notificationService;
+        this.reservationDocumentReviewService = reservationDocumentReviewService;
+        this.reservationRepository = reservationRepository;
+    }
+
+    private UserDocumentResponseDTO mapWithReservation(UserDocument doc) {
+        String resCode = null;
+        String vehName = null;
+        if (doc.getUser() != null && reservationRepository != null) {
+            var resList = reservationRepository.findByCustomerOrderByCreatedAtDesc(doc.getUser());
+            if (!resList.isEmpty()) {
+                var topRes = resList.get(0);
+                resCode = topRes.getCode();
+                if (topRes.getVehicle() != null) {
+                    var v = topRes.getVehicle();
+                    vehName = (v.getBrand() != null ? v.getBrand().getName() + " " : "") + v.getModel();
+                }
+            }
+        }
+        return UserDocumentResponseDTO.fromEntity(doc, resCode, vehName);
     }
 
     @Transactional(readOnly = true)
@@ -71,7 +124,7 @@ public class UserDocumentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con email: " + userEmail));
 
         return userDocumentRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
-                .map(UserDocumentResponseDTO::fromEntity)
+                .map(this::mapWithReservation)
                 .toList();
     }
 
@@ -124,16 +177,18 @@ public class UserDocumentService {
         }
         doc.setBranch(branch);
 
+        user.setProfileComplete(false);
+        user.setUpdatedAt(Instant.now());
         if (documentNumber != null && !documentNumber.isBlank() && (user.getDocumentNumber() == null || user.getDocumentNumber().isBlank())) {
             user.setDocumentNumber(documentNumber);
             user.setDocumentTypeId(docType.getId());
-            userRepository.save(user);
         }
+        userRepository.save(user);
 
         UserDocument saved = userDocumentRepository.save(doc);
         updateUserProfileCompletion(user);
 
-        return UserDocumentResponseDTO.fromEntity(saved);
+        return mapWithReservation(saved);
     }
 
     @Transactional
@@ -171,7 +226,8 @@ public class UserDocumentService {
         String message = approved
                 ? "Tu documento " + doc.getDocumentType().getName() + " fue aprobado por " + (doc.getBranch() != null ? doc.getBranch().getName() : "la sucursal") + ". Ya puedes continuar con tu reserva cuando toda tu documentación esté aprobada."
                 : "Tu documento " + doc.getDocumentType().getName() + " fue rechazado. Motivo: " + (request.reviewNotes() == null || request.reviewNotes().isBlank() ? "Debes cargar nuevamente un documento válido." : request.reviewNotes());
-        notificationService.send(doc.getUser(), "EMAIL", approved ? "DOCUMENT_APPROVED" : "DOCUMENT_REJECTED", subject, message, saved.getId());
+        String docKey = "DOC-" + saved.getId() + "-" + statusCode;
+        notificationService.send(doc.getUser(), "EMAIL", approved ? "DOCUMENT_APPROVED" : "DOCUMENT_REJECTED", subject, message, saved.getId(), docKey + "-EMAIL");
 
         try {
             notificationService.emitDomainEvent(
@@ -185,7 +241,11 @@ public class UserDocumentService {
             );
         } catch (Exception e) {}
 
-        return UserDocumentResponseDTO.fromEntity(saved);
+        if (approved && reservationDocumentReviewService != null) {
+            reservationDocumentReviewService.onDocumentsReviewed(doc.getUser());
+        }
+
+        return mapWithReservation(saved);
     }
 
     @Transactional(readOnly = true)
@@ -205,7 +265,7 @@ public class UserDocumentService {
             docs = userDocumentRepository.findAllByOrderByCreatedAtDesc();
         }
         return docs.stream()
-                .map(UserDocumentResponseDTO::fromEntity)
+                .map(this::mapWithReservation)
                 .toList();
     }
 
