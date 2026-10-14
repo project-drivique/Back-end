@@ -288,10 +288,12 @@ public class NotificationService {
 
             if ("PAYMENT".equalsIgnoreCase(normalizedEventType)) {
                 String paymentStatus = params != null && params.get("status") != null ? params.get("status").toString().toUpperCase(Locale.ROOT) : "APPROVED";
-                if ("PAYMENT_SUCCESS_EMAIL".equalsIgnoreCase(template.getCode()) && !"APPROVED".equalsIgnoreCase(paymentStatus)) {
+                boolean isApproved = "APPROVED".equalsIgnoreCase(paymentStatus);
+                String codeUpper = template.getCode().toUpperCase(Locale.ROOT);
+                if (codeUpper.contains("SUCCESS") && !isApproved) {
                     continue;
                 }
-                if ("PAYMENT_FAILED_EMAIL".equalsIgnoreCase(template.getCode()) && "APPROVED".equalsIgnoreCase(paymentStatus)) {
+                if (codeUpper.contains("FAILED") && isApproved) {
                     continue;
                 }
             }

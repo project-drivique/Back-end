@@ -105,9 +105,47 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     }
                 }
 
+                if (bookingCode == null || bookingCode.isBlank()) {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(RES-\\d{4}-\\d+)").matcher(safeMessage + " " + safeSubject);
+                    if (m.find()) {
+                        bookingCode = m.group(1);
+                    }
+                }
+                if (amount == null || amount.isBlank()) {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:pago(?:\\s+de)?|transacci[oó]n(?:\\s+de)?)\\s+([\\d.,]+)\\s*([A-Z]{3})?").matcher(safeMessage);
+                    if (m.find()) {
+                        amount = m.group(1);
+                        if (m.group(2) != null && !m.group(2).isBlank()) {
+                            currency = m.group(2);
+                        }
+                    }
+                }
+                if (currency == null || currency.isBlank()) {
+                    currency = "COP";
+                }
+                if (paymentStatus == null) {
+                    if (safeSubject.toLowerCase().contains("problema") || safeSubject.toLowerCase().contains("rechazado") || safeSubject.toLowerCase().contains("fallo") || safeSubject.toLowerCase().contains("fallido")) {
+                        paymentStatus = "DECLINED";
+                    } else if (safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante") || safeSubject.toLowerCase().contains("exitoso") || safeSubject.toLowerCase().contains("confirmado")) {
+                        paymentStatus = "APPROVED";
+                    }
+                }
+
+                String base = (frontendUrl != null ? frontendUrl : "http://localhost:5173").replaceAll("/+$", "");
+                if (actionUrl == null && (paymentStatus != null || safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante"))) {
+                    boolean isApproved = !"DECLINED".equalsIgnoreCase(paymentStatus);
+                    if (isApproved) {
+                        actionUrl = base + "/reservas";
+                        actionLabel = "Continuar y Firmar Contrato";
+                    } else {
+                        actionUrl = base + "/reservas";
+                        actionLabel = "Reintentar Pago en Mis Reservas";
+                    }
+                }
+
                 String receiptCardHtml = "";
                 if (paymentStatus != null || safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante")) {
-                    boolean isApproved = paymentStatus == null || "APPROVED".equalsIgnoreCase(paymentStatus);
+                    boolean isApproved = !"DECLINED".equalsIgnoreCase(paymentStatus);
                     String badgeBg = isApproved ? "#ecfdf5" : "#fef2f2";
                     String badgeBorder = isApproved ? "#10b981" : "#ef4444";
                     String badgeColor = isApproved ? "#047857" : "#b91c1c";
@@ -118,22 +156,27 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     String formattedAmount = amount != null ? amount : "";
                     try {
                         if (amount != null && !amount.isBlank()) {
-                            double val = Double.parseDouble(amount);
+                            double val = Double.parseDouble(amount.replace(",", ""));
                             formattedAmount = String.format("%,.0f", val).replace(',', '.');
                         }
                     } catch (Exception ignored) {}
 
                     String curr = currency != null ? currency : "COP";
+                    String fechaStr = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(java.time.ZoneId.of("America/Bogota")).format(java.time.Instant.now());
+
+                    String explNote = isApproved
+                        ? "Tu pago ha sido procesado exitosamente. Para continuar con la entrega de tu vehículo, por favor ingresa a la plataforma para firmar digitalmente tu contrato de alquiler."
+                        : "Tu entidad bancaria no autorizó la transacción. No se ha realizado ningún cobro a tu cuenta. Puedes reintentar el pago con otra tarjeta o medio disponible para no perder tu reserva.";
 
                     receiptCardHtml = String.format("""
-                        <div style="margin: 18px 0;">
+                        <div style="margin: 20px 0;">
                           <div style="display: inline-block; background-color: %s; border: 1px solid %s; color: %s; font-size: 12px; font-weight: 800; padding: 6px 14px; border-radius: 9999px; letter-spacing: 0.5px;">
                             %s
                           </div>
                           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-top: 14px;">
                             <div style="border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 12px;">
-                              <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; display: block;">Monto Total de la Transacción</span>
-                              <span style="font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 2px; display: block;">$ %s %s</span>
+                              <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; display: block;">Monto de la Transacción</span>
+                              <span style="font-size: 24px; font-weight: 800; color: #0f172a; margin-top: 2px; display: block;">$ %s %s</span>
                             </div>
                             <table style="width: 100%%; border-collapse: collapse; font-size: 13px;">
                               %s
@@ -145,14 +188,27 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                                 <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Pasarela de Pago:</td>
                                 <td style="color: #0f172a; padding: 5px 0; font-weight: 600; text-align: right;">Wompi Colombia (Segura)</td>
                               </tr>
+                              <tr>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Fecha y Hora:</td>
+                                <td style="color: #0f172a; padding: 5px 0; font-weight: 500; text-align: right;">%s</td>
+                              </tr>
+                              <tr>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Comercio:</td>
+                                <td style="color: #0f172a; padding: 5px 0; font-weight: 500; text-align: right;">Drivique S.A.S.</td>
+                              </tr>
                             </table>
+                            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #475569; line-height: 1.5;">
+                              %s
+                            </div>
                           </div>
                         </div>
                         """,
                         badgeBg, badgeBorder, badgeColor, badgeText,
                         formattedAmount, curr,
                         bookingCode != null && !bookingCode.isBlank() ? "<tr><td style=\"color: #64748b; padding: 5px 0; font-weight: 500;\">Código de Reserva:</td><td style=\"color: #0f172a; padding: 5px 0; font-weight: 700; text-align: right;\">" + bookingCode + "</td></tr>" : "",
-                        statusColor, statusText
+                        statusColor, statusText,
+                        fechaStr,
+                        explNote
                     );
                 }
 
