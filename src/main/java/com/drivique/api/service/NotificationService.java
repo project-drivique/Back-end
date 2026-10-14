@@ -344,6 +344,17 @@ public class NotificationService {
                 inAppMessage = isApproved 
                         ? "Tu pago de " + amount + " " + currency + " fue aprobado exitosamente por Wompi. Ya puedes continuar con la firma de tu contrato."
                         : "Tu pago de " + amount + " " + currency + " fue declinado por la entidad financiera. Por favor actualiza tu medio de pago.";
+            } else if ("CANCELLATION".equalsIgnoreCase(normalizedEventType)) {
+                String reason = params != null && params.get("reason") != null ? params.get("reason").toString() : "Cancelada automáticamente";
+                inAppSubject = "Reserva " + bookingCode + " cancelada";
+                inAppMessage = "Tu reserva " + bookingCode + " fue cancelada (" + reason + "). El vehículo ha sido liberado de nuevo al catálogo.";
+            } else if ("PAYMENT_EXPIRATION_WARNING".equalsIgnoreCase(normalizedEventType)) {
+                String hours = params != null && params.get("hoursRemaining") != null ? params.get("hoursRemaining").toString() : "pocas";
+                inAppSubject = "Plazo de pago por vencer - Reserva " + bookingCode;
+                inAppMessage = "Atención: Tu plazo para pagar la reserva " + bookingCode + " vencerá en " + hours + " horas. Realiza el pago para no perder tu reserva.";
+            } else if ("RESERVATION".equalsIgnoreCase(normalizedEventType)) {
+                inAppSubject = "Reserva " + bookingCode + " registrada";
+                inAppMessage = "Tu reserva " + bookingCode + " se encuentra registrada en el sistema. Puedes consultar el detalle en la sección de reservas.";
             } else {
                 inAppSubject = "Notificación de " + normalizedEventType;
                 inAppMessage = "Actualización referente a tu servicio (" + normalizedEventType + ").";
