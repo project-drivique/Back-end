@@ -37,6 +37,9 @@ public record NotificationResponseDTO(
     }
 
     public static NotificationResponseDTO fromEntity(Notification notification) {
+        if (notification == null) {
+            return null;
+        }
         return new NotificationResponseDTO(
                 notification.getId(),
                 notification.getUser() != null ? notification.getUser().getId() : null,
