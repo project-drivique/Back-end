@@ -94,9 +94,11 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     String label = (actionLabel != null && !actionLabel.isBlank()) ? actionLabel : "Continuar";
                     actionButtonHtml = """
                         <div style="text-align: center; margin: 26px 0 20px;">
-                          <a href="%s" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 26px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">%s</a>
+                          <a href="{{ACTION_URL}}" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 26px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">{{ACTION_LABEL}}</a>
                         </div>
-                        """.formatted(actionUrl, label);
+                        """
+                        .replace("{{ACTION_URL}}", actionUrl)
+                        .replace("{{ACTION_LABEL}}", label);
                     textMessage = safeMessage + "\n\n" + label + ": " + actionUrl;
                 }
 
