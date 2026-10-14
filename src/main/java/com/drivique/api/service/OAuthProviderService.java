@@ -135,7 +135,55 @@ public class OAuthProviderService {
     }
 
     private OAuthUserInfo info(String provider, String sub, String email, String first, String last, String nonce) {
-        return new OAuthUserInfo(provider, sub, email.trim().toLowerCase(), firstNonBlank(first, "Usuario"), firstNonBlank(last, provider), nonce);
+        String cleanEmail = email.trim().toLowerCase();
+        String[] derived = deriveNamesFromEmail(cleanEmail);
+
+        String cleanFirst = first;
+        String cleanLast = last;
+
+        if (containsProvider(cleanFirst) || blank(cleanFirst)) {
+            cleanFirst = derived[0];
+        }
+        if (containsProvider(cleanLast) || blank(cleanLast)) {
+            cleanLast = derived[1];
+        }
+
+        return new OAuthUserInfo(provider, sub, cleanEmail, cleanFirst, cleanLast, nonce);
+    }
+
+    private static boolean containsProvider(String val) {
+        if (blank(val)) return false;
+        String lower = val.toLowerCase();
+        return lower.contains("google") || lower.contains("facebook") || lower.contains("fb") || lower.contains("sandbox") || lower.contains("social") || lower.contains("meta");
+    }
+
+    private static String[] deriveNamesFromEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return new String[]{"Usuario", ""};
+        }
+        String prefix = email.split("@")[0].replaceAll("[0-9]+$", "").trim();
+        String[] parts = prefix.split("[._\\-\\s]+");
+        String first = "Usuario";
+        String last = "";
+        if (parts.length > 0 && !parts[0].isBlank()) {
+            first = capitalize(parts[0]);
+        }
+        if (parts.length > 1) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 1; i < parts.length; i++) {
+                if (!parts[i].isBlank()) {
+                    if (!sb.isEmpty()) sb.append(" ");
+                    sb.append(capitalize(parts[i]));
+                }
+            }
+            last = sb.toString();
+        }
+        return new String[]{first, last};
+    }
+
+    private static String capitalize(String str) {
+        if (blank(str)) return "";
+        return str.substring(0, 1).toUpperCase() + (str.length() > 1 ? str.substring(1).toLowerCase() : "");
     }
 
     private static boolean looksLikeJwt(String token) { return token.split("\\.").length == 3; }

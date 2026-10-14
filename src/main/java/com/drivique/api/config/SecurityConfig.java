@@ -36,6 +36,24 @@ public class SecurityConfig {
     }
 
     @Bean
+    @org.springframework.core.annotation.Order(1)
+    SecurityFilterChain uploadsSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher("/uploads/**")
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.disable())
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives("default-src 'self' data: blob:; frame-ancestors *; script-src 'self' 'unsafe-inline'"))
+                )
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
+                .build();
+    }
+
+    @Bean
+    @org.springframework.core.annotation.Order(2)
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             ProblemSecurityHandler problems,
@@ -58,6 +76,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
+                                "/uploads/**",
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/v3/api-docs/**",

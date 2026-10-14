@@ -35,8 +35,8 @@ public class ReservationService {
     private final BranchRepository branchRepository;
     private final AuditLogRepository auditLogRepository;
     private final NotificationService notificationService;
+    private final ReservationDocumentReviewService reservationDocumentReviewService;
 
-    @Autowired
     public ReservationService(
             ReservationRepository reservationRepository,
             ReservationStatusRepository reservationStatusRepository,
@@ -54,6 +54,45 @@ public class ReservationService {
             AuditLogRepository auditLogRepository,
             NotificationService notificationService
     ) {
+        this(
+                reservationRepository,
+                reservationStatusRepository,
+                additionalServiceRepository,
+                promotionRepository,
+                vehicleRepository,
+                userRepository,
+                insuranceCoverageRepository,
+                mileagePlanRepository,
+                additionalServiceCatalogRepository,
+                promotionCatalogRepository,
+                userCouponUsageRepository,
+                promotionValidationService,
+                branchRepository,
+                auditLogRepository,
+                notificationService,
+                null
+        );
+    }
+
+    @Autowired
+    public ReservationService(
+            ReservationRepository reservationRepository,
+            ReservationStatusRepository reservationStatusRepository,
+            ReservationAdditionalServiceRepository additionalServiceRepository,
+            ReservationPromotionRepository promotionRepository,
+            VehicleRepository vehicleRepository,
+            UserRepository userRepository,
+            InsuranceCoverageRepository insuranceCoverageRepository,
+            MileagePlanRepository mileagePlanRepository,
+            AdditionalServiceRepository additionalServiceCatalogRepository,
+            PromotionRepository promotionCatalogRepository,
+            UserCouponUsageRepository userCouponUsageRepository,
+            PromotionValidationService promotionValidationService,
+            BranchRepository branchRepository,
+            AuditLogRepository auditLogRepository,
+            NotificationService notificationService,
+            @Autowired(required = false) ReservationDocumentReviewService reservationDocumentReviewService
+    ) {
         this.reservationRepository = reservationRepository;
         this.reservationStatusRepository = reservationStatusRepository;
         this.additionalServiceRepository = additionalServiceRepository;
@@ -69,6 +108,7 @@ public class ReservationService {
         this.branchRepository = branchRepository;
         this.auditLogRepository = auditLogRepository;
         this.notificationService = notificationService;
+        this.reservationDocumentReviewService = reservationDocumentReviewService;
     }
 
     @Transactional
@@ -185,18 +225,52 @@ public class ReservationService {
                 .subtract(discountApplied)
                 .max(BigDecimal.ZERO);
 
+        boolean documentsApproved = reservationDocumentReviewService != null
+                && reservationDocumentReviewService.hasApprovedRequiredDocuments(customer.getId());
+
+        Branch pickupBranch = vehicle.getCurrentBranch();
+        if (pickupBranch == null && cashBranch != null) {
+            pickupBranch = cashBranch;
+        }
+
+        boolean isOutsideSchedule = false;
+        if (pickupBranch != null && pickupBranch.getOpeningTime() != null && pickupBranch.getClosingTime() != null) {
+            java.time.LocalTime open = pickupBranch.getOpeningTime();
+            java.time.LocalTime close = pickupBranch.getClosingTime();
+            boolean is24Hours = (open.equals(java.time.LocalTime.MIN) && (close.equals(java.time.LocalTime.MAX) || (close.getHour() == 23 && close.getMinute() >= 59)))
+                    || open.equals(close);
+            if (!is24Hours) {
+                java.time.LocalTime nowTime = java.time.LocalTime.now(java.time.ZoneId.of("America/Bogota"));
+                if (open.isBefore(close)) {
+                    isOutsideSchedule = nowTime.isBefore(open) || nowTime.isAfter(close);
+                } else {
+                    isOutsideSchedule = nowTime.isBefore(open) && nowTime.isAfter(close);
+                }
+            }
+        }
+
+        boolean outsideAccepted = Boolean.TRUE.equals(request.outsideScheduleAccepted());
+        String initialStatusCode;
+        if (isOutsideSchedule && outsideAccepted) {
+            initialStatusCode = "PENDING_SCHEDULE";
+        } else {
+            initialStatusCode = documentsApproved ? "PENDING_PAYMENT" : "PENDING_DOCUMENT_REVIEW";
+        }
+
         String cashPaymentCode = null;
         Instant cashPaymentExpiresAt = null;
         if (cashBranch != null || request.cashPaymentBranchId() != null) {
             cashPaymentCode = "CASH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-            Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
-            cashPaymentExpiresAt = standard72h.isBefore(request.pickupDate()) ? standard72h : request.pickupDate();
+            if ("PENDING_PAYMENT".equals(initialStatusCode)) {
+                Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
+                cashPaymentExpiresAt = standard72h.isBefore(request.pickupDate()) ? standard72h : request.pickupDate();
+            }
         }
 
         String reservationCode = "HLD-" + UUID.randomUUID().toString().substring(0, 15).toUpperCase();
 
-        ReservationStatus initialStatus = reservationStatusRepository.findByCodeIgnoreCase("PENDING_PAYMENT")
-                .orElseGet(() -> reservationStatusRepository.save(new ReservationStatus("PENDING_PAYMENT", "Pending payment", true)));
+        ReservationStatus initialStatus = reservationStatusRepository.findByCodeIgnoreCase(initialStatusCode)
+                .orElseGet(() -> reservationStatusRepository.save(new ReservationStatus(initialStatusCode, initialStatusCode, true)));
 
         Reservation reservation = new Reservation(
                 reservationCode,
@@ -217,26 +291,25 @@ public class ReservationService {
 
         Reservation savedReservation = reservationRepository.save(reservation);
 
-        notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_PAYMENT",
-                "Reserva recibida - pago pendiente",
-                "Recibimos tu reserva " + savedReservation.getCode() + ". Quedará pendiente hasta que el pago sea validado en la sucursal. Después podrás firmar el contrato y recibir el PDF.",
-                savedReservation.getId());
-
-        try {
-            notificationService.emitDomainEvent(
-                    savedReservation.getCustomer(),
-                    "RESERVATION",
-                    "HIGH",
-                    savedReservation.getId(),
-                    java.util.Map.of(
-                            "bookingCode", savedReservation.getCode(),
-                            "pickupDate", savedReservation.getPickupDate().toString(),
-                            "returnDate", savedReservation.getReturnDate().toString()
-                    ),
-                    "RES-" + savedReservation.getId()
-            );
-        } catch (Exception e) {
-            // No bloquear la creación de la reserva
+        if ("PENDING_SCHEDULE".equals(initialStatusCode)) {
+            String branchName = pickupBranch != null ? pickupBranch.getName() : "la sucursal";
+            String openTime = pickupBranch != null && pickupBranch.getOpeningTime() != null ? pickupBranch.getOpeningTime().toString() : "su apertura";
+            String subject = "Reserva registrada fuera de horario";
+            String message = "Recibimos tu reserva " + savedReservation.getCode() + " fuera del horario de atención de " + branchName + ". Cuando inicie la jornada a las " + openTime + ", te notificaremos automáticamente para continuar con tu reserva.";
+            notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_SCHEDULE", subject, message, savedReservation.getId());
+            notificationService.send(savedReservation.getCustomer(), "IN_APP", "RESERVATION_PENDING_SCHEDULE", subject, message, savedReservation.getId());
+        } else if (documentsApproved) {
+            notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_PAYMENT",
+                    "Reserva recibida - pago pendiente",
+                    "Recibimos tu reserva " + savedReservation.getCode() + ". Quedará pendiente hasta que el pago sea validado en la sucursal o en línea. Después podrás firmar el contrato y recibir el PDF.",
+                    savedReservation.getId());
+        } else {
+            String subject = "Reserva registrada, documentos en revisión";
+            String message = "Recibimos tu reserva " + savedReservation.getCode() + ". Tus documentos están en proceso de validación por parte del encargado de la sucursal. Te notificaremos cuando sean aprobados para que puedas proceder con el pago.";
+            notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_DOCUMENT_REVIEW",
+                    subject, message, savedReservation.getId());
+            notificationService.send(savedReservation.getCustomer(), "IN_APP", "RESERVATION_PENDING_DOCUMENT_REVIEW",
+                    subject, message, savedReservation.getId());
         }
 
         for (ReservationAdditionalServiceItemDTO item : serviceItems) {
@@ -322,6 +395,12 @@ public class ReservationService {
              throw new AccessDeniedException("No puede confirmar una reserva de otro usuario");
         }
 
+        if (reservationDocumentReviewService != null) {
+            reservationDocumentReviewService.validateCanBePaid(r);
+        } else if (r.getStatus() != null && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(r.getStatus().getCode())) {
+            throw new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada hasta que los documentos sean aprobados por el encargado de la sucursal.");
+        }
+
         if (!r.getCode().startsWith("HLD-")) {
             // Idempotency: if it's already a RES-, it was already confirmed. Return it.
             return mapFromEntity(r);
@@ -340,7 +419,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "CONFIRM_RESERVATION",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
@@ -349,8 +428,73 @@ public class ReservationService {
                 null,
                 null
         ));
+
+        try {
+            notificationService.emitDomainEvent(
+                    saved.getCustomer(),
+                    "RESERVATION",
+                    "HIGH",
+                    saved.getId(),
+                    java.util.Map.of(
+                            "bookingCode", saved.getCode(),
+                            "pickupDate", saved.getPickupDate().toString(),
+                            "returnDate", saved.getReturnDate().toString()
+                    ),
+                    "RES-" + saved.getId()
+            );
+        } catch (Throwable e) {
+            // No bloquear
+        }
+
+        try {
+            notificationService.emitDomainEvent(
+                    saved.getCustomer(),
+                    "PAYMENT",
+                    "HIGH",
+                    saved.getId(),
+                    java.util.Map.of(
+                            "bookingCode", saved.getCode(),
+                            "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "398000",
+                            "currency", "COP",
+                            "status", "APPROVED",
+                            "actionPath", "/contrato/" + saved.getId(),
+                            "actionLabel", "Continuar y Firmar mi Contrato"
+                    ),
+                    "PAY-CONF-" + saved.getId()
+            );
+        } catch (Throwable e) {
+            // No bloquear
+        }
         
         return mapFromEntity(saved);
+    }
+
+    @Transactional
+    public void reportPaymentFailed(UUID holdId, String userEmail) {
+        Reservation r = reservationRepository.findById(holdId).orElse(null);
+        if (r == null) return;
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail).orElse(null);
+        if (user == null || !r.getCustomer().getId().equals(user.getId())) return;
+
+        try {
+            notificationService.emitDomainEvent(
+                    user,
+                    "PAYMENT",
+                    "HIGH",
+                    r.getId(),
+                    java.util.Map.of(
+                            "bookingCode", r.getCode(),
+                            "amount", r.getTotalEstimated() != null ? r.getTotalEstimated().toString() : "0",
+                            "currency", "COP",
+                            "status", "DECLINED",
+                            "actionPath", "/reservas",
+                            "actionLabel", "Reintentar Pago en Mis Reservas"
+                    ),
+                    "PAY-FAIL-" + UUID.randomUUID()
+            );
+        } catch (Throwable e) {
+            // No bloquear
+        }
     }
 
     @Transactional
@@ -383,7 +527,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "CANCEL_RESERVATION",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
@@ -431,6 +575,15 @@ public class ReservationService {
         List<String> allowed = new ArrayList<>();
 
         switch (currentStatusCode) {
+            case "PENDING_SCHEDULE":
+                allowed.add("PENDING_PAYMENT");
+                allowed.add("PENDING_DOCUMENT_REVIEW");
+                allowed.add("CANCELLED_BY_USER");
+                break;
+            case "PENDING_DOCUMENT_REVIEW":
+                allowed.add("PENDING_PAYMENT");
+                allowed.add("CANCELLED_BY_USER");
+                break;
             case "PENDING_PAYMENT":
                 allowed.add("CONFIRMED");
                 allowed.add("CANCELLED_BY_USER");
@@ -477,14 +630,15 @@ public class ReservationService {
             throw new IllegalArgumentException("La fecha de devolución debe ser posterior a la fecha de recogida");
         }
 
-        boolean hasOverlap = reservationRepository.existsOverlappingReservation(
+        boolean hasOverlap = reservationRepository.existsOverlappingReservationExcluding(
                 r.getVehicle().getId(),
+                r.getId(),
                 request.pickupDate(),
                 request.returnDate()
         );
-        
-        // This is a simplified check. Ideally we'd exclude the current reservation.
-        // Assuming the repository has a method to check overlap excluding current, but if not we'll just catch it later.
+        if (hasOverlap) {
+            throw new ConflictException("El vehículo no está disponible para las fechas seleccionadas");
+        }
         
         // Use reflection or direct field access if setter does not exist. Wait, no setPickupDate?
         // Let's use correct field names if they are records, but they are Entities. 
@@ -525,7 +679,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "MODIFY_DATES",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
@@ -577,7 +731,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "MODIFY_SERVICES",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,

@@ -102,7 +102,11 @@ public class User {
     public void setLastName(String lastName) { this.lastName = lastName; }
 
     public String getFullName() {
-        return (firstName != null ? firstName : "") + (lastName != null ? " " + lastName : "").trim();
+        String f = firstName != null ? firstName.trim() : "";
+        String l = lastName != null ? lastName.trim() : "";
+        if (f.isEmpty()) return l;
+        if (l.isEmpty()) return f;
+        return f + " " + l;
     }
 
     public String getEmail() { return email; }
