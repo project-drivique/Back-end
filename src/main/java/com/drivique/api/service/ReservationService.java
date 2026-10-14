@@ -419,7 +419,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "CONFIRM_RESERVATION",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
@@ -442,7 +442,7 @@ public class ReservationService {
                     ),
                     "RES-" + saved.getId()
             );
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // No bloquear
         }
 
@@ -454,13 +454,13 @@ public class ReservationService {
                     saved.getId(),
                     java.util.Map.of(
                             "bookingCode", saved.getCode(),
-                            "amount", saved.getTotalAmount() != null ? saved.getTotalAmount().toString() : "398000",
+                            "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "398000",
                             "currency", "COP",
                             "status", "APPROVED"
                     ),
                     "PAY-CONF-" + saved.getId()
             );
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // No bloquear
         }
         
@@ -482,13 +482,13 @@ public class ReservationService {
                     r.getId(),
                     java.util.Map.of(
                             "bookingCode", r.getCode(),
-                            "amount", r.getTotalAmount() != null ? r.getTotalAmount().toString() : "0",
+                            "amount", r.getTotalEstimated() != null ? r.getTotalEstimated().toString() : "0",
                             "currency", "COP",
                             "status", "DECLINED"
                     ),
                     "PAY-FAIL-" + UUID.randomUUID()
             );
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // No bloquear
         }
     }
@@ -523,7 +523,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "CANCEL_RESERVATION",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
@@ -675,7 +675,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "MODIFY_DATES",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
@@ -727,7 +727,7 @@ public class ReservationService {
                 "RESERVATIONS",
                 "Reservation",
                 r.getId(),
-                "MODIFY_SERVICES",
+                "UPDATE",
                 "SUCCESS",
                 user,
                 null,
