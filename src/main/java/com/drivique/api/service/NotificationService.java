@@ -250,7 +250,7 @@ public class NotificationService {
         String normalizedChannel = channel != null ? channel.trim().toUpperCase() : "IN_APP";
         String normalizedType = determineNotificationType(type);
         String normalizedCriticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
-        String finalEventType = eventType != null ? eventType : type;
+        String finalEventType = determineEventType(eventType != null ? eventType : type);
 
         Notification notification = new Notification(
                 user,
@@ -346,6 +346,26 @@ public class NotificationService {
             case "SECURITY" -> "SECURITY";
             case "RESERVATION" -> "RESERVATION";
             case "PROMOTION" -> "PROMOTION";
+            default -> "GENERAL";
+        };
+    }
+
+    private String determineEventType(String eventType) {
+        if (eventType == null) return "GENERAL";
+        String upper = eventType.trim().toUpperCase();
+        if (upper.startsWith("RESERVATION")) return "RESERVATION";
+        if (upper.startsWith("REGISTRATION")) return "REGISTRATION";
+        if (upper.startsWith("PAYMENT")) return "PAYMENT";
+        if (upper.startsWith("CANCELLATION")) return "CANCELLATION";
+        if (upper.startsWith("CONTRACT")) return "CONTRACT";
+        if (upper.startsWith("DELIVERY")) return "DELIVERY";
+        if (upper.startsWith("RETURN")) return "RETURN";
+        if (upper.startsWith("DOCUMENT")) return "DOCUMENT";
+        if (upper.startsWith("INCIDENT")) return "INCIDENT";
+        if (upper.startsWith("SECURITY") || upper.startsWith("AUTH") || upper.startsWith("PASSWORD")) return "SECURITY";
+        if (upper.startsWith("PROMOTION") || upper.startsWith("COUPON")) return "PROMOTION";
+        return switch (upper) {
+            case "REGISTRATION", "PAYMENT", "RESERVATION", "CANCELLATION", "CONTRACT", "DELIVERY", "RETURN", "DOCUMENT", "INCIDENT", "SECURITY", "PROMOTION", "GENERAL" -> upper;
             default -> "GENERAL";
         };
     }
