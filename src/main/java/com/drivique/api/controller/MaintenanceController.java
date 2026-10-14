@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/v1/admin")
-@PreAuthorize("hasAuthority('fleet:manage') or hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@PreAuthorize("hasAuthority('fleet:manage') or hasAuthority('FLEET_MANAGE') or hasAnyRole('ADMIN', 'SUPER_ADMIN', 'BRANCH_ADMIN')")
 public class MaintenanceController {
     private final MaintenanceService service;
     public MaintenanceController(MaintenanceService service) { this.service = service; }
