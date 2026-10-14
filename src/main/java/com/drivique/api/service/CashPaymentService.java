@@ -50,6 +50,10 @@ public class CashPaymentService {
     public CashPaymentConfirmationResponseDTO confirm(CashPaymentConfirmationRequestDTO input, String email) {
         Reservation reservation = reservations.findByCashPaymentCodeIgnoreCase(input.cashPaymentCode().trim())
                 .orElseThrow(() -> new ResourceNotFoundException("Código de pago en efectivo no encontrado"));
+        if (reservation.getStatus() != null && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(reservation.getStatus().getCode()))
+            throw new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada en efectivo hasta que los documentos sean aprobados.");
+        if (reservation.getStatus() != null && "PENDING_SCHEDULE".equalsIgnoreCase(reservation.getStatus().getCode()))
+            throw new ConflictException("La reserva se encuentra en espera de horario de atención de la sucursal.");
         if (reservation.getCashPaymentBranch() == null || !reservation.getCashPaymentBranch().allowsCashPayment())
             throw new ConflictException("La sede de la reserva no permite pagos en efectivo.");
         if (reservation.getCashPaymentExpiresAt() != null && reservation.getCashPaymentExpiresAt().isBefore(Instant.now()))

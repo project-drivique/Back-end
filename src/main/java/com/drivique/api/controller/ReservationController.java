@@ -56,6 +56,16 @@ public class ReservationController {
         return reservationService.confirmReservationPayment(holdId, authentication.getName());
     }
 
+    @PostMapping("/checkout/payment-failed/{holdId}")
+    @ResponseStatus(HttpStatus.OK)
+    @Operation(summary = "Notificar pago fallido", description = "Emite notificación de fallo de pago para la reserva.")
+    public void reportPaymentFailed(
+            @PathVariable UUID holdId,
+            Authentication authentication
+    ) {
+        reservationService.reportPaymentFailed(holdId, authentication.getName());
+    }
+
     @GetMapping("/me")
     @Operation(summary = "Obtener mis reservas", description = "Obtiene el historial de reservas del usuario autenticado.")
     @ApiResponse(responseCode = "200", description = "Listado de reservas obtenido")
