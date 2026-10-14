@@ -248,8 +248,9 @@ public class NotificationService {
             String idempotencyKey
     ) {
         String normalizedChannel = channel != null ? channel.trim().toUpperCase() : "IN_APP";
-        String normalizedType = type != null ? type.trim().toUpperCase() : "GENERAL";
+        String normalizedType = determineNotificationType(type);
         String normalizedCriticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
+        String finalEventType = eventType != null ? eventType : type;
 
         Notification notification = new Notification(
                 user,
@@ -258,7 +259,7 @@ public class NotificationService {
                 subject,
                 message,
                 referenceId,
-                eventType,
+                finalEventType,
                 normalizedCriticality,
                 metadata,
                 idempotencyKey
@@ -330,9 +331,20 @@ public class NotificationService {
     }
 
     private String determineNotificationType(String eventType) {
-        return switch (eventType.toUpperCase()) {
+        if (eventType == null) return "GENERAL";
+        String upper = eventType.trim().toUpperCase();
+        if (upper.startsWith("RESERVATION") || upper.contains("CANCELLATION") || upper.contains("DELIVERY") || upper.contains("RETURN") || upper.contains("CONTRACT")) {
+            return "RESERVATION";
+        }
+        if (upper.startsWith("SECURITY") || upper.contains("AUTH") || upper.contains("PASSWORD")) {
+            return "SECURITY";
+        }
+        if (upper.startsWith("PROMOTION") || upper.contains("COUPON")) {
+            return "PROMOTION";
+        }
+        return switch (upper) {
             case "SECURITY" -> "SECURITY";
-            case "RESERVATION", "CANCELLATION", "DELIVERY", "RETURN", "CONTRACT" -> "RESERVATION";
+            case "RESERVATION" -> "RESERVATION";
             case "PROMOTION" -> "PROMOTION";
             default -> "GENERAL";
         };
