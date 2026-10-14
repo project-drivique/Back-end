@@ -226,7 +226,8 @@ public class UserDocumentService {
         String message = approved
                 ? "Tu documento " + doc.getDocumentType().getName() + " fue aprobado por " + (doc.getBranch() != null ? doc.getBranch().getName() : "la sucursal") + ". Ya puedes continuar con tu reserva cuando toda tu documentación esté aprobada."
                 : "Tu documento " + doc.getDocumentType().getName() + " fue rechazado. Motivo: " + (request.reviewNotes() == null || request.reviewNotes().isBlank() ? "Debes cargar nuevamente un documento válido." : request.reviewNotes());
-        notificationService.send(doc.getUser(), "EMAIL", approved ? "DOCUMENT_APPROVED" : "DOCUMENT_REJECTED", subject, message, saved.getId());
+        String docKey = "DOC-" + saved.getId() + "-" + statusCode;
+        notificationService.send(doc.getUser(), "EMAIL", approved ? "DOCUMENT_APPROVED" : "DOCUMENT_REJECTED", subject, message, saved.getId(), docKey + "-EMAIL");
 
         try {
             notificationService.emitDomainEvent(

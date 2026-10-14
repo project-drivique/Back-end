@@ -80,7 +80,8 @@ public class NotificationService {
         } else {
             notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         }
-        return notifications.stream().map(NotificationResponseDTO::fromEntity).toList();
+        List<Notification> deduplicated = deduplicateNotifications(notifications);
+        return deduplicated.stream().map(NotificationResponseDTO::fromEntity).toList();
     }
 
     @Transactional(readOnly = true)
@@ -94,6 +95,10 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public long getUnreadCount(String email) {
         User user = findUserByEmail(email);
+        List<Notification> unread = notificationRepository.findByUserIdAndIsReadOrderByCreatedAtDesc(user.getId(), false);
+        if (unread != null && !unread.isEmpty()) {
+            return deduplicateNotifications(unread).size();
+        }
         return notificationRepository.countByUserIdAndIsReadFalse(user.getId());
     }
 
@@ -104,7 +109,63 @@ public class NotificationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Notificación no encontrada con id: " + id));
         notification.markAsRead();
         Notification saved = notificationRepository.save(notification);
+
+        markSisterNotificationsAsRead(user.getId(), saved);
+
         return NotificationResponseDTO.fromEntity(saved);
+    }
+
+    private void markSisterNotificationsAsRead(UUID userId, Notification target) {
+        try {
+            List<Notification> unread = notificationRepository.findByUserIdAndIsReadOrderByCreatedAtDesc(userId, false);
+            if (unread == null || unread.isEmpty()) return;
+
+            String targetKey = buildDeduplicationKey(target);
+            for (Notification n : unread) {
+                if (!n.getId().equals(target.getId()) && targetKey.equals(buildDeduplicationKey(n))) {
+                    n.markAsRead();
+                    notificationRepository.save(n);
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Error al marcar notificaciones hermanas como leídas: {}", e.getMessage());
+        }
+    }
+
+    private List<Notification> deduplicateNotifications(List<Notification> list) {
+        if (list == null || list.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, Notification> uniqueMap = new LinkedHashMap<>();
+        for (Notification n : list) {
+            String key = buildDeduplicationKey(n);
+            if (!uniqueMap.containsKey(key)) {
+                uniqueMap.put(key, n);
+            } else {
+                Notification existing = uniqueMap.get(key);
+                if (!"IN_APP".equalsIgnoreCase(existing.getChannel()) && "IN_APP".equalsIgnoreCase(n.getChannel())) {
+                    uniqueMap.put(key, n);
+                }
+            }
+        }
+        return new ArrayList<>(uniqueMap.values());
+    }
+
+    private String buildDeduplicationKey(Notification n) {
+        if (n == null) return UUID.randomUUID().toString();
+
+        if (n.getIdempotencyKey() != null && !n.getIdempotencyKey().isBlank()) {
+            String baseKey = n.getIdempotencyKey().replaceAll("-(IN_APP|EMAIL|PUSH|SMS)$", "");
+            return "IDEMP:" + baseKey;
+        }
+
+        String ref = n.getReferenceId() != null ? n.getReferenceId().toString() : "noref";
+        String evType = n.getEventType() != null ? n.getEventType() : (n.getType() != null ? n.getType() : "GENERAL");
+        String subj = n.getSubject() != null ? n.getSubject().trim().toLowerCase(Locale.ROOT) : "";
+        String msg = n.getMessage() != null ? n.getMessage().trim().toLowerCase(Locale.ROOT) : "";
+
+        return "CONTENT:" + ref + "|" + evType + "|" + subj + "|" + msg;
     }
 
     @Transactional
@@ -144,6 +205,11 @@ public class NotificationService {
     }
 
     @Transactional
+    public NotificationResponseDTO send(User user, String channel, String type, String subject, String message, UUID referenceId, String idempotencyKey) {
+        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", null, idempotencyKey);
+    }
+
+    @Transactional
     public NotificationResponseDTO sendWithMetadata(
             User user,
             String channel,
@@ -153,8 +219,26 @@ public class NotificationService {
             UUID referenceId,
             Map<String, Object> metadata
     ) {
+        String idempotencyKey = null;
+        if (referenceId != null && channel != null) {
+            idempotencyKey = "META-" + referenceId + "-" + channel.toUpperCase(Locale.ROOT);
+        }
+        return sendWithMetadata(user, channel, type, subject, message, referenceId, metadata, idempotencyKey);
+    }
+
+    @Transactional
+    public NotificationResponseDTO sendWithMetadata(
+            User user,
+            String channel,
+            String type,
+            String subject,
+            String message,
+            UUID referenceId,
+            Map<String, Object> metadata,
+            String idempotencyKey
+    ) {
         String metadataJson = serializeMetadata(metadata);
-        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", metadataJson, null);
+        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", metadataJson, idempotencyKey);
     }
 
     @Transactional
@@ -251,6 +335,14 @@ public class NotificationService {
         String normalizedType = determineNotificationType(type);
         String normalizedCriticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
         String finalEventType = determineEventType(eventType != null ? eventType : type);
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Notification> existing = notificationRepository.findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey.trim());
+            if (existing.isPresent()) {
+                LOG.info("Notificación duplicada omitida para usuario {} con clave de idempotencia '{}'", user.getId(), idempotencyKey);
+                return NotificationResponseDTO.fromEntity(existing.get());
+            }
+        }
 
         Notification notification = new Notification(
                 user,
