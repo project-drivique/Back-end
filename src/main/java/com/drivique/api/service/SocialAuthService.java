@@ -99,9 +99,11 @@ public class SocialAuthService {
                 socialAccountRepository.save(newSocial);
             } else {
                 // 3. Auto-provision new customer account
+                String fName = oauthUser.firstName() != null && !oauthUser.firstName().isBlank() ? oauthUser.firstName() : "Usuario";
+                String lName = oauthUser.lastName() != null ? oauthUser.lastName() : "";
                 user = new User(
-                        oauthUser.firstName() != null && !oauthUser.firstName().isBlank() ? oauthUser.firstName() : "Usuario",
-                        oauthUser.lastName() != null && !oauthUser.lastName().isBlank() ? oauthUser.lastName() : "Social",
+                        fName,
+                        lName,
                         oauthUser.email(),
                         passwordEncoder.encode(UUID.randomUUID().toString())
                 );

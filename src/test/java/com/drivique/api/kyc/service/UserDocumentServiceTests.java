@@ -59,6 +59,9 @@ class UserDocumentServiceTests {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private ReservationDocumentReviewService reservationDocumentReviewService;
+
     private UserDocumentService userDocumentService;
 
     private User user;
@@ -78,7 +81,8 @@ class UserDocumentServiceTests {
                 branchRepository,
                 branchUserRepository,
                 fileStorageService,
-                notificationService
+                notificationService,
+                reservationDocumentReviewService
         );
 
         user = new User("John", "Doe", "john.doe@example.com", "hash");
@@ -148,5 +152,6 @@ class UserDocumentServiceTests {
         assertThat(doc.getReviewNotes()).isEqualTo("All clear");
         assertThat(user.isProfileComplete()).isTrue();
         verify(userRepository).save(user);
+        verify(reservationDocumentReviewService).onDocumentsReviewed(user);
     }
 }

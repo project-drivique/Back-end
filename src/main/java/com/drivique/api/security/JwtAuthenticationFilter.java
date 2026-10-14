@@ -59,8 +59,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (permsObj instanceof List<?> rawPerms) {
                 rawPerms.stream()
                         .map(Object::toString)
-                        .map(SimpleGrantedAuthority::new)
-                        .forEach(authorities::add);
+                        .forEach(perm -> {
+                            authorities.add(new SimpleGrantedAuthority(perm));
+                            authorities.add(new SimpleGrantedAuthority(perm.toLowerCase().replace('_', ':')));
+                            authorities.add(new SimpleGrantedAuthority(perm.toLowerCase().replace(':', '_')));
+                        });
             }
 
             var authentication = new UsernamePasswordAuthenticationToken(email, null, authorities);
