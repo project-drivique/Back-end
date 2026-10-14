@@ -88,7 +88,8 @@ public class UserDocumentService {
                 var topRes = resList.get(0);
                 resCode = topRes.getCode();
                 if (topRes.getVehicle() != null) {
-                    vehName = topRes.getVehicle().getName();
+                    var v = topRes.getVehicle();
+                    vehName = (v.getBrand() != null ? v.getBrand().getName() + " " : "") + v.getModel();
                 }
             }
         }
