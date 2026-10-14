@@ -286,6 +286,16 @@ public class NotificationService {
         for (NotificationTemplate template : templates) {
             String channel = template.getChannel().toUpperCase();
 
+            if ("PAYMENT".equalsIgnoreCase(normalizedEventType)) {
+                String paymentStatus = params != null && params.get("status") != null ? params.get("status").toString().toUpperCase(Locale.ROOT) : "APPROVED";
+                if ("PAYMENT_SUCCESS_EMAIL".equalsIgnoreCase(template.getCode()) && !"APPROVED".equalsIgnoreCase(paymentStatus)) {
+                    continue;
+                }
+                if ("PAYMENT_FAILED_EMAIL".equalsIgnoreCase(template.getCode()) && "APPROVED".equalsIgnoreCase(paymentStatus)) {
+                    continue;
+                }
+            }
+
             // 3. Evaluar permisos de canal y criticidad
             if (!isChannelAllowed(user, channel, normalizedCriticality, normalizedEventType)) {
                 LOG.info("Notificación '{}' canal '{}' omitida para '{}' por preferencias de usuario.",
