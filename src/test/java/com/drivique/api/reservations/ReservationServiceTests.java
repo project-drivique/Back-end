@@ -753,6 +753,48 @@ class ReservationServiceTests {
         assertThat(response.currentStatus()).isEqualTo("PENDING_DOCUMENT_REVIEW");
         assertThat(response.allowedTransitions()).containsExactlyInAnyOrder("PENDING_PAYMENT", "CANCELLED_BY_USER");
     }
+
+    @Test
+    void reportPaymentFailed_EmitsDeclinedPaymentNotification() {
+        Reservation r = new Reservation(
+                "HLD-FAIL1", user, vehicle, pendingStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        r.setId(reservationId);
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)).thenReturn(Optional.of(user));
+
+        service.reportPaymentFailed(reservationId, userEmail);
+
+        verify(notificationService).emitDomainEvent(
+                eq(user),
+                eq("PAYMENT"),
+                eq("HIGH"),
+                eq(reservationId),
+                anyMap(),
+                anyString()
+        );
+    }
+
+    @Test
+    void getAllowedTransitions_WhenPendingSchedule_ReturnsAllowedTransitions() {
+        ReservationStatus scheduleStatus = mock(ReservationStatus.class);
+        when(scheduleStatus.getCode()).thenReturn("PENDING_SCHEDULE");
+
+        Reservation r = new Reservation(
+                "HLD-SCHED", user, vehicle, scheduleStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        AllowedTransitionsResponseDTO response = service.getAllowedTransitions(reservationId, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.currentStatus()).isEqualTo("PENDING_SCHEDULE");
+        assertThat(response.allowedTransitions()).containsExactlyInAnyOrder("PENDING_PAYMENT", "PENDING_DOCUMENT_REVIEW", "CANCELLED_BY_USER");
+    }
 }
 
 
