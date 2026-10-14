@@ -445,8 +445,52 @@ public class ReservationService {
         } catch (Exception e) {
             // No bloquear
         }
+
+        try {
+            notificationService.emitDomainEvent(
+                    saved.getCustomer(),
+                    "PAYMENT",
+                    "HIGH",
+                    saved.getId(),
+                    java.util.Map.of(
+                            "bookingCode", saved.getCode(),
+                            "amount", saved.getTotalAmount() != null ? saved.getTotalAmount().toString() : "398000",
+                            "currency", "COP",
+                            "status", "APPROVED"
+                    ),
+                    "PAY-CONF-" + saved.getId()
+            );
+        } catch (Exception e) {
+            // No bloquear
+        }
         
         return mapFromEntity(saved);
+    }
+
+    @Transactional
+    public void reportPaymentFailed(UUID holdId, String userEmail) {
+        Reservation r = reservationRepository.findById(holdId).orElse(null);
+        if (r == null) return;
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail).orElse(null);
+        if (user == null || !r.getCustomer().getId().equals(user.getId())) return;
+
+        try {
+            notificationService.emitDomainEvent(
+                    user,
+                    "PAYMENT",
+                    "HIGH",
+                    r.getId(),
+                    java.util.Map.of(
+                            "bookingCode", r.getCode(),
+                            "amount", r.getTotalAmount() != null ? r.getTotalAmount().toString() : "0",
+                            "currency", "COP",
+                            "status", "DECLINED"
+                    ),
+                    "PAY-FAIL-" + UUID.randomUUID()
+            );
+        } catch (Exception e) {
+            // No bloquear
+        }
     }
 
     @Transactional
