@@ -54,6 +54,21 @@ public class UserDocumentService {
                 branchRepository, branchUserRepository, fileStorageService, notificationService, null, null);
     }
 
+    public UserDocumentService(
+            UserDocumentRepository userDocumentRepository,
+            DocumentTypeRepository documentTypeRepository,
+            DocumentStatusRepository documentStatusRepository,
+            UserRepository userRepository,
+            BranchRepository branchRepository,
+            BranchUserRepository branchUserRepository,
+            FileStorageService fileStorageService,
+            NotificationService notificationService,
+            ReservationDocumentReviewService reservationDocumentReviewService
+    ) {
+        this(userDocumentRepository, documentTypeRepository, documentStatusRepository, userRepository,
+                branchRepository, branchUserRepository, fileStorageService, notificationService, reservationDocumentReviewService, null);
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     public UserDocumentService(
             UserDocumentRepository userDocumentRepository,
