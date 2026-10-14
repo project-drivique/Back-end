@@ -7,6 +7,7 @@ import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
 import com.drivique.api.service.NotificationService;
 import com.drivique.api.service.PromotionValidationService;
+import com.drivique.api.service.ReservationDocumentReviewService;
 import com.drivique.api.service.ReservationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,7 @@ class ReservationServiceTests {
     private final BranchRepository branchRepository = mock(BranchRepository.class);
     private final AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
     private final NotificationService notificationService = mock(NotificationService.class);
+    private final ReservationDocumentReviewService reservationDocumentReviewService = mock(ReservationDocumentReviewService.class);
 
     private final ReservationService service = new ReservationService(
             reservationRepository,
@@ -55,7 +57,8 @@ class ReservationServiceTests {
             promotionValidationService,
             branchRepository,
             auditLogRepository,
-            notificationService
+            notificationService,
+            reservationDocumentReviewService
     );
 
     private final UUID vehicleId = UUID.randomUUID();
@@ -142,6 +145,7 @@ class ReservationServiceTests {
         when(reservationStatusRepository.findByCodeIgnoreCase("PENDING_PAYMENT")).thenReturn(Optional.of(pendingStatus));
 
         when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reservationDocumentReviewService.hasApprovedRequiredDocuments(any())).thenReturn(true);
     }
 
     @Test
@@ -664,6 +668,90 @@ class ReservationServiceTests {
         ModifyReservationServicesRequestDTO req = new ModifyReservationServicesRequestDTO(List.of(additionalServiceId), insuranceId, mileagePlanId);
         ReservationResponseDTO response = service.modifyReservationServices(reservationId, req, userEmail);
         assertThat(response).isNotNull();
+    }
+
+    @Test
+    void createReservation_WhenDocumentsNotApproved_SetsStatusPendingDocumentReviewAndDoesNotExpireCash() {
+        when(reservationDocumentReviewService.hasApprovedRequiredDocuments(user.getId())).thenReturn(false);
+
+        ReservationStatus docReviewStatus = mock(ReservationStatus.class);
+        when(docReviewStatus.getCode()).thenReturn("PENDING_DOCUMENT_REVIEW");
+        when(docReviewStatus.getName()).thenReturn("Pending review");
+        when(docReviewStatus.isBlocksAvailability()).thenReturn(true);
+        when(reservationStatusRepository.findByCodeIgnoreCase("PENDING_DOCUMENT_REVIEW")).thenReturn(Optional.of(docReviewStatus));
+
+        Instant pickup = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant returnDate = pickup.plus(3, ChronoUnit.DAYS);
+
+        when(reservationRepository.existsOverlappingReservation(eq(vehicleId), eq(pickup), eq(returnDate))).thenReturn(false);
+
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(
+                vehicleId, pickup, returnDate, insuranceId, mileagePlanId, List.of(), null, branchId
+        );
+
+        ReservationResponseDTO response = service.createReservation(request, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isEqualTo("PENDING_DOCUMENT_REVIEW");
+        assertThat(response.cashPaymentCode()).isNotNull();
+        assertThat(response.cashPaymentExpiresAt()).isNull();
+
+        verify(notificationService).send(
+                eq(user),
+                eq("EMAIL"),
+                eq("RESERVATION_PENDING_DOCUMENT_REVIEW"),
+                eq("Reserva registrada, documentos en revisión"),
+                anyString(),
+                any()
+        );
+        verify(notificationService).send(
+                eq(user),
+                eq("IN_APP"),
+                eq("RESERVATION_PENDING_DOCUMENT_REVIEW"),
+                eq("Reserva registrada, documentos en revisión"),
+                anyString(),
+                any()
+        );
+        // Verify RESERVATION domain event is NOT prematurely emitted
+        verify(notificationService, never()).emitDomainEvent(any(), eq("RESERVATION"), any(), any(), any(), any());
+    }
+
+    @Test
+    void confirmReservationPayment_WhenStatusPendingDocumentReview_ThrowsConflictException() {
+        ReservationStatus docReviewStatus = mock(ReservationStatus.class);
+        when(docReviewStatus.getCode()).thenReturn("PENDING_DOCUMENT_REVIEW");
+
+        Reservation r = new Reservation(
+                "HLD-12345", user, vehicle, docReviewStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        doThrow(new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada hasta que los documentos sean aprobados por el encargado de la sucursal."))
+                .when(reservationDocumentReviewService).validateCanBePaid(r);
+
+        assertThatThrownBy(() -> service.confirmReservationPayment(reservationId, userEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("revisión de documentos");
+    }
+
+    @Test
+    void getAllowedTransitions_WhenPendingDocumentReview_ReturnsAllowedTransitions() {
+        ReservationStatus docReviewStatus = mock(ReservationStatus.class);
+        when(docReviewStatus.getCode()).thenReturn("PENDING_DOCUMENT_REVIEW");
+
+        Reservation r = new Reservation(
+                "HLD-12345", user, vehicle, docReviewStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+
+        AllowedTransitionsResponseDTO response = service.getAllowedTransitions(reservationId, userEmail);
+
+        assertThat(response).isNotNull();
+        assertThat(response.currentStatus()).isEqualTo("PENDING_DOCUMENT_REVIEW");
+        assertThat(response.allowedTransitions()).containsExactlyInAnyOrder("PENDING_PAYMENT", "CANCELLED_BY_USER");
     }
 }
 

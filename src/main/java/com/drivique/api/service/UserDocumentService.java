@@ -37,6 +37,7 @@ public class UserDocumentService {
     private final BranchUserRepository branchUserRepository;
     private final FileStorageService fileStorageService;
     private final NotificationService notificationService;
+    private final ReservationDocumentReviewService reservationDocumentReviewService;
 
     public UserDocumentService(
             UserDocumentRepository userDocumentRepository,
@@ -48,6 +49,22 @@ public class UserDocumentService {
             FileStorageService fileStorageService,
             NotificationService notificationService
     ) {
+        this(userDocumentRepository, documentTypeRepository, documentStatusRepository, userRepository,
+                branchRepository, branchUserRepository, fileStorageService, notificationService, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public UserDocumentService(
+            UserDocumentRepository userDocumentRepository,
+            DocumentTypeRepository documentTypeRepository,
+            DocumentStatusRepository documentStatusRepository,
+            UserRepository userRepository,
+            BranchRepository branchRepository,
+            BranchUserRepository branchUserRepository,
+            FileStorageService fileStorageService,
+            NotificationService notificationService,
+            ReservationDocumentReviewService reservationDocumentReviewService
+    ) {
         this.userDocumentRepository = userDocumentRepository;
         this.documentTypeRepository = documentTypeRepository;
         this.documentStatusRepository = documentStatusRepository;
@@ -56,6 +73,7 @@ public class UserDocumentService {
         this.branchUserRepository = branchUserRepository;
         this.fileStorageService = fileStorageService;
         this.notificationService = notificationService;
+        this.reservationDocumentReviewService = reservationDocumentReviewService;
     }
 
     @Transactional(readOnly = true)
@@ -124,11 +142,13 @@ public class UserDocumentService {
         }
         doc.setBranch(branch);
 
+        user.setProfileComplete(false);
+        user.setUpdatedAt(Instant.now());
         if (documentNumber != null && !documentNumber.isBlank() && (user.getDocumentNumber() == null || user.getDocumentNumber().isBlank())) {
             user.setDocumentNumber(documentNumber);
             user.setDocumentTypeId(docType.getId());
-            userRepository.save(user);
         }
+        userRepository.save(user);
 
         UserDocument saved = userDocumentRepository.save(doc);
         updateUserProfileCompletion(user);
@@ -184,6 +204,10 @@ public class UserDocumentService {
                     "DOC-" + saved.getId() + "-" + statusCode
             );
         } catch (Exception e) {}
+
+        if (approved && reservationDocumentReviewService != null) {
+            reservationDocumentReviewService.onDocumentsReviewed(doc.getUser());
+        }
 
         return UserDocumentResponseDTO.fromEntity(saved);
     }
