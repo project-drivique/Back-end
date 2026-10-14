@@ -326,6 +326,44 @@ public class NotificationService {
             }
         }
 
+        // Asegurar emisión IN_APP para eventos críticos como PAYMENT si no hay plantilla IN_APP en base de datos
+        boolean hasInApp = templates.stream().anyMatch(t -> "IN_APP".equalsIgnoreCase(t.getChannel()));
+        if (!hasInApp && isChannelAllowed(user, "IN_APP", normalizedCriticality, normalizedEventType)) {
+            String paymentStatus = params != null && params.get("status") != null ? params.get("status").toString().toUpperCase(Locale.ROOT) : "APPROVED";
+            String bookingCode = params != null && params.get("bookingCode") != null ? params.get("bookingCode").toString() : "";
+            String amount = params != null && params.get("amount") != null ? params.get("amount").toString() : "";
+            String currency = params != null && params.get("currency") != null ? params.get("currency").toString() : "COP";
+
+            boolean isApproved = "APPROVED".equalsIgnoreCase(paymentStatus);
+            String inAppSubject;
+            String inAppMessage;
+            if ("PAYMENT".equalsIgnoreCase(normalizedEventType)) {
+                inAppSubject = isApproved ? "¡Pago exitoso de tu reserva " + bookingCode + "!" : "Pago rechazado para la reserva " + bookingCode;
+                inAppMessage = isApproved 
+                        ? "Tu pago de " + amount + " " + currency + " fue aprobado exitosamente por Wompi. Ya puedes continuar con la firma de tu contrato."
+                        : "Tu pago de " + amount + " " + currency + " fue declinado por la entidad financiera. Por favor actualiza tu medio de pago.";
+            } else {
+                inAppSubject = "Notificación de " + normalizedEventType;
+                inAppMessage = "Actualización referente a tu servicio (" + normalizedEventType + ").";
+            }
+
+            NotificationResponseDTO inAppResp = dispatchNotification(
+                    user,
+                    "IN_APP",
+                    determineNotificationType(normalizedEventType),
+                    inAppSubject,
+                    inAppMessage,
+                    referenceId,
+                    normalizedEventType,
+                    normalizedCriticality,
+                    metadataJson,
+                    idempotencyKey != null ? idempotencyKey + "-IN_APP" : null
+            );
+            if (primaryResponse == null) {
+                primaryResponse = inAppResp;
+            }
+        }
+
         return primaryResponse;
     }
 
