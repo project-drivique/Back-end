@@ -80,7 +80,8 @@ public class NotificationService {
         } else {
             notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         }
-        return notifications.stream().map(NotificationResponseDTO::fromEntity).toList();
+        List<Notification> deduplicated = deduplicateNotifications(notifications);
+        return deduplicated.stream().map(NotificationResponseDTO::fromEntity).toList();
     }
 
     @Transactional(readOnly = true)
@@ -94,6 +95,10 @@ public class NotificationService {
     @Transactional(readOnly = true)
     public long getUnreadCount(String email) {
         User user = findUserByEmail(email);
+        List<Notification> unread = notificationRepository.findByUserIdAndIsReadOrderByCreatedAtDesc(user.getId(), false);
+        if (unread != null && !unread.isEmpty()) {
+            return deduplicateNotifications(unread).size();
+        }
         return notificationRepository.countByUserIdAndIsReadFalse(user.getId());
     }
 
@@ -104,7 +109,63 @@ public class NotificationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Notificación no encontrada con id: " + id));
         notification.markAsRead();
         Notification saved = notificationRepository.save(notification);
+
+        markSisterNotificationsAsRead(user.getId(), saved);
+
         return NotificationResponseDTO.fromEntity(saved);
+    }
+
+    private void markSisterNotificationsAsRead(UUID userId, Notification target) {
+        try {
+            List<Notification> unread = notificationRepository.findByUserIdAndIsReadOrderByCreatedAtDesc(userId, false);
+            if (unread == null || unread.isEmpty()) return;
+
+            String targetKey = buildDeduplicationKey(target);
+            for (Notification n : unread) {
+                if (!n.getId().equals(target.getId()) && targetKey.equals(buildDeduplicationKey(n))) {
+                    n.markAsRead();
+                    notificationRepository.save(n);
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("Error al marcar notificaciones hermanas como leídas: {}", e.getMessage());
+        }
+    }
+
+    private List<Notification> deduplicateNotifications(List<Notification> list) {
+        if (list == null || list.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, Notification> uniqueMap = new LinkedHashMap<>();
+        for (Notification n : list) {
+            String key = buildDeduplicationKey(n);
+            if (!uniqueMap.containsKey(key)) {
+                uniqueMap.put(key, n);
+            } else {
+                Notification existing = uniqueMap.get(key);
+                if (!"IN_APP".equalsIgnoreCase(existing.getChannel()) && "IN_APP".equalsIgnoreCase(n.getChannel())) {
+                    uniqueMap.put(key, n);
+                }
+            }
+        }
+        return new ArrayList<>(uniqueMap.values());
+    }
+
+    private String buildDeduplicationKey(Notification n) {
+        if (n == null) return UUID.randomUUID().toString();
+
+        if (n.getIdempotencyKey() != null && !n.getIdempotencyKey().isBlank()) {
+            String baseKey = n.getIdempotencyKey().replaceAll("-(IN_APP|EMAIL|PUSH|SMS)$", "");
+            return "IDEMP:" + baseKey;
+        }
+
+        String ref = n.getReferenceId() != null ? n.getReferenceId().toString() : "noref";
+        String evType = n.getEventType() != null ? n.getEventType() : (n.getType() != null ? n.getType() : "GENERAL");
+        String subj = n.getSubject() != null ? n.getSubject().trim().toLowerCase(Locale.ROOT) : "";
+        String msg = n.getMessage() != null ? n.getMessage().trim().toLowerCase(Locale.ROOT) : "";
+
+        return "CONTENT:" + ref + "|" + evType + "|" + subj + "|" + msg;
     }
 
     @Transactional
@@ -141,6 +202,43 @@ public class NotificationService {
     @Transactional
     public NotificationResponseDTO send(User user, String channel, String type, String subject, String message, UUID referenceId) {
         return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", null, null);
+    }
+
+    @Transactional
+    public NotificationResponseDTO send(User user, String channel, String type, String subject, String message, UUID referenceId, String idempotencyKey) {
+        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", null, idempotencyKey);
+    }
+
+    @Transactional
+    public NotificationResponseDTO sendWithMetadata(
+            User user,
+            String channel,
+            String type,
+            String subject,
+            String message,
+            UUID referenceId,
+            Map<String, Object> metadata
+    ) {
+        String idempotencyKey = null;
+        if (referenceId != null && channel != null) {
+            idempotencyKey = "META-" + referenceId + "-" + channel.toUpperCase(Locale.ROOT);
+        }
+        return sendWithMetadata(user, channel, type, subject, message, referenceId, metadata, idempotencyKey);
+    }
+
+    @Transactional
+    public NotificationResponseDTO sendWithMetadata(
+            User user,
+            String channel,
+            String type,
+            String subject,
+            String message,
+            UUID referenceId,
+            Map<String, Object> metadata,
+            String idempotencyKey
+    ) {
+        String metadataJson = serializeMetadata(metadata);
+        return dispatchNotification(user, channel, type, subject, message, referenceId, null, "NORMAL", metadataJson, idempotencyKey);
     }
 
     @Transactional
@@ -188,6 +286,18 @@ public class NotificationService {
         for (NotificationTemplate template : templates) {
             String channel = template.getChannel().toUpperCase();
 
+            if ("PAYMENT".equalsIgnoreCase(normalizedEventType)) {
+                String paymentStatus = params != null && params.get("status") != null ? params.get("status").toString().toUpperCase(Locale.ROOT) : "APPROVED";
+                boolean isApproved = "APPROVED".equalsIgnoreCase(paymentStatus);
+                String codeUpper = template.getCode().toUpperCase(Locale.ROOT);
+                if (codeUpper.contains("SUCCESS") && !isApproved) {
+                    continue;
+                }
+                if (codeUpper.contains("FAILED") && isApproved) {
+                    continue;
+                }
+            }
+
             // 3. Evaluar permisos de canal y criticidad
             if (!isChannelAllowed(user, channel, normalizedCriticality, normalizedEventType)) {
                 LOG.info("Notificación '{}' canal '{}' omitida para '{}' por preferencias de usuario.",
@@ -234,8 +344,17 @@ public class NotificationService {
             String idempotencyKey
     ) {
         String normalizedChannel = channel != null ? channel.trim().toUpperCase() : "IN_APP";
-        String normalizedType = type != null ? type.trim().toUpperCase() : "GENERAL";
+        String normalizedType = determineNotificationType(type);
         String normalizedCriticality = criticality != null ? criticality.trim().toUpperCase() : "NORMAL";
+        String finalEventType = determineEventType(eventType != null ? eventType : type);
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Notification> existing = notificationRepository.findByUserIdAndIdempotencyKey(user.getId(), idempotencyKey.trim());
+            if (existing.isPresent()) {
+                LOG.info("Notificación duplicada omitida para usuario {} con clave de idempotencia '{}'", user.getId(), idempotencyKey);
+                return NotificationResponseDTO.fromEntity(existing.get());
+            }
+        }
 
         Notification notification = new Notification(
                 user,
@@ -244,12 +363,16 @@ public class NotificationService {
                 subject,
                 message,
                 referenceId,
-                eventType,
+                finalEventType,
                 normalizedCriticality,
                 metadata,
                 idempotencyKey
         );
         Notification saved = notificationRepository.save(notification);
+        if (saved == null) {
+            LOG.warn("notificationRepository.save retornó null para notificación {}", notification);
+            return null;
+        }
 
         // Verificar si el canal está permitido según preferencias y criticidad
         boolean channelAllowed = isChannelAllowed(user, normalizedChannel, normalizedCriticality, normalizedType);
@@ -316,10 +439,41 @@ public class NotificationService {
     }
 
     private String determineNotificationType(String eventType) {
-        return switch (eventType.toUpperCase()) {
+        if (eventType == null) return "GENERAL";
+        String upper = eventType.trim().toUpperCase();
+        if (upper.startsWith("RESERVATION") || upper.contains("CANCELLATION") || upper.contains("DELIVERY") || upper.contains("RETURN") || upper.contains("CONTRACT")) {
+            return "RESERVATION";
+        }
+        if (upper.startsWith("SECURITY") || upper.contains("AUTH") || upper.contains("PASSWORD")) {
+            return "SECURITY";
+        }
+        if (upper.startsWith("PROMOTION") || upper.contains("COUPON")) {
+            return "PROMOTION";
+        }
+        return switch (upper) {
             case "SECURITY" -> "SECURITY";
-            case "RESERVATION", "CANCELLATION", "DELIVERY", "RETURN", "CONTRACT" -> "RESERVATION";
+            case "RESERVATION" -> "RESERVATION";
             case "PROMOTION" -> "PROMOTION";
+            default -> "GENERAL";
+        };
+    }
+
+    private String determineEventType(String eventType) {
+        if (eventType == null) return "GENERAL";
+        String upper = eventType.trim().toUpperCase();
+        if (upper.startsWith("RESERVATION")) return "RESERVATION";
+        if (upper.startsWith("REGISTRATION")) return "REGISTRATION";
+        if (upper.startsWith("PAYMENT")) return "PAYMENT";
+        if (upper.startsWith("CANCELLATION")) return "CANCELLATION";
+        if (upper.startsWith("CONTRACT")) return "CONTRACT";
+        if (upper.startsWith("DELIVERY")) return "DELIVERY";
+        if (upper.startsWith("RETURN")) return "RETURN";
+        if (upper.startsWith("DOCUMENT")) return "DOCUMENT";
+        if (upper.startsWith("INCIDENT")) return "INCIDENT";
+        if (upper.startsWith("SECURITY") || upper.startsWith("AUTH") || upper.startsWith("PASSWORD")) return "SECURITY";
+        if (upper.startsWith("PROMOTION") || upper.startsWith("COUPON")) return "PROMOTION";
+        return switch (upper) {
+            case "REGISTRATION", "PAYMENT", "RESERVATION", "CANCELLATION", "CONTRACT", "DELIVERY", "RETURN", "DOCUMENT", "INCIDENT", "SECURITY", "PROMOTION", "GENERAL" -> upper;
             default -> "GENERAL";
         };
     }
