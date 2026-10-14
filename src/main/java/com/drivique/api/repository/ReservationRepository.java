@@ -60,4 +60,15 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
             @Param("statusCode") String statusCode,
             @Param("now") Instant now
     );
+
+    @Query("SELECT r FROM Reservation r " +
+           "WHERE UPPER(r.status.code) = UPPER(:statusCode) " +
+           "AND r.cashPaymentExpiresAt IS NOT NULL " +
+           "AND r.cashPaymentExpiresAt > :now " +
+           "AND r.cashPaymentExpiresAt <= :warningWindow")
+    List<Reservation> findExpiringPendingReservations(
+            @Param("statusCode") String statusCode,
+            @Param("now") Instant now,
+            @Param("warningWindow") Instant warningWindow
+    );
 }
