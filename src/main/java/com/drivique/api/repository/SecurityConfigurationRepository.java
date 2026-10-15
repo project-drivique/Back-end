@@ -7,4 +7,8 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 public interface SecurityConfigurationRepository extends JpaRepository<SecurityConfiguration, UUID> {
     List<SecurityConfiguration> findByConfigKeyInOrderByConfigKeyAsc(Collection<String> keys);
+
+    List<SecurityConfiguration> findAllByOrderByConfigKeyAsc();
+
+    java.util.Optional<SecurityConfiguration> findByConfigKey(String configKey);
 }

@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface IncidentStatusHistoryRepository extends JpaRepository<IncidentStatusHistory, UUID> {
     List<IncidentStatusHistory> findByIncidentIdOrderByCreatedAtAsc(UUID incidentId);
+
+    void deleteByIncidentId(UUID incidentId);
 }
