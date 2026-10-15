@@ -104,8 +104,8 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM audit.audit_logs");
         jdbc.execute("DELETE FROM audit.generated_reports");
         jdbc.execute("DELETE FROM audit.administrative_report_types");
-        jdbc.execute("DELETE FROM support.notification_delivery_attempts");
-        jdbc.execute("DELETE FROM support.notification_outbox");
+        // Un solo comando: un envío asíncrono no puede insertar intentos entre el borrado de ambas tablas
+        jdbc.execute("TRUNCATE TABLE support.notification_delivery_attempts, support.notification_outbox");
         jdbc.execute("DELETE FROM support.notifications");
         jdbc.execute("DELETE FROM support.incident_attachments");
         jdbc.execute("DELETE FROM support.incident_status_history");
