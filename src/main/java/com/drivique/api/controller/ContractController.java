@@ -32,11 +32,17 @@ public class ContractController {
     private final ContractService contractService;
     private final ClauseService clauseService;
     private final ContractSignatureService signatureService;
+    private final com.drivique.api.service.AdminContractQueryService adminContractQueryService;
+    private final com.drivique.api.service.ContractEmailService contractEmailService;
 
-    public ContractController(ContractService contractService, ClauseService clauseService, ContractSignatureService signatureService) {
+    public ContractController(ContractService contractService, ClauseService clauseService, ContractSignatureService signatureService,
+            com.drivique.api.service.AdminContractQueryService adminContractQueryService,
+            com.drivique.api.service.ContractEmailService contractEmailService) {
         this.contractService = contractService;
         this.clauseService = clauseService;
         this.signatureService = signatureService;
+        this.adminContractQueryService = adminContractQueryService;
+        this.contractEmailService = contractEmailService;
     }
 
     @PostMapping("/generate")
@@ -69,13 +75,13 @@ public class ContractController {
             @RequestPart(value = "signature", required = false) MultipartFile signature,
             @RequestPart("signatureStrokeData") String signatureStrokeData,
             @RequestPart("signedCityId") String signedCityId,
-            @RequestPart("consentAccepted") Boolean consentAccepted,
+            @RequestPart("consentAccepted") String consentAccepted,
             @RequestPart("documentVersion") String documentVersion,
             HttpServletRequest servletRequest,
             Authentication authentication
     ) {
         return signatureService.sign(id, signature, signatureStrokeData, UUID.fromString(signedCityId),
-                Boolean.TRUE.equals(consentAccepted), documentVersion, servletRequest.getRemoteAddr(), authentication.getName());
+                Boolean.parseBoolean(consentAccepted == null ? null : consentAccepted.trim()), documentVersion, servletRequest.getRemoteAddr(), authentication.getName());
     }
 
     @GetMapping("/clauses")
@@ -86,6 +92,25 @@ public class ContractController {
     @ApiResponse(responseCode = "200", description = "Listado de cláusulas vigentes")
     public List<ContractClauseResponseDTO> getActiveClauses() {
         return clauseService.getActiveClauses();
+    }
+
+    @GetMapping(value = "/{id}/signature", produces = MediaType.IMAGE_PNG_VALUE)
+    @Operation(summary = "Obtener la imagen de la firma del contrato")
+    public byte[] signature(@PathVariable UUID id, Authentication authentication) {
+        return contractService.downloadSignature(id, authentication.getName());
+    }
+
+    @PostMapping("/{id}/email")
+    @Operation(summary = "Enviar por correo el contrato firmado en PDF")
+    public java.util.Map<String, Boolean> email(@PathVariable UUID id, Authentication authentication) {
+        return java.util.Map.of("sent", contractService.emailContract(id, authentication.getName()));
+    }
+
+    @GetMapping("/admin")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'EMPLOYEE', 'BRANCH_ADMIN')")
+    @Operation(summary = "Listar contratos del panel", description = "Administradores ven todos los contratos; encargados solo los de su sucursal.")
+    public java.util.List<ContractResponseDTO> listForStaff(Authentication authentication) {
+        return adminContractQueryService.list(authentication.getName());
     }
 
     @GetMapping("/{id}")

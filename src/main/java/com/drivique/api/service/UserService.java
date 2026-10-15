@@ -80,9 +80,10 @@ public class UserService {
 
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setPhone(request.phone());
-        user.setBirthDate(request.birthDate());
-        user.setNationalityId(request.nationalityId());
+        if (request.phone() != null) user.setPhone(request.phone());
+        if (request.birthDate() != null) user.setBirthDate(request.birthDate());
+        if (request.nationalityId() != null) user.setNationalityId(request.nationalityId());
+        if (request.address() != null) user.setAddress(request.address().isBlank() ? null : request.address().trim());
 
         boolean isComplete = user.getFirstName() != null && !user.getFirstName().isBlank()
                 && user.getLastName() != null && !user.getLastName().isBlank()
@@ -176,9 +177,12 @@ public class UserService {
                 user.getEmail(),
                 user.getPhone(),
                 user.getDocumentTypeId(),
+                user.getDocumentTypeId() == null ? null
+                        : userRepository.findDocumentTypeCodeById(user.getDocumentTypeId()).orElse(null),
                 user.getDocumentNumber(),
                 user.getBirthDate(),
                 user.getNationalityId(),
+                user.getAddress(),
                 roleCodes,
                 user.isProfileComplete(),
                 user.getAccountStatus(),
