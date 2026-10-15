@@ -111,10 +111,9 @@ public class AuthService {
 
     @Transactional
     public MessageResponseDTO resendVerificationCode(ForgotPasswordRequestDTO request) {
-        userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).ifPresent(user -> {
-            String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
-            authEmailService.sendOtp(user.getEmail(), "verificar tu cuenta", code);
-        });
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).orElseThrow(() -> accountNotFound());
+        String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
+        authEmailService.sendOtp(user.getEmail(), "verificar tu cuenta", code);
         return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
     }
 
@@ -133,10 +132,16 @@ public class AuthService {
         }
     }
 
+    /** Correo sin cuenta: se avisa con un mensaje claro y nunca se envía un código. */
+    private static org.springframework.web.server.ResponseStatusException accountNotFound() {
+        return new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,
+                "No existe una cuenta registrada con ese correo.");
+    }
+
     @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class})
     public AuthResponseDTO login(LoginRequestDTO request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
-                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas."));
+                .orElseThrow(() -> accountNotFound());
 
         if (user.isLocked()) {
             auditAccess(user.getEmail(), "FAILURE", "Intento de inicio de sesión con la cuenta bloqueada", ipAddress);
@@ -379,10 +384,9 @@ public class AuthService {
 
     @Transactional
     public MessageResponseDTO forgotPassword(ForgotPasswordRequestDTO request) {
-        userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).ifPresent(user -> {
-            String code = verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
-            authEmailService.sendOtp(user.getEmail(), "restablecer tu contraseña", code);
-        });
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).orElseThrow(() -> accountNotFound());
+        String code = verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
+        authEmailService.sendOtp(user.getEmail(), "restablecer tu contraseña", code);
         return MessageResponseDTO.of("Si el correo está registrado, se ha enviado un código de verificación.");
     }
 
