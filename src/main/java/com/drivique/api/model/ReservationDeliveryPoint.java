@@ -54,6 +54,19 @@ public class ReservationDeliveryPoint {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "driver_id")
+    private DeliveryDriver driver;
+
+    @Column(name = "delivery_pin", length = 4)
+    private String deliveryPin;
+
+    @Column(name = "delivery_status", nullable = false, length = 12)
+    private String deliveryStatus = "PENDING";
+
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
     protected ReservationDeliveryPoint() {}
 
     public ReservationDeliveryPoint(
@@ -103,4 +116,22 @@ public class ReservationDeliveryPoint {
     public void setFlightOrBusNumber(String flightOrBusNumber) { this.flightOrBusNumber = flightOrBusNumber; }
     public void setReferenceDetails(String referenceDetails) { this.referenceDetails = referenceDetails; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public DeliveryDriver getDriver() { return driver; }
+    public String getDeliveryPin() { return deliveryPin; }
+    public String getDeliveryStatus() { return deliveryStatus; }
+    public Instant getDeliveredAt() { return deliveredAt; }
+
+    public void assignDriver(DeliveryDriver driver, String pin) {
+        this.driver = driver;
+        this.deliveryPin = pin;
+        this.deliveryStatus = "ASSIGNED";
+        this.updatedAt = Instant.now();
+    }
+
+    public void completeDelivery() {
+        this.deliveryStatus = "COMPLETED";
+        this.deliveredAt = Instant.now();
+        this.updatedAt = Instant.now();
+    }
 }
