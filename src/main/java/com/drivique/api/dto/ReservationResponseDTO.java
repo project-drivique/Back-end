@@ -37,8 +37,25 @@ public record ReservationResponseDTO(
         Instant cashPaymentExpiresAt,
         boolean blocksAvailability,
         List<DeliveryPointResponseDTO> deliveryPoints,
-        Instant createdAt
+        Instant createdAt,
+        ReservationPriceBreakdownDTO breakdown
 ) {
+    /** Forma anterior (sin desglose de precio). */
+    public ReservationResponseDTO(UUID id, String code, UUID customerId, String customerName, String customerEmail, UUID vehicleId,
+            String vehicleModel, String vehiclePlate, String status, String statusName, Instant pickupDate, Instant returnDate,
+            int rentalDays, BigDecimal vehicleDailyRate, BigDecimal vehicleSubtotal, UUID insuranceCoverageId,
+            String insuranceCoverageName, BigDecimal insuranceDailyRate, UUID mileagePlanId, String mileagePlanName,
+            BigDecimal mileagePlanDailyRate, List<ReservationAdditionalServiceItemDTO> additionalServices,
+            ReservationPromotionItemDTO promotion, BigDecimal totalEstimated, UUID cashPaymentBranchId, String cashPaymentCode,
+            Instant cashPaymentExpiresAt, boolean blocksAvailability, List<DeliveryPointResponseDTO> deliveryPoints, Instant createdAt) {
+        this(id, code, customerId, customerName, customerEmail, vehicleId, vehicleModel, vehiclePlate, status, statusName, pickupDate,
+                returnDate, rentalDays, vehicleDailyRate, vehicleSubtotal, insuranceCoverageId, insuranceCoverageName,
+                insuranceDailyRate, mileagePlanId, mileagePlanName, mileagePlanDailyRate, additionalServices, promotion,
+                totalEstimated, cashPaymentBranchId, cashPaymentCode, cashPaymentExpiresAt, blocksAvailability, deliveryPoints,
+                createdAt, null);
+    }
+
+
     public ReservationResponseDTO(
             UUID id,
             String code,

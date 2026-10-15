@@ -60,6 +60,7 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM iam.user_roles");
         jdbc.execute("DELETE FROM iam.role_permissions");
         jdbc.execute("DELETE FROM location.branch_users");
+        jdbc.execute("DELETE FROM iam.security_configuration_changes");
         jdbc.execute("DELETE FROM iam.users");
         jdbc.execute("DELETE FROM iam.roles");
         jdbc.execute("DELETE FROM iam.permissions");

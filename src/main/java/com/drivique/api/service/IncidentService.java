@@ -272,6 +272,25 @@ public class IncidentService {
         history.save(new IncidentStatusHistory(report, from, target, actor, note == null || note.isBlank() ? null : note.trim()));
     }
 
+    /** Un empleado solo puede eliminar un reporte interno propio mientras siga recibido; los de clientes nunca. */
+    @Transactional
+    @Auditable(domain = "SUPPORT", entity = "IncidentReport", action = "DELETE", description = "Eliminación de reporte interno de incidencia", includeArgs = false, includeResult = false)
+    public void deleteOwnInternal(UUID id, String email) {
+        User user = current(email);
+        IncidentReport report = reports.findById(id).orElseThrow(() -> new ResourceNotFoundException("Incidencia no encontrada"));
+        if (!isOwner(user, report) || !isStaffUser(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Los reportes creados por los clientes no pueden ser eliminados por control de auditoría.");
+        }
+        if (!"OPEN".equals(report.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No se puede eliminar un reporte propio que ya pasó a revisión o resolución.");
+        }
+        // Primero lo que depende del reporte: adjuntos, mensajes e historial de estados
+        attachments.deleteByIncidentId(report.getId());
+        responses.deleteByIncidentId(report.getId());
+        history.deleteByIncidentId(report.getId());
+        reports.delete(report);
+    }
+
     // ------------------------------------------------------------------ acceso
 
     private boolean isOwner(User user, IncidentReport report) {
@@ -403,12 +422,15 @@ public class IncidentService {
         boolean staffView = !isOwner(viewer, r);
         List<IncidentDTO.Attachment> initial = new ArrayList<>();
         List<IncidentDTO.TimelineEntry> timeline = new ArrayList<>();
+        // Los adjuntos iniciales viajan siempre (el listado muestra las evidencias); la conversación solo en el detalle
+        for (IncidentAttachment a : attachments.findByIncidentIdOrderByCreatedAtAsc(r.getId())) {
+            if (a.getResponse() == null) initial.add(attachmentDto(a));
+        }
         if (withDetail) {
             List<IncidentAttachment> all = attachments.findByIncidentIdOrderByCreatedAtAsc(r.getId());
             Map<UUID, List<IncidentDTO.Attachment>> byResponse = new HashMap<>();
             for (IncidentAttachment a : all) {
-                if (a.getResponse() == null) initial.add(attachmentDto(a));
-                else byResponse.computeIfAbsent(a.getResponse().getId(), k -> new ArrayList<>()).add(attachmentDto(a));
+                if (a.getResponse() != null) byResponse.computeIfAbsent(a.getResponse().getId(), k -> new ArrayList<>()).add(attachmentDto(a));
             }
             for (IncidentResponse resp : responses.findByIncidentIdOrderByCreatedAtAsc(r.getId())) {
                 boolean fromCustomer = resp.getAuthor().getId().equals(r.getReporter().getId());
@@ -433,6 +455,7 @@ public class IncidentService {
                 res != null ? res.getId() : null, res != null ? res.getCode() : null,
                 r.getBranch() != null ? r.getBranch().getId() : null, r.getBranch() != null ? r.getBranch().getName() : null,
                 r.getReporter().getId(), r.getReporter().getFullName(), r.getReporter().getEmail(),
+                isStaffUser(r.getReporter()),
                 r.getAssignedTo() != null ? r.getAssignedTo().getId() : null, r.getAssignedTo() != null ? r.getAssignedTo().getFullName() : null,
                 r.getSlaDueAt(), open && r.getSlaDueAt() != null && Instant.now().isAfter(r.getSlaDueAt()),
                 r.getCreatedAt(), r.getUpdatedAt(), r.getResolvedAt(), r.getClosedAt(),
