@@ -62,4 +62,15 @@ public class CityController {
     public CityResponseDTO update(@PathVariable UUID id, @Valid @RequestBody CityRequestDTO input) {
         return service.update(id, input);
     }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('BRANCH_ADMIN', 'SUPER_ADMIN')")
+    public void delete(@PathVariable UUID id) {
+        if (!branches.byCity(id).isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.CONFLICT,
+                    "No se puede eliminar la ciudad porque tiene sucursales asociadas.");
+        }
+        service.deactivateCity(id);
+    }
 }

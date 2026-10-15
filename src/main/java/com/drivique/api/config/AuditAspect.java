@@ -38,7 +38,7 @@ public class AuditAspect {
 
         Object[] args = joinPoint.getArgs();
         UUID entityId = extractEntityId(args);
-        Object oldData = (args != null && args.length > 0) ? args : null;
+        Object oldData = (auditable.includeArgs() && args != null && args.length > 0) ? args : null;
 
         try {
             Object result = joinPoint.proceed();
@@ -55,7 +55,7 @@ public class AuditAspect {
                         ipAddress,
                         description,
                         oldData,
-                        result
+                        auditable.includeResult() ? result : null
                 );
             } catch (Exception auditEx) {
                 LOG.error("Error al registrar bitácora de auditoría exitosa: {}", auditEx.getMessage());
