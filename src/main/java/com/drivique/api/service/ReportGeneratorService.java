@@ -198,17 +198,15 @@ public class ReportGeneratorService {
                 document.add(table);
             } else if ("REVENUE_SUMMARY".equalsIgnoreCase(type)) {
                 List<RentalContract> contracts = rentalContractRepository.findAll();
-                PdfPTable table = new PdfPTable(5);
+                PdfPTable table = new PdfPTable(4);
                 table.setWidthPercentage(100);
-                addPdfHeader(table, tableHeaderFont, "N° Contrato", "Cliente", "Monto Base", "Depósito", "Total Estimado");
+                addPdfHeader(table, tableHeaderFont, "N° Contrato", "Cliente", "Monto Base", "Total Estimado");
 
                 for (RentalContract c : contracts) {
                     table.addCell(new PdfPCell(new Phrase(c.getContractNumber(), cellFont)));
                     table.addCell(new PdfPCell(new Phrase(c.getCustomer() != null ? c.getCustomer().getFullName() : "-", cellFont)));
                     table.addCell(new PdfPCell(new Phrase("$" + c.getBaseAmount(), cellFont)));
-                    table.addCell(new PdfPCell(new Phrase("$" + c.getSecurityDeposit(), cellFont)));
-                    BigDecimal total = c.getBaseAmount().add(c.getSecurityDeposit());
-                    table.addCell(new PdfPCell(new Phrase("$" + total, cellFont)));
+                    table.addCell(new PdfPCell(new Phrase("$" + c.getBaseAmount(), cellFont)));
                 }
                 document.add(table);
             } else {
@@ -274,7 +272,7 @@ public class ReportGeneratorService {
                 }
             } else if ("REVENUE_SUMMARY".equalsIgnoreCase(type)) {
                 Row header = sheet.createRow(rowIdx++);
-                String[] cols = {"Contrato", "Cliente", "Monto Base", "Depósito", "Total"};
+                String[] cols = {"Contrato", "Cliente", "Monto Base", "Total"};
                 for (int i = 0; i < cols.length; i++) {
                     org.apache.poi.ss.usermodel.Cell cell = header.createCell(i);
                     cell.setCellValue(cols[i]);
@@ -287,10 +285,7 @@ public class ReportGeneratorService {
                     r.createCell(0).setCellValue(c.getContractNumber());
                     r.createCell(1).setCellValue(c.getCustomer() != null ? c.getCustomer().getFullName() : "");
                     r.createCell(2).setCellValue(c.getBaseAmount() != null ? c.getBaseAmount().doubleValue() : 0.0);
-                    r.createCell(3).setCellValue(c.getSecurityDeposit() != null ? c.getSecurityDeposit().doubleValue() : 0.0);
-                    BigDecimal total = (c.getBaseAmount() != null ? c.getBaseAmount() : BigDecimal.ZERO)
-                            .add(c.getSecurityDeposit() != null ? c.getSecurityDeposit() : BigDecimal.ZERO);
-                    r.createCell(4).setCellValue(total.doubleValue());
+                    r.createCell(3).setCellValue(c.getBaseAmount() != null ? c.getBaseAmount().doubleValue() : 0.0);
                 }
             } else {
                 Row header = sheet.createRow(rowIdx++);
@@ -328,17 +323,14 @@ public class ReportGeneratorService {
                 ));
             }
         } else if ("REVENUE_SUMMARY".equalsIgnoreCase(type)) {
-            sw.write("Contrato,Cliente,MontoBase,Deposito,Total\n");
+            sw.write("Contrato,Cliente,MontoBase,Total\n");
             List<RentalContract> contracts = rentalContractRepository.findAll();
             for (RentalContract c : contracts) {
-                BigDecimal total = (c.getBaseAmount() != null ? c.getBaseAmount() : BigDecimal.ZERO)
-                        .add(c.getSecurityDeposit() != null ? c.getSecurityDeposit() : BigDecimal.ZERO);
-                sw.write(String.format("\"%s\",\"%s\",%s,%s,%s\n",
+                sw.write(String.format("\"%s\",\"%s\",%s,%s\n",
                         escapeCsv(c.getContractNumber()),
                         escapeCsv(c.getCustomer() != null ? c.getCustomer().getFullName() : ""),
                         c.getBaseAmount(),
-                        c.getSecurityDeposit(),
-                        total
+                        c.getBaseAmount()
                 ));
             }
         } else {

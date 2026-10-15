@@ -3,7 +3,10 @@ package com.drivique.api.controller;
 import com.drivique.api.dto.AdministrativeReportTypeResponseDTO;
 import com.drivique.api.dto.GenerateReportRequestDTO;
 import com.drivique.api.dto.GeneratedReportResponseDTO;
+import com.drivique.api.dto.ReportHistoryDTO;
+import com.drivique.api.dto.ReportHistoryRequestDTO;
 import com.drivique.api.service.ReportGeneratorService;
+import com.drivique.api.service.ReportHistoryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -28,9 +31,39 @@ import java.util.UUID;
 public class AdminReportController {
 
     private final ReportGeneratorService reportGeneratorService;
+    private final ReportHistoryService historyService;
 
-    public AdminReportController(ReportGeneratorService reportGeneratorService) {
+    public AdminReportController(ReportGeneratorService reportGeneratorService, ReportHistoryService historyService) {
         this.reportGeneratorService = reportGeneratorService;
+        this.historyService = historyService;
+    }
+
+    @GetMapping("/history")
+    public List<ReportHistoryDTO> history(Authentication authentication) {
+        return historyService.list(authentication.getName());
+    }
+
+    @GetMapping("/history/{id}")
+    public ReportHistoryDTO historyDetail(@PathVariable UUID id, Authentication authentication) {
+        return historyService.get(id, authentication.getName());
+    }
+
+    @PostMapping("/history")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReportHistoryDTO saveHistory(@Valid @RequestBody ReportHistoryRequestDTO request, Authentication authentication) {
+        return historyService.save(request, authentication.getName());
+    }
+
+    @DeleteMapping("/history/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteHistory(@PathVariable UUID id, Authentication authentication) {
+        historyService.delete(id, authentication.getName());
+    }
+
+    @DeleteMapping("/history")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void clearHistory(Authentication authentication) {
+        historyService.clear(authentication.getName());
     }
 
     @GetMapping("/types")
