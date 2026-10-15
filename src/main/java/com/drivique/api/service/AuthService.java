@@ -118,12 +118,28 @@ public class AuthService {
         return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AuditService auditService;
+
+    /** Los accesos (exitosos o no) quedan en la auditoría; si el registro falla, el inicio de sesión no se afecta. */
+    private void auditAccess(String email, String result, String description, String ipAddress) {
+        if (auditService == null) {
+            return;
+        }
+        try {
+            auditService.recordAudit("AUTH", "Session", null, "INSERT", result, email, null, ipAddress, description, null, null);
+        } catch (Exception ignored) {
+            // la auditoría nunca bloquea el acceso
+        }
+    }
+
     @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class})
     public AuthResponseDTO login(LoginRequestDTO request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
                 .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas."));
 
         if (user.isLocked()) {
+            auditAccess(user.getEmail(), "FAILURE", "Intento de inicio de sesión con la cuenta bloqueada", ipAddress);
             throw new AccountLockedException(user.getLockedUntil());
         }
 
@@ -132,8 +148,10 @@ public class AuthService {
             userRepository.save(user);
 
             if (user.isLocked()) {
+                auditAccess(user.getEmail(), "FAILURE", "Cuenta bloqueada por intentos fallidos de inicio de sesión", ipAddress);
                 throw new AccountLockedException(user.getLockedUntil());
             }
+            auditAccess(user.getEmail(), "FAILURE", "Inicio de sesión fallido: contraseña incorrecta", ipAddress);
             throw new BadCredentialsException("Credenciales inválidas.");
         }
 
@@ -147,6 +165,7 @@ public class AuthService {
         }
 
         if ("INACTIVE".equalsIgnoreCase(user.getAccountStatus()) || "SUSPENDED".equalsIgnoreCase(user.getAccountStatus())) {
+            auditAccess(user.getEmail(), "FAILURE", "Inicio de sesión rechazado: la cuenta no está activa", ipAddress);
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.FORBIDDEN,
                     "La cuenta no está autorizada para iniciar sesión.");
@@ -199,6 +218,7 @@ public class AuthService {
                 permissions
         );
 
+        auditAccess(user.getEmail(), "SUCCESS", "Inicio de sesión exitoso", ipAddress);
         return AuthResponseDTO.of(accessToken, refreshToken, jwtService.getAccessTokenExpirationSeconds(), profile);
     }
 
