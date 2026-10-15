@@ -99,3 +99,6 @@ drivique:
     facebook:
       app-id: ${FACEBOOK_APP_ID:1072551762252390}
       app-secret: ${FACEBOOK_APP_SECRET:}
+  pricing:
+    admin-fee-rate: 0.10
+    vat-rate: 0.19
