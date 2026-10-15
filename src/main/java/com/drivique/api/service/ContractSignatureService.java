@@ -1,5 +1,6 @@
 package com.drivique.api.service;
 
+import com.drivique.api.config.Auditable;
 import com.drivique.api.dto.ContractResponseDTO;
 import com.drivique.api.exception.*;
 import com.drivique.api.model.*;
@@ -17,7 +18,11 @@ public class ContractSignatureService {
     @org.springframework.beans.factory.annotation.Autowired
     public ContractSignatureService(RentalContractRepository contracts, UserRepository users, CityRepository cities, ContractStatusRepository statuses, FileStorageService storage, PdfContractGeneratorService pdfs, ContractService contractService, PaymentRepository payments, @org.springframework.beans.factory.annotation.Autowired(required = false) NotificationService notificationService) { this.contracts=contracts; this.users=users; this.cities=cities; this.statuses=statuses; this.storage=storage; this.pdfs=pdfs; this.contractService=contractService; this.payments=payments; this.notificationService=notificationService; }
     public ContractSignatureService(RentalContractRepository contracts, UserRepository users, CityRepository cities, ContractStatusRepository statuses, FileStorageService storage, PdfContractGeneratorService pdfs, ContractService contractService, PaymentRepository payments) { this(contracts, users, cities, statuses, storage, pdfs, contractService, payments, null); }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ContractEmailService contractEmail;
+
     @Transactional
+    @Auditable(domain = "CONTRACTS", entity = "RentalContract", action = "UPDATE", description = "Firma de contrato", includeArgs = false, includeResult = false)
     public ContractResponseDTO sign(UUID id, MultipartFile signature, String strokes, UUID cityId, boolean consentAccepted, String documentVersion, String remoteAddress, String email) {
         if (strokes == null || strokes.isBlank()) throw new IllegalArgumentException("Los trazos biométricos son obligatorios.");
         if (signature != null && (!"image/png".equalsIgnoreCase(signature.getContentType()) || signature.isEmpty())) throw new IllegalArgumentException("La firma debe ser una imagen PNG válida.");
@@ -31,7 +36,7 @@ public class ContractSignatureService {
         City city=cities.findById(cityId).orElseThrow(()->new ResourceNotFoundException("Ciudad de firma no encontrada"));
         byte[] signatureBytes=signature == null ? renderStrokes(strokes) : bytes(signature);
         String signatureUrl=signature == null ? storage.storeBytes(signatureBytes, "signature.png", "contracts/signatures") : storage.storeFile(signature, "contracts/signatures");
-        byte[] pdf=pdfs.generate(contract, signatureBytes);
+        byte[] pdf=pdfs.generate(contract, signatureBytes, contractService.pdfExtras(contract));
         String pdfUrl=storage.storePdf(pdf, "contracts/pdf");
         contract.setSignatureUrl(signatureUrl); contract.setSignatureStrokeData(strokes); contract.setSignedCity(city); contract.setSignedAt(Instant.now());
         contract.setPdfUrl(pdfUrl); contract.setStatus(statuses.findByCodeIgnoreCase("ACTIVE").orElseThrow(()->new ResourceNotFoundException("Estado ACTIVE no encontrado")));
@@ -48,6 +53,10 @@ public class ContractSignatureService {
                         "CONT-SIGN-" + saved.getId()
                 );
             } catch (Exception e) {}
+        }
+        if (contractEmail != null) {
+            final ContractEmailService.Delivery delivery = ContractEmailService.delivery(saved.getCustomer(), saved, pdf);
+            java.util.concurrent.CompletableFuture.runAsync(() -> contractEmail.sendSignedContract(delivery));
         }
         return contractService.mapToDTO(saved);
     }
