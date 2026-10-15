@@ -20,13 +20,21 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
 
     Optional<Reservation> findByCodeIgnoreCase(String code);
     Optional<Reservation> findByCashPaymentCodeIgnoreCase(String cashPaymentCode);
+    List<Reservation> findByCashPaymentCodeIsNotNullOrderByCreatedAtDesc();
+    List<Reservation> findByCashPaymentBranchIdAndCashPaymentCodeIsNotNullOrderByCreatedAtDesc(UUID branchId);
 
     List<Reservation> findByCustomerOrderByCreatedAtDesc(User customer);
 
     boolean existsByCustomerId(UUID customerId);
+    @Query("SELECT COUNT(r) > 0 FROM Reservation r WHERE r.vehicle.id = :vehicleId AND r.blocksAvailability = true")
+    boolean existsActiveByVehicle(@Param("vehicleId") UUID vehicleId);
     boolean existsByCustomer(User customer);
 
     long countByCodeStartingWith(String prefix);
+
+    long countByCustomerIdAndStatusCode(java.util.UUID customerId, String statusCode);
+
+    long countByCustomerIdAndStatusCodeIn(java.util.UUID customerId, java.util.Collection<String> statusCodes);
 
     @Query("SELECT COUNT(r) > 0 FROM Reservation r " +
            "WHERE r.vehicle.id = :vehicleId " +

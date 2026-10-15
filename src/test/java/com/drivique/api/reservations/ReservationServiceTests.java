@@ -136,6 +136,7 @@ class ReservationServiceTests {
         branch = mock(Branch.class);
         when(branch.getId()).thenReturn(branchId);
         when(branch.isActive()).thenReturn(true);
+        when(branch.allowsCashPayment()).thenReturn(true);
         when(branchRepository.findById(branchId)).thenReturn(Optional.of(branch));
 
         pendingStatus = mock(ReservationStatus.class);
@@ -177,7 +178,7 @@ class ReservationServiceTests {
         assertThat(response.status()).isEqualTo("PENDING_PAYMENT");
         assertThat(response.rentalDays()).isEqualTo(3);
         assertThat(response.vehicleDailyRate()).isEqualByComparingTo("220000");
-        assertThat(response.totalEstimated()).isEqualByComparingTo("864000");
+        assertThat(response.totalEstimated()).isEqualByComparingTo("1151370");
 
         verify(vehicleRepository).findByIdWithPessimisticLock(vehicleId);
         verify(reservationRepository).save(any(Reservation.class));

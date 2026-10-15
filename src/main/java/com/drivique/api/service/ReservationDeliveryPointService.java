@@ -178,7 +178,7 @@ public class ReservationDeliveryPointService {
 
         boolean isOwner = Objects.equals(reservation.getCustomer().getId(), user.getId());
         boolean isStaff = user.getRoles().stream()
-                .anyMatch(r -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(r.getCode()));
+                .anyMatch(r -> List.of("ADMIN", "SUPER_ADMIN", "AGENT", "EMPLOYEE", "BRANCH_ADMIN").contains(r.getCode()));
 
         if (!isOwner && !isStaff) {
             throw new AccessDeniedException("No tiene permisos para gestionar los puntos de esta reserva");
@@ -188,21 +188,12 @@ public class ReservationDeliveryPointService {
     }
 
     public DeliveryPointResponseDTO mapToDTO(ReservationDeliveryPoint point) {
-        return new DeliveryPointResponseDTO(
-                point.getId(),
-                point.getReservation().getId(),
-                point.getPointType(),
-                point.getModality(),
-                point.getBranch() != null ? point.getBranch().getId() : null,
-                point.getBranch() != null ? point.getBranch().getName() : null,
-                point.getCity() != null ? point.getCity().getId() : null,
-                point.getCity() != null ? point.getCity().getName() : null,
-                point.getNeighborhood(),
-                point.getAddress(),
-                point.getFlightOrBusNumber(),
-                point.getReferenceDetails(),
-                point.getCreatedAt(),
-                point.getUpdatedAt()
-        );
+        return DeliveryPointResponseDTO.from(point, isOwnerRequest(point.getReservation()));
+    }
+
+    private static boolean isOwnerRequest(Reservation reservation) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getName() != null && reservation.getCustomer() != null
+                && auth.getName().equalsIgnoreCase(reservation.getCustomer().getEmail());
     }
 }

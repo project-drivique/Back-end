@@ -126,6 +126,7 @@ public class SecurityConfig {
                                 "/v1/insurance-coverages",
                                 "/v1/mileage-plans",
                                 "/v1/promotions/featured",
+                                "/v1/promotions/published",
                                 "/v1/contracts/clauses"
                         ).permitAll()
                         .anyRequest().authenticated()

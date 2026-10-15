@@ -67,6 +67,72 @@ public class RbacService {
         return new UserRolesResponseDTO(saved.getId(), saved.getEmail(), roleCodes);
     }
 
+    private static final Set<String> SYSTEM_ROLES = Set.of("SUPER_ADMIN", "BRANCH_ADMIN", "EMPLOYEE", "CUSTOMER");
+
+    @Transactional
+    @com.drivique.api.config.Auditable(domain = "IAM", entity = "Role", action = "INSERT", description = "Creación de rol")
+    public RoleResponseDTO createRole(com.drivique.api.dto.RoleRequestDTO request) {
+        String name = request.name().strip();
+        String code = name.toUpperCase(java.util.Locale.ROOT)
+                .replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U').replace('Ñ', 'N')
+                .replaceAll("[^A-Z0-9]+", "_").replaceAll("^_+|_+$", "");
+        if (code.length() < 3 || !Character.isLetter(code.charAt(0))) {
+            throw new IllegalArgumentException("El nombre del rol debe tener al menos 3 caracteres y empezar con una letra");
+        }
+        if (code.length() > 40) {
+            code = code.substring(0, 40);
+        }
+        if (roleRepository.findByCode(code).isPresent() || roleRepository.findAll().stream().anyMatch(r -> r.getName().equalsIgnoreCase(name))) {
+            throw new com.drivique.api.exception.ConflictException("Ya existe un rol con ese nombre");
+        }
+        Role role = new Role(code, name, request.description().strip(), true);
+        role.setPermissions(resolvePermissions(request.permissionCodes()));
+        return mapRoleToDTO(roleRepository.saveAndFlush(role));
+    }
+
+    @Transactional
+    @com.drivique.api.config.Auditable(domain = "IAM", entity = "Role", action = "UPDATE", description = "Actualización de rol y permisos")
+    public RoleResponseDTO updateRole(UUID id, com.drivique.api.dto.RoleRequestDTO request) {
+        Role role = roleRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
+        if ("SUPER_ADMIN".equals(role.getCode())) {
+            throw new com.drivique.api.exception.ConflictException("El rol de super administrador no se puede modificar");
+        }
+        String name = request.name().strip();
+        if (roleRepository.findAll().stream().anyMatch(r -> !r.getId().equals(id) && r.getName().equalsIgnoreCase(name))) {
+            throw new com.drivique.api.exception.ConflictException("Ya existe un rol con ese nombre");
+        }
+        // El código no cambia nunca: los roles del sistema se identifican por él
+        role.update(SYSTEM_ROLES.contains(role.getCode()) ? role.getName() : name, request.description().strip());
+        role.setPermissions(resolvePermissions(request.permissionCodes()));
+        return mapRoleToDTO(roleRepository.saveAndFlush(role));
+    }
+
+    @Transactional
+    @com.drivique.api.config.Auditable(domain = "IAM", entity = "Role", action = "DELETE", description = "Eliminación de rol")
+    public void deleteRole(UUID id) {
+        Role role = roleRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Rol no encontrado"));
+        if (SYSTEM_ROLES.contains(role.getCode())) {
+            throw new com.drivique.api.exception.ConflictException("Los roles del sistema no se pueden eliminar");
+        }
+        if (userRepository.findAll().stream().anyMatch(u -> u.getDeletedAt() == null
+                && u.getRoles().stream().anyMatch(r -> r.getId().equals(id)))) {
+            throw new com.drivique.api.exception.ConflictException("El rol tiene cuentas asignadas; reasígnalas antes de eliminarlo");
+        }
+        roleRepository.delete(role);
+        roleRepository.flush();
+    }
+
+    private Set<Permission> resolvePermissions(List<String> codes) {
+        Set<Permission> resolved = new HashSet<>();
+        if (codes != null) {
+            for (String code : codes) {
+                resolved.add(permissionRepository.findByCode(code)
+                        .orElseThrow(() -> new ResourceNotFoundException("Permiso no encontrado: " + code)));
+            }
+        }
+        return resolved;
+    }
+
     private RoleResponseDTO mapRoleToDTO(Role role) {
         List<PermissionResponseDTO> permissions = role.getPermissions().stream()
                 .map(this::mapPermissionToDTO)
