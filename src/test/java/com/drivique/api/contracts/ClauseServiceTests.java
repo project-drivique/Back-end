@@ -39,13 +39,12 @@ class ClauseServiceTests {
     }
 
     @Test
-    void getActiveClauses_WhenEmpty_SeedsDefaultClauses() {
+    void getActiveClauses_WhenEmpty_NeverCreatesClausesFromCode() {
         when(repository.findByActiveTrueOrderBySortOrderAsc()).thenReturn(List.of());
-        when(repository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         List<ContractClauseResponseDTO> result = service.getActiveClauses();
 
-        assertThat(result).hasSize(5);
-        verify(repository).saveAll(anyList());
+        assertThat(result).isEmpty();
+        verify(repository, never()).saveAll(anyList());
     }
 }

@@ -77,7 +77,6 @@ public class ReportGeneratorService {
 
     @Transactional(readOnly = true)
     public List<AdministrativeReportTypeResponseDTO> getReportTypes() {
-        seedReportTypesIfEmpty();
         return reportTypeRepository.findByActiveTrueOrderByCodeAsc().stream()
                 .map(AdministrativeReportTypeResponseDTO::fromEntity)
                 .toList();
@@ -103,8 +102,6 @@ public class ReportGeneratorService {
 
     @Transactional
     public GeneratedReportResponseDTO generateReport(GenerateReportRequestDTO request, String userEmail) {
-        seedReportTypesIfEmpty();
-
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado con correo: " + userEmail));
 
@@ -360,16 +357,5 @@ public class ReportGeneratorService {
         return String.format("{\"startDate\":%s,\"endDate\":%s}",
                 s != null ? "\"" + s + "\"" : "null",
                 e != null ? "\"" + e + "\"" : "null");
-    }
-
-    private void seedReportTypesIfEmpty() {
-        if (reportTypeRepository.count() == 0) {
-            reportTypeRepository.saveAll(List.of(
-                    new AdministrativeReportType("FLEET_OCCUPANCY", "Ocupación de Flota", "Reporte analítico de disponibilidad y tasa de uso de vehículos", true),
-                    new AdministrativeReportType("REVENUE_SUMMARY", "Resumen de Ingresos", "Métricas consolidadas de facturación por alquileres y servicios", true),
-                    new AdministrativeReportType("AUDIT_TRAIL", "Pistas de Auditoría", "Trazabilidad de eventos transaccionales y cambios en el sistema", true),
-                    new AdministrativeReportType("MAINTENANCE", "Mantenimiento Preventivo", "Registro de revisiones técnicas y alertas de kilometraje", true)
-            ));
-        }
     }
 }
