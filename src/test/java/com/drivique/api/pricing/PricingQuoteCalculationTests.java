@@ -137,7 +137,7 @@ class PricingQuoteCalculationTests {
         assertThat(quote.additionalServicesSubtotal()).isEqualByComparingTo("15000.00");
         assertThat(quote.discountAmount()).isEqualByComparingTo("0.00");
         assertThat(quote.refundableSecurityDeposit()).isEqualByComparingTo("500000.00");
-        assertThat(quote.estimatedTotal()).isEqualByComparingTo("405000.00");
+        assertThat(quote.estimatedTotal()).isEqualByComparingTo("530145.00");
         assertThat(quote.couponCode()).isNull();
     }
 
@@ -166,7 +166,7 @@ class PricingQuoteCalculationTests {
         assertThat(quote.vehicleSubtotal()).isEqualByComparingTo("100000.00");
         assertThat(quote.additionalServicesSubtotal()).isEqualByComparingTo("0.00");
         assertThat(quote.discountAmount()).isEqualByComparingTo("0.00");
-        assertThat(quote.estimatedTotal()).isEqualByComparingTo("130000.00");
+        assertThat(quote.estimatedTotal()).isEqualByComparingTo("170170.00");
     }
 
     @Test
@@ -206,7 +206,7 @@ class PricingQuoteCalculationTests {
         assertThat(quote).isNotNull();
         assertThat(quote.couponCode()).isEqualTo("DESCUENTO10");
         assertThat(quote.discountAmount()).isEqualByComparingTo("40500.00");
-        assertThat(quote.estimatedTotal()).isEqualByComparingTo("364500.00");
+        assertThat(quote.estimatedTotal()).isEqualByComparingTo("489645.00");
     }
 
     @Test

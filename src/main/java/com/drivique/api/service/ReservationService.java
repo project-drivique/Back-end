@@ -37,6 +37,9 @@ public class ReservationService {
     private final NotificationService notificationService;
     private final ReservationDocumentReviewService reservationDocumentReviewService;
 
+    @Autowired(required = false)
+    private ReservationPricing reservationPricing = new ReservationPricing(new java.math.BigDecimal("0.10"), new java.math.BigDecimal("0.19"));
+
     public ReservationService(
             ReservationRepository reservationRepository,
             ReservationStatusRepository reservationStatusRepository,
@@ -147,11 +150,11 @@ public class ReservationService {
             throw new ConflictException("El vehículo no se encuentra disponible en las fechas seleccionadas debido a otra reserva activa");
         }
 
-        InsuranceCoverage insurance = (request.insuranceCoverageId() == null ? insuranceCoverageRepository.findAll().stream().filter(InsuranceCoverage::isActive).findFirst() : insuranceCoverageRepository.findById(request.insuranceCoverageId()))
+        InsuranceCoverage insurance = (request.insuranceCoverageId() == null ? insuranceCoverageRepository.findAll().stream().filter(InsuranceCoverage::isActive).min(java.util.Comparator.comparing(InsuranceCoverage::getDailyRate)) : insuranceCoverageRepository.findById(request.insuranceCoverageId()))
                 .filter(InsuranceCoverage::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Cobertura de seguro no encontrada o inactiva"));
 
-        MileagePlan mileagePlan = (request.mileagePlanId() == null ? mileagePlanRepository.findAll().stream().filter(MileagePlan::isActive).findFirst() : mileagePlanRepository.findById(request.mileagePlanId()))
+        MileagePlan mileagePlan = (request.mileagePlanId() == null ? mileagePlanRepository.findAll().stream().filter(MileagePlan::isActive).min(java.util.Comparator.comparing(MileagePlan::getDailyRate)) : mileagePlanRepository.findById(request.mileagePlanId()))
                 .filter(MileagePlan::isActive)
                 .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado o inactivo"));
 
@@ -160,6 +163,11 @@ public class ReservationService {
             cashBranch = branchRepository.findById(request.cashPaymentBranchId())
                     .filter(Branch::isActive)
                     .orElseThrow(() -> new ResourceNotFoundException("Sede de pago en efectivo no encontrada o inactiva"));
+            if (!cashBranch.allowsCashPayment()) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT,
+                        "La sucursal " + cashBranch.getName() + " no recibe pagos en efectivo. Elige otro método de pago.");
+            }
         }
 
         BigDecimal multiplier = BigDecimal.valueOf(rentalDays);
@@ -218,12 +226,8 @@ public class ReservationService {
             userCouponUsageRepository.save(new UserCouponUsage(appliedPromotion, customer, discountApplied));
         }
 
-        BigDecimal totalEstimated = vehicleSubtotal
-                .add(insuranceSubtotal)
-                .add(mileageSubtotal)
-                .add(extrasSubtotal)
-                .subtract(discountApplied)
-                .max(BigDecimal.ZERO);
+        BigDecimal totalEstimated = reservationPricing.calculate(
+                vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(extrasSubtotal), discountApplied).total();
 
         boolean documentsApproved = reservationDocumentReviewService != null
                 && reservationDocumentReviewService.hasApprovedRequiredDocuments(customer.getId());
@@ -345,8 +349,7 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = user.getRoles().stream()
-                .anyMatch(role -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(role.getCode()));
+        boolean isStaff = isStaffFor(user, r);
 
         if (!isOwner && !isStaff) {
             throw new ResourceNotFoundException("Reserva no encontrada");
@@ -363,8 +366,7 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = user.getRoles().stream()
-                .anyMatch(role -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(role.getCode()));
+        boolean isStaff = isStaffFor(user, r);
 
         if (!isOwner && !isStaff) {
             throw new ResourceNotFoundException("Reserva no encontrada");
@@ -497,6 +499,27 @@ public class ReservationService {
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.BranchUserRepository branchUserRepository;
+
+    /** Administradores y agentes ven todo; encargados y empleados solo las reservas de su sucursal. */
+    boolean isStaffFor(User user, Reservation r) {
+        java.util.Set<String> codes = user.getRoles().stream().map(Role::getCode).collect(java.util.stream.Collectors.toSet());
+        if (codes.stream().anyMatch(c -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(c))) {
+            return true;
+        }
+        if (codes.stream().noneMatch(c -> List.of("EMPLOYEE", "BRANCH_ADMIN").contains(c)) || branchUserRepository == null) {
+            return false;
+        }
+        return branchUserRepository.findByUserId(user.getId()).map(b -> {
+            UUID branchId = b.getBranchId();
+            boolean vehicleBranch = r.getVehicle() != null && r.getVehicle().getCurrentBranch() != null
+                    && branchId.equals(r.getVehicle().getCurrentBranch().getId());
+            boolean cashBranch = r.getCashPaymentBranch() != null && branchId.equals(r.getCashPaymentBranch().getId());
+            return vehicleBranch || cashBranch;
+        }).orElse(false);
+    }
+
     @Transactional
     public ReservationResponseDTO cancelReservation(UUID id, CancelReservationRequestDTO request, String userEmail) {
         Reservation r = reservationRepository.findById(id)
@@ -505,8 +528,7 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = user.getRoles().stream()
-                .anyMatch(role -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(role.getCode()));
+        boolean isStaff = isStaffFor(user, r);
 
         if (!isOwner && !isStaff) {
             throw new AccessDeniedException("No tiene permisos para cancelar esta reserva");
@@ -564,8 +586,7 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = user.getRoles().stream()
-                .anyMatch(role -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(role.getCode()));
+        boolean isStaff = isStaffFor(user, r);
 
         if (!isOwner && !isStaff) {
             throw new AccessDeniedException("No tiene permisos");
@@ -611,8 +632,7 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = user.getRoles().stream()
-                .anyMatch(role -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(role.getCode()));
+        boolean isStaff = isStaffFor(user, r);
 
         if (!isOwner && !isStaff) {
             throw new AccessDeniedException("No tiene permisos");
@@ -664,12 +684,8 @@ public class ReservationService {
                 .map(ReservationPromotion::getDiscountApplied)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                 
-        BigDecimal totalEstimated = vehicleSubtotal
-                .add(insuranceSubtotal)
-                .add(mileageSubtotal)
-                .add(extrasSubtotal)
-                .subtract(discountApplied)
-                .max(BigDecimal.ZERO);
+        BigDecimal totalEstimated = reservationPricing.calculate(
+                vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(extrasSubtotal), discountApplied).total();
                 
         r.setTotalEstimated(totalEstimated);
 
@@ -700,8 +716,7 @@ public class ReservationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
 
         boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = user.getRoles().stream()
-                .anyMatch(role -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(role.getCode()));
+        boolean isStaff = isStaffFor(user, r);
 
         if (!isOwner && !isStaff) {
             throw new AccessDeniedException("No tiene permisos");
@@ -757,6 +772,10 @@ public class ReservationService {
         return code;
     }
 
+    public ReservationResponseDTO toResponse(Reservation r) {
+        return mapFromEntity(r);
+    }
+
     private ReservationResponseDTO mapFromEntity(Reservation r) {
         long seconds = Duration.between(r.getPickupDate(), r.getReturnDate()).toSeconds();
         int rentalDays = (int) Math.max(1, (seconds + 86399) / 86400);
@@ -783,6 +802,12 @@ public class ReservationService {
         return mapToDTO(r, rentalDays, vehicleSubtotal, services, promo);
     }
 
+    private static boolean isOwnerRequest(Reservation r) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getName() != null && r.getCustomer() != null
+                && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail());
+    }
+
     private ReservationResponseDTO mapToDTO(
             Reservation r,
             int rentalDays,
@@ -792,22 +817,7 @@ public class ReservationService {
     ) {
         List<DeliveryPointResponseDTO> deliveryPointDTOs = r.getDeliveryPoints() != null
                 ? r.getDeliveryPoints().stream()
-                .map(pt -> new DeliveryPointResponseDTO(
-                        pt.getId(),
-                        r.getId(),
-                        pt.getPointType(),
-                        pt.getModality(),
-                        pt.getBranch() != null ? pt.getBranch().getId() : null,
-                        pt.getBranch() != null ? pt.getBranch().getName() : null,
-                        pt.getCity() != null ? pt.getCity().getId() : null,
-                        pt.getCity() != null ? pt.getCity().getName() : null,
-                        pt.getNeighborhood(),
-                        pt.getAddress(),
-                        pt.getFlightOrBusNumber(),
-                        pt.getReferenceDetails(),
-                        pt.getCreatedAt(),
-                        pt.getUpdatedAt()
-                ))
+                .map(pt -> DeliveryPointResponseDTO.from(pt, isOwnerRequest(r)))
                 .toList()
                 : List.of();
 

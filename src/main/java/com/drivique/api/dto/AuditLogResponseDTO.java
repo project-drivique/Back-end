@@ -14,6 +14,7 @@ public record AuditLogResponseDTO(
         UUID actorUserId,
         String actorEmail,
         String actorFullName,
+        String actorRole,
         UUID branchId,
         String branchName,
         String ipAddress,
@@ -22,6 +23,14 @@ public record AuditLogResponseDTO(
         String newData,
         Instant createdAt
 ) {
+    /** Forma anterior (sin rol del actor). */
+    public AuditLogResponseDTO(UUID id, String domainName, String entityName, UUID entityId, String operation, String result,
+                               UUID actorUserId, String actorEmail, String actorFullName, UUID branchId, String branchName,
+                               String ipAddress, String description, String oldData, String newData, Instant createdAt) {
+        this(id, domainName, entityName, entityId, operation, result, actorUserId, actorEmail, actorFullName, null, branchId,
+                branchName, ipAddress, description, oldData, newData, createdAt);
+    }
+
     public static AuditLogResponseDTO fromEntity(AuditLog log) {
         return new AuditLogResponseDTO(
                 log.getId(),
@@ -33,6 +42,7 @@ public record AuditLogResponseDTO(
                 log.getActor() != null ? log.getActor().getId() : null,
                 log.getActor() != null ? log.getActor().getEmail() : null,
                 log.getActor() != null ? log.getActor().getFullName() : null,
+                log.getActor() == null ? null : log.getActor().getRoles().stream().map(com.drivique.api.model.Role::getCode).min(String::compareTo).orElse(null),
                 log.getBranch() != null ? log.getBranch().getId() : null,
                 log.getBranch() != null ? log.getBranch().getName() : null,
                 log.getIpAddress(),

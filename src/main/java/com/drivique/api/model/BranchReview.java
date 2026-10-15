@@ -39,6 +39,16 @@ public class BranchReview {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
+    @Column(name = "manager_reply", length = 1000)
+    private String managerReply;
+
+    @Column(name = "replied_at")
+    private Instant repliedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replied_by")
+    private User repliedBy;
+
     protected BranchReview() {}
 
     public BranchReview(Branch b, User u, Reservation r, short rating, String comment) {
@@ -57,4 +67,15 @@ public class BranchReview {
     public String getComment() { return comment; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    public String getManagerReply() { return managerReply; }
+    public Instant getRepliedAt() { return repliedAt; }
+    public User getRepliedBy() { return repliedBy; }
+
+    public void reply(String text, User author) {
+        this.managerReply = text;
+        this.repliedBy = author;
+        this.repliedAt = Instant.now();
+        this.updatedAt = Instant.now();
+    }
 }

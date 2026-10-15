@@ -5,4 +5,6 @@ import java.util.UUID;
 
 public record PriceQuoteResponseDTO(UUID vehicleId, int rentalDays, BigDecimal vehicleSubtotal,
         BigDecimal insuranceSubtotal, BigDecimal mileagePlanSubtotal, BigDecimal additionalServicesSubtotal,
-        BigDecimal discountAmount, BigDecimal refundableSecurityDeposit, BigDecimal estimatedTotal, String couponCode) {}
+        BigDecimal discountAmount, BigDecimal refundableSecurityDeposit, BigDecimal estimatedTotal, String couponCode,
+        BigDecimal adminFee, BigDecimal vat,
+        BigDecimal adminFeeRate, BigDecimal vatRate) {}

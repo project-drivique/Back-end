@@ -93,19 +93,45 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM fleet.vehicle_documents");
         jdbc.execute("DELETE FROM fleet.vehicle_images");
         jdbc.execute("DELETE FROM fleet.vehicles");
+        jdbc.execute("DELETE FROM location.delivery_drivers");
         jdbc.execute("DELETE FROM location.branch_users");
         jdbc.execute("DELETE FROM location.branches");
         jdbc.execute("DELETE FROM location.cities");
         jdbc.execute("DELETE FROM location.departments");
     }
 
+    /**
+     * Un envío de notificaciones asíncrono puede seguir escribiendo intentos de entrega mientras se limpia la base:
+     * se borra con DELETE (sin bloqueos exclusivos) y se reintenta si justo en ese momento llega una escritura.
+     */
+    private void clearNotificationTables() {
+        RuntimeException last = null;
+        for (int attempt = 0; attempt < 15; attempt++) {
+            try {
+                jdbc.execute("DELETE FROM support.notification_delivery_attempts");
+                jdbc.execute("DELETE FROM support.notification_outbox");
+                return;
+            } catch (org.springframework.dao.DataAccessException e) {
+                last = e;
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        throw last;
+    }
+
     protected void resetRentalTables() {
         jdbc.execute("DELETE FROM audit.audit_logs");
         jdbc.execute("DELETE FROM audit.generated_reports");
         jdbc.execute("DELETE FROM audit.administrative_report_types");
-        jdbc.execute("DELETE FROM support.notification_delivery_attempts");
-        jdbc.execute("DELETE FROM support.notification_outbox");
+        clearNotificationTables();
         jdbc.execute("DELETE FROM support.notifications");
+        jdbc.execute("DELETE FROM support.incident_attachments");
+        jdbc.execute("DELETE FROM support.incident_status_history");
         jdbc.execute("DELETE FROM support.incident_responses");
         jdbc.execute("DELETE FROM support.incident_reports");
         jdbc.execute("DELETE FROM rental.branch_reviews");
@@ -129,6 +155,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM support.incident_attachments");
+        jdbc.execute("DELETE FROM support.incident_status_history");
         jdbc.execute("DELETE FROM support.incident_responses");
         jdbc.execute("DELETE FROM support.incident_reports");
         jdbc.execute("DELETE FROM rental.branch_reviews");

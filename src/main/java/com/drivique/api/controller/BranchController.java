@@ -25,6 +25,18 @@ public class BranchController {
     @Operation(summary="Consultar sedes activas")
     public List<BranchResponseDTO> active() { return service.active(); }
 
+    @GetMapping("/admin")
+    @PreAuthorize("hasAnyRole('BRANCH_ADMIN', 'SUPER_ADMIN')")
+    public List<BranchResponseDTO> all() { return service.all(); }
+
+    @GetMapping("/managers")
+    @PreAuthorize("hasAnyRole('BRANCH_ADMIN', 'SUPER_ADMIN')")
+    public List<BranchStaffResponseDTO> managers() { return service.managers(); }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('BRANCH_ADMIN', 'SUPER_ADMIN')")
+    public BranchResponseDTO delete(@PathVariable UUID id) { return service.deactivate(id); }
+
     @GetMapping("/{id}")
     public BranchResponseDTO detail(@PathVariable UUID id) { return service.detail(id); }
 
