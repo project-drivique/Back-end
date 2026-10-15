@@ -100,12 +100,35 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM location.departments");
     }
 
+    /**
+     * Un envío de notificaciones asíncrono puede seguir escribiendo intentos de entrega mientras se limpia la base:
+     * se borra con DELETE (sin bloqueos exclusivos) y se reintenta si justo en ese momento llega una escritura.
+     */
+    private void clearNotificationTables() {
+        RuntimeException last = null;
+        for (int attempt = 0; attempt < 15; attempt++) {
+            try {
+                jdbc.execute("DELETE FROM support.notification_delivery_attempts");
+                jdbc.execute("DELETE FROM support.notification_outbox");
+                return;
+            } catch (org.springframework.dao.DataAccessException e) {
+                last = e;
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        throw last;
+    }
+
     protected void resetRentalTables() {
         jdbc.execute("DELETE FROM audit.audit_logs");
         jdbc.execute("DELETE FROM audit.generated_reports");
         jdbc.execute("DELETE FROM audit.administrative_report_types");
-        // Un solo comando: un envío asíncrono no puede insertar intentos entre el borrado de ambas tablas
-        jdbc.execute("TRUNCATE TABLE support.notification_delivery_attempts, support.notification_outbox");
+        clearNotificationTables();
         jdbc.execute("DELETE FROM support.notifications");
         jdbc.execute("DELETE FROM support.incident_attachments");
         jdbc.execute("DELETE FROM support.incident_status_history");
