@@ -212,12 +212,35 @@ public class AuditService {
         return AuditLogResponseDTO.fromEntity(saved);
     }
 
+    private static final java.util.regex.Pattern SENSITIVE_FIELD = java.util.regex.Pattern.compile(
+            "(?i).*(password|passwd|contrasena|token|secret|authorization|cvv|cvc|card|pan|iban|apikey|api_key|integrity|signature).*");
+
     private String toJson(Object obj) {
         if (obj == null) return null;
         try {
-            return objectMapper.writeValueAsString(obj);
+            String json = objectMapper.writeValueAsString(obj);
+            // La auditoría nunca guarda contraseñas, tokens ni datos de tarjeta
+            com.fasterxml.jackson.databind.JsonNode tree = objectMapper.readTree(json);
+            mask(tree);
+            return objectMapper.writeValueAsString(tree);
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private static void mask(com.fasterxml.jackson.databind.JsonNode node) {
+        if (node instanceof com.fasterxml.jackson.databind.node.ObjectNode object) {
+            java.util.List<String> names = new java.util.ArrayList<>();
+            object.fieldNames().forEachRemaining(names::add);
+            for (String name : names) {
+                if (SENSITIVE_FIELD.matcher(name).matches() && !object.get(name).isContainerNode()) {
+                    object.put(name, "***");
+                } else {
+                    mask(object.get(name));
+                }
+            }
+        } else if (node != null && node.isArray()) {
+            node.forEach(AuditService::mask);
         }
     }
 }
