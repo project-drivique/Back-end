@@ -47,6 +47,9 @@ public class AuditService {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.BranchUserRepository branchUsers;
+
     @Transactional(readOnly = true)
     public List<AuditLogResponseDTO> getAuditLogs(
             String entityName,
@@ -56,8 +59,30 @@ public class AuditService {
             String operation,
             String domain
     ) {
+        return getAuditLogs(entityName, userEmail, startDate, endDate, operation, domain, null, null);
+    }
+
+    /** Un encargado (branchScope) ve lo ocurrido en su sucursal y lo que hizo él mismo. */
+    @Transactional(readOnly = true)
+    public List<AuditLogResponseDTO> getAuditLogs(
+            String entityName,
+            String userEmail,
+            LocalDate startDate,
+            LocalDate endDate,
+            String operation,
+            String domain,
+            UUID branchScope,
+            String selfEmail
+    ) {
         Specification<AuditLog> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            if (branchScope != null) {
+                predicates.add(cb.or(
+                        cb.equal(root.get("branch").get("id"), branchScope),
+                        cb.equal(cb.lower(root.get("actor").get("email")), selfEmail == null ? "" : selfEmail.toLowerCase())
+                ));
+            }
 
             if (entityName != null && !entityName.isBlank()) {
                 predicates.add(cb.equal(cb.lower(root.get("entityName")), entityName.trim().toLowerCase()));
@@ -124,8 +149,13 @@ public class AuditService {
         }
 
         Branch branch = null;
-        if (branchId != null) {
-            branch = branchRepository.findById(branchId).orElse(null);
+        UUID effectiveBranchId = branchId;
+        if (effectiveBranchId == null && actor != null && branchUsers != null) {
+            // Las acciones del personal de sucursal quedan asociadas a su sucursal
+            effectiveBranchId = branchUsers.findByUserId(actor.getId()).map(com.drivique.api.model.BranchUser::getBranchId).orElse(null);
+        }
+        if (effectiveBranchId != null) {
+            branch = branchRepository.findById(effectiveBranchId).orElse(null);
         }
 
         String oldJson = toJson(oldDataObj);
@@ -184,11 +214,10 @@ public class AuditService {
 
     private String toJson(Object obj) {
         if (obj == null) return null;
-        if (obj instanceof String str) return str;
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            return String.valueOf(obj);
+            return null;
         }
     }
 }

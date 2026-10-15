@@ -12,4 +12,10 @@ public @interface Auditable {
     String entity() default "";
     String action() default "UPDATE";
     String description() default "";
+
+    /** false cuando los argumentos pueden traer archivos o datos sensibles. */
+    boolean includeArgs() default true;
+
+    /** false cuando el resultado puede traer tokens o archivos. */
+    boolean includeResult() default true;
 }

@@ -1,5 +1,6 @@
 package com.drivique.api.service;
 
+import com.drivique.api.config.Auditable;
 import com.drivique.api.model.User;
 import com.drivique.api.model.Branch;
 import com.drivique.api.repository.BranchRepository;
@@ -192,6 +193,7 @@ public class UserDocumentService {
     }
 
     @Transactional
+    @Auditable(domain = "KYC", entity = "UserDocument", action = "UPDATE", description = "Revisión de documento de identidad o licencia", includeResult = false)
     public UserDocumentResponseDTO reviewDocument(
             UUID documentId,
             String reviewerEmail,

@@ -184,7 +184,7 @@ class AuditServiceTests {
         assertThat(response).isNotNull();
         assertThat(response.domainName()).isEqualTo("IAM");
         assertThat(response.entityName()).isEqualTo("User");
-        assertThat(response.operation()).isEqualTo("ROLE_ASSIGNMENT");
+        assertThat(response.operation()).isEqualTo("UPDATE");
         assertThat(response.actorEmail()).isEqualTo("audit.admin@drivique.com");
     }
 }
