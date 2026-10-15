@@ -821,6 +821,21 @@ public class ReservationService {
                 .toList()
                 : List.of();
 
+        BigDecimal days = BigDecimal.valueOf(rentalDays);
+        BigDecimal insuranceSubtotal = r.getInsuranceCoverage().getDailyRate().multiply(days);
+        BigDecimal mileageSubtotal = r.getMileagePlan().getDailyRate().multiply(days);
+        BigDecimal servicesSubtotal = services.stream().map(ReservationAdditionalServiceItemDTO::subtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal baseSubtotal = vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(servicesSubtotal);
+        BigDecimal discount = promo == null || promo.discountApplied() == null ? BigDecimal.ZERO : promo.discountApplied();
+        ReservationPricing.Breakdown fees = reservationPricing.calculate(baseSubtotal, discount);
+        // Las reservas anteriores al cargo administrativo y al IVA no los incluyen en su total guardado
+        boolean includesFees = fees.total().compareTo(r.getTotalEstimated()) == 0;
+        ReservationPriceBreakdownDTO breakdown = new ReservationPriceBreakdownDTO(insuranceSubtotal, mileageSubtotal,
+                servicesSubtotal, baseSubtotal, discount, includesFees ? fees.adminFee() : null,
+                includesFees ? reservationPricing.adminFeeRate() : null, includesFees ? fees.vat() : null,
+                includesFees ? reservationPricing.vatRate() : null);
+
         return new ReservationResponseDTO(
                 r.getId(),
                 r.getCode(),
@@ -851,7 +866,8 @@ public class ReservationService {
                 r.getCashPaymentExpiresAt(),
                 r.isBlocksAvailability(),
                 deliveryPointDTOs,
-                r.getCreatedAt()
+                r.getCreatedAt(),
+                breakdown
         );
     }
 }
