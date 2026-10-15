@@ -35,13 +35,16 @@ class AdminReportControllerTests {
     private ReportGeneratorService reportGeneratorService;
 
     @Mock
+    private com.drivique.api.service.ReportHistoryService historyService;
+
+    @Mock
     private Authentication authentication;
 
     private AdminReportController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AdminReportController(reportGeneratorService);
+        controller = new AdminReportController(reportGeneratorService, historyService);
         mvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

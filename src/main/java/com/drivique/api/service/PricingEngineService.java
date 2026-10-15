@@ -15,6 +15,8 @@ public class PricingEngineService {
     private final VehicleRepository vehicles; private final InsuranceCoverageRepository coverages;
     private final MileagePlanRepository mileagePlans; private final AdditionalServiceRepository additionalServices;
     private final PromotionValidationService promotions;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ReservationPricing reservationPricing = new ReservationPricing(new BigDecimal("0.10"), new BigDecimal("0.19"));
     public PricingEngineService(VehicleRepository vehicles, InsuranceCoverageRepository coverages,
             MileagePlanRepository mileagePlans, AdditionalServiceRepository additionalServices, PromotionValidationService promotions) {
         this.vehicles=vehicles; this.coverages=coverages; this.mileagePlans=mileagePlans; this.additionalServices=additionalServices; this.promotions=promotions;
@@ -33,7 +35,7 @@ public class PricingEngineService {
                 .map(s->s.getDailyRate().multiply(multiplier)).reduce(BigDecimal.ZERO,BigDecimal::add);
         BigDecimal discount=BigDecimal.ZERO; String coupon=null;
         if(input.couponCode()!=null&&!input.couponCode().isBlank()) { coupon=input.couponCode().strip(); discount=promotions.validate(new PromotionValidationRequestDTO(coupon,vehicle.getId(),vehicle.getCategory().getId(),input.pickupDate(),input.returnDate()),email).discountAmount(); }
-        BigDecimal total=vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(extras).subtract(discount);
-        return new PriceQuoteResponseDTO(vehicle.getId(),days,vehicleSubtotal,insuranceSubtotal,mileageSubtotal,extras,discount,vehicle.getCategory().getSecurityDeposit(),total,coupon);
+        ReservationPricing.Breakdown breakdown=reservationPricing.calculate(vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(extras),discount); BigDecimal total=breakdown.total();
+        return new PriceQuoteResponseDTO(vehicle.getId(),days,vehicleSubtotal,insuranceSubtotal,mileageSubtotal,extras,discount,vehicle.getCategory().getSecurityDeposit(),total,coupon,breakdown.adminFee(),breakdown.vat(),reservationPricing.adminFeeRate(),reservationPricing.vatRate());
     }
 }

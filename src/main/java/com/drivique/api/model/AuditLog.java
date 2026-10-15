@@ -73,7 +73,7 @@ public class AuditLog {
         this.domainName = domainName != null ? domainName.trim().toUpperCase() : "SYSTEM";
         this.entityName = entityName != null ? entityName.trim() : "unknown";
         this.entityId = entityId;
-        this.operation = operation != null ? operation.trim().toUpperCase() : "UPDATE";
+        this.operation = normalizeOperation(operation);
         this.result = result != null ? result.trim().toUpperCase() : "SUCCESS";
         this.actor = actor;
         this.branch = branch;
@@ -82,6 +82,15 @@ public class AuditLog {
         this.oldData = oldData;
         this.newData = newData;
         this.createdAt = Instant.now();
+    }
+
+    /** La base solo admite INSERT, UPDATE y DELETE; cualquier otra acción se registra como UPDATE. */
+    private static String normalizeOperation(String operation) {
+        String value = operation == null ? "UPDATE" : operation.trim().toUpperCase();
+        if ("CREATE".equals(value)) {
+            return "INSERT";
+        }
+        return "INSERT".equals(value) || "DELETE".equals(value) ? value : "UPDATE";
     }
 
     public UUID getId() {
