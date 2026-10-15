@@ -111,4 +111,42 @@ class BrandIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(jsonPath("$.paths['/v1/security-configurations'].get").exists())
                 .andExpect(jsonPath("$.components.schemas.BrandRequestDTO.properties.primaryColor.pattern").value("^#[0-9A-Fa-f]{6}$"));
     }
+
+    @Test
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void adminCanRestorePreviousAndOriginalBrand() throws Exception {
+        mvc.perform(get("/api/v1/brand-configurations/active").contextPath("/api"))
+                .andExpect(jsonPath("$.hasPrevious").value(false));
+        mvc.perform(post("/api/v1/brand-configurations/restore-previous").contextPath("/api"))
+                .andExpect(status().isConflict());
+
+        mvc.perform(put("/api/v1/brand-configurations").contextPath("/api").contentType("application/json").content(BODY))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.hasPrevious").value(true));
+
+        mvc.perform(post("/api/v1/brand-configurations/restore-previous").contextPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.companyName").value("Original"))
+                .andExpect(jsonPath("$.primaryColor").value("#2563EB"));
+        // El cambio que se deshizo pasa a ser la marca "anterior"
+        mvc.perform(post("/api/v1/brand-configurations/restore-previous").contextPath("/api"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.primaryColor").value("#ABCDEF"));
+
+        mvc.perform(post("/api/v1/brand-configurations/restore-default").contextPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.companyName").value("Drivique"))
+                .andExpect(jsonPath("$.primaryColor").value("#2563EB"))
+                .andExpect(jsonPath("$.logoUrl").doesNotExist());
+    }
+
+    @Test
+    @WithMockUser(roles = "SUPER_ADMIN")
+    void acceptsAnUploadedLogoAsDataUrlAndRejectsOtherContent() throws Exception {
+        String logo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        mvc.perform(put("/api/v1/brand-configurations").contextPath("/api").contentType("application/json")
+                        .content(BODY.replace("https://example.com/logo.png", logo)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.logoUrl").value(logo));
+        mvc.perform(put("/api/v1/brand-configurations").contextPath("/api").contentType("application/json")
+                        .content(BODY.replace("https://example.com/logo.png", "data:text/html;base64,PHNjcmlwdD4=")))
+                .andExpect(status().isBadRequest());
+    }
 }

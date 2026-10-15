@@ -1,7 +1,18 @@
 package com.drivique.api.controller;
 
+import com.drivique.api.dto.AdminManualReservationRequestDTO;
+import com.drivique.api.dto.AdminReservationDTO;
 import com.drivique.api.dto.ExpiredReservationsSummaryDTO;
+import com.drivique.api.dto.ReservationResponseDTO;
+import com.drivique.api.service.AdminReservationService;
 import com.drivique.api.service.ReservationExpirationService;
+import jakarta.validation.Valid;
+import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -18,9 +29,26 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminReservationController {
 
     private final ReservationExpirationService reservationExpirationService;
+    private final AdminReservationService adminReservationService;
 
-    public AdminReservationController(ReservationExpirationService reservationExpirationService) {
+    public AdminReservationController(ReservationExpirationService reservationExpirationService, AdminReservationService adminReservationService) {
         this.reservationExpirationService = reservationExpirationService;
+        this.adminReservationService = adminReservationService;
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'EMPLOYEE', 'BRANCH_ADMIN')")
+    @Operation(summary = "Listar reservas del panel", description = "Administradores ven todas las reservas; encargados solo las de su sucursal.")
+    public List<AdminReservationDTO> list(Authentication authentication) {
+        return adminReservationService.list(authentication.getName());
+    }
+
+    @PostMapping("/manual")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN', 'EMPLOYEE', 'BRANCH_ADMIN')")
+    @Operation(summary = "Registrar reserva manual en mostrador")
+    public ReservationResponseDTO createManual(@Valid @RequestBody AdminManualReservationRequestDTO request, Authentication authentication) {
+        return adminReservationService.createManual(request, authentication.getName());
     }
 
     @PostMapping("/expire-pending")
