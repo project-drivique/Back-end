@@ -46,16 +46,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     ResponseEntity<Object> notFound(ResourceNotFoundException ex, HttpServletRequest request) {
+        LOG.warn("404 {} -> {}", request.getRequestURI(), ex.getMessage());
         return response(HttpStatus.NOT_FOUND, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
     @ExceptionHandler(ConflictException.class)
     ResponseEntity<Object> conflict(ConflictException ex, HttpServletRequest request) {
+        LOG.warn("409 {} -> {}", request.getRequestURI(), ex.getMessage());
         return response(HttpStatus.CONFLICT, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<Object> denied(AccessDeniedException ex, HttpServletRequest request) {
+        LOG.warn("403 {} -> {}", request.getRequestURI(), ex.getMessage());
         return response(HttpStatus.FORBIDDEN, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
@@ -77,6 +80,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Object> badRequest(IllegalArgumentException ex, HttpServletRequest request) {
+        LOG.warn("400 {} -> {}", request.getRequestURI(), ex.getMessage());
         return response(HttpStatus.BAD_REQUEST, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 

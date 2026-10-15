@@ -33,4 +33,14 @@ public class BrandController {
     @ApiResponse(responseCode = "404", ref = "#/components/responses/Error404")
     public BrandResponseDTO update(@Valid @RequestBody BrandRequestDTO dto) { return service.update(dto); }
 
+    @PostMapping("/brand-configurations/restore-previous")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Restaurar la marca anterior (SUPER_ADMIN)")
+    public BrandResponseDTO restorePrevious() { return service.restorePrevious(); }
+
+    @PostMapping("/brand-configurations/restore-default")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Restablecer la marca original (SUPER_ADMIN)")
+    public BrandResponseDTO restoreDefault() { return service.restoreDefault(); }
+
 }

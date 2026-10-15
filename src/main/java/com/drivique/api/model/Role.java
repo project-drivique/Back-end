@@ -61,5 +61,6 @@ public class Role {
     public String getDescription() { return description; }
     public boolean isActive() { return active; }
     public java.util.Set<Permission> getPermissions() { return permissions; }
+    public void update(String name, String description) { this.name = name; this.description = description; this.updatedAt = Instant.now(); }
     public void setPermissions(java.util.Set<Permission> permissions) { this.permissions = permissions; }
 }

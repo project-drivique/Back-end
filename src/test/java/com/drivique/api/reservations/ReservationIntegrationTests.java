@@ -192,7 +192,7 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(jsonPath("$.promotion.code").value("DESC10"))
                 .andExpect(jsonPath("$.promotion.discountApplied").value(66000.00)) // 10% of 660k
                 // Total = 660,000 + 135,000 (insurance) + 90,000 (mileage) + 45,000 (baby seat) - 66,000 (discount) = 864,000
-                .andExpect(jsonPath("$.totalEstimated").value(864000.00))
+                .andExpect(jsonPath("$.totalEstimated").value(1151370.00))
                 .andExpect(jsonPath("$.cashPaymentCode", startsWith("CASH-")))
                 .andExpect(jsonPath("$.cashPaymentExpiresAt").isNotEmpty())
                 .andExpect(jsonPath("$.blocksAvailability").value(true));

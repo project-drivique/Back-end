@@ -21,9 +21,11 @@ import java.util.UUID;
 public class AdminAuditLogController {
 
     private final AuditService auditService;
+    private final com.drivique.api.service.StaffBranchScope staffScope;
 
-    public AdminAuditLogController(AuditService auditService) {
+    public AdminAuditLogController(AuditService auditService, com.drivique.api.service.StaffBranchScope staffScope) {
         this.auditService = auditService;
+        this.staffScope = staffScope;
     }
 
     @GetMapping
@@ -42,11 +44,13 @@ public class AdminAuditLogController {
             @RequestParam(value = "startDate", required = false) LocalDate startDate,
             @RequestParam(value = "endDate", required = false) LocalDate endDate,
             @RequestParam(value = "operation", required = false) String operation,
-            @RequestParam(value = "domain", required = false) String domain
+            @RequestParam(value = "domain", required = false) String domain,
+            org.springframework.security.core.Authentication authentication
     ) {
         String entityFilter = entityName != null ? entityName : table;
         String userFilter = userEmail != null ? userEmail : user;
-        return auditService.getAuditLogs(entityFilter, userFilter, startDate, endDate, operation, domain);
+        java.util.UUID branchScope = staffScope.forAuthentication(authentication).orElse(null);
+        return auditService.getAuditLogs(entityFilter, userFilter, startDate, endDate, operation, domain, branchScope, authentication.getName());
     }
 
     @GetMapping("/{id}")

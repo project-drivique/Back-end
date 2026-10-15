@@ -30,11 +30,17 @@ class AdminAuditLogControllerTests {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private com.drivique.api.service.StaffBranchScope staffScope;
+
     private AdminAuditLogController controller;
+
+    private final java.security.Principal admin = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+            "admin@drivique.com", "n/a", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_SUPER_ADMIN")));
 
     @BeforeEach
     void setUp() {
-        controller = new AdminAuditLogController(auditService);
+        controller = new AdminAuditLogController(auditService, staffScope);
         mvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
@@ -49,10 +55,11 @@ class AdminAuditLogControllerTests {
                 Instant.now()
         );
 
-        when(auditService.getAuditLogs(null, null, null, null, null, null))
+        when(staffScope.forAuthentication(any())).thenReturn(java.util.Optional.empty());
+        when(auditService.getAuditLogs(null, null, null, null, null, null, null, "admin@drivique.com"))
                 .thenReturn(List.of(dto));
 
-        mvc.perform(get("/v1/admin/audit-logs"))
+        mvc.perform(get("/v1/admin/audit-logs").principal(admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(id.toString()))
@@ -73,13 +80,14 @@ class AdminAuditLogControllerTests {
                 Instant.now()
         );
 
+        when(staffScope.forAuthentication(any())).thenReturn(java.util.Optional.empty());
         when(auditService.getAuditLogs(
                 eq("Reservation"), eq("agent@drivique.com"),
                 any(LocalDate.class), any(LocalDate.class),
-                eq("CONFIRM"), eq("RENTAL")
+                eq("CONFIRM"), eq("RENTAL"), eq((UUID) null), eq("admin@drivique.com")
         )).thenReturn(List.of(dto));
 
-        mvc.perform(get("/v1/admin/audit-logs")
+        mvc.perform(get("/v1/admin/audit-logs").principal(admin)
                         .param("table", "Reservation")
                         .param("user", "agent@drivique.com")
                         .param("startDate", "2026-01-01")
