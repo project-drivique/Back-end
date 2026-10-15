@@ -1,6 +1,7 @@
 package com.drivique.api.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -200,6 +201,31 @@ class IncidentIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/v1/incidents/" + id + "/attachments/" + attachmentId).contextPath("/api")
                         .header("Authorization", "Bearer " + otherCustomerToken))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void staffCanDeleteTheirOwnInternalReportWhileItIsReceivedButNeverACustomersReport() throws Exception {
+        String customerReport = createIncident("Consulta general", "Necesito información");
+        String body = "{\"category\":\"OTHER\",\"branchId\":\"%s\",\"subject\":\"Revisión interna\",\"description\":\"Reporte interno de la sede\"}"
+                .formatted(branchA.getId());
+        String response = mvc.perform(post("/api/v1/incidents").contextPath("/api")
+                        .header("Authorization", "Bearer " + employeeAToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.internal").value(true))
+                .andReturn().getResponse().getContentAsString();
+        String internal = com.jayway.jsonpath.JsonPath.read(response, "$.id");
+
+        mvc.perform(get("/api/v1/incidents/" + customerReport).contextPath("/api").header("Authorization", "Bearer " + employeeAToken))
+                .andExpect(jsonPath("$.internal").value(false));
+        mvc.perform(delete("/api/v1/incidents/" + customerReport).contextPath("/api").header("Authorization", "Bearer " + employeeAToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/incidents/" + internal).contextPath("/api").header("Authorization", "Bearer " + customerToken))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/v1/incidents/" + internal).contextPath("/api").header("Authorization", "Bearer " + employeeAToken))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/incidents/" + internal).contextPath("/api").header("Authorization", "Bearer " + employeeAToken))
                 .andExpect(status().isNotFound());
     }
 }

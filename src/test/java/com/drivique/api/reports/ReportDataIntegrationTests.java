@@ -235,7 +235,7 @@ class ReportDataIntegrationTests extends DatabaseHealthTestSupport {
                         .content("{\"type\":\"RESERVATIONS\",\"format\":\"CSV\"}"))
                 .andExpect(status().isUnprocessableEntity());
         mvc.perform(post("/v1/admin/reports/export").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"type\":\"RESERVATIONS\",\"format\":\"WORD\"}"))
+                        .content("{\"type\":\"RESERVATIONS\",\"format\":\"PPT\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -292,5 +292,19 @@ class ReportDataIntegrationTests extends DatabaseHealthTestSupport {
     @WithMockUser(username = "laura@drivique.com", roles = "BRANCH_ADMIN")
     void managersCannotListUsers() throws Exception {
         mvc.perform(get("/v1/admin/reports/data/USERS")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "admin@drivique.com", roles = "SUPER_ADMIN")
+    void severalStatusesAndWordExportAreSupported() throws Exception {
+        mvc.perform(get("/v1/admin/reports/data/RESERVATIONS").param("status", "CONFIRMED,REJECTED"))
+                .andExpect(jsonPath("$.totalElements").value(3));
+        mvc.perform(get("/v1/admin/reports/data/RESERVATIONS").param("status", "REJECTED"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        String word = mvc.perform(post("/v1/admin/reports/export").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"RESERVATIONS\",\"format\":\"WORD\"}"))
+                .andExpect(status().isOk()).andExpect(header().string("Content-Type", containsString("msword")))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(word).contains("<table>").contains("RES-PO-1");
     }
 }

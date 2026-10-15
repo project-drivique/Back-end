@@ -206,8 +206,8 @@ public class ReportDataService {
             p.addValue("branchId", f.branchId());
         }
         if (notBlank(f.status())) {
-            w.append(" AND s.code = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND s.code IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         String inner = "SELECT r.code AS code, trim(u.first_name || ' ' || u.last_name) AS customer, "
                 + "trim(coalesce(vb.name, '') || ' ' || v.model) AS vehicle, coalesce(b.name, '—') AS branch, "
@@ -242,8 +242,8 @@ public class ReportDataService {
             p.addValue("branchId", f.branchId());
         }
         if (notBlank(f.status())) {
-            w.append(" AND pm.code = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND pm.code IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         String inner = "SELECT coalesce(p.paid_at, p.created_at) AS paid_at, coalesce(r.code, '—') AS reservation, "
                 + "coalesce(trim(u.first_name || ' ' || u.last_name), '—') AS customer, pm.name AS method, "
@@ -284,8 +284,8 @@ public class ReportDataService {
             p.addValue("branchId", f.branchId());
         }
         if (notBlank(f.status())) {
-            w.append(" AND vs.code = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND vs.code IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         String overlap = "greatest(0, extract(epoch FROM (least(r.return_date, :toTs) - greatest(r.pickup_date, :fromTs))) / 86400.0)";
         String inner = "SELECT v.plate AS plate, trim(coalesce(vb.name, '') || ' ' || v.model) AS vehicle, "
@@ -317,8 +317,8 @@ public class ReportDataService {
             p.addValue("branchId", f.branchId());
         }
         if (notBlank(f.status())) {
-            w.append(" AND vs.code = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND vs.code IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         if (notBlank(f.category())) {
             w.append(" AND v.category_id = CAST(:category AS uuid)");
@@ -397,12 +397,12 @@ public class ReportDataService {
             p.addValue("branchId", f.branchId());
         }
         if (notBlank(f.status())) {
-            w.append(" AND i.status = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND i.status IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         if (notBlank(f.priority())) {
-            w.append(" AND i.priority = :priority");
-            p.addValue("priority", f.priority().trim().toUpperCase());
+            w.append(" AND i.priority IN (:priority)");
+            p.addValue("priority", values(f.priority()));
         }
         if (notBlank(f.category())) {
             w.append(" AND i.category = :category");
@@ -436,8 +436,8 @@ public class ReportDataService {
             p.addValue("branchId", f.branchId());
         }
         if (notBlank(f.status())) {
-            w.append(" AND cs.code = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND cs.code IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         String inner = "SELECT ct.contract_number AS number, coalesce(r.code, '—') AS reservation, "
                 + "trim(u.first_name || ' ' || u.last_name) AS customer, trim(coalesce(vb.name, '') || ' ' || v.model) AS vehicle, "
@@ -466,13 +466,13 @@ public class ReportDataService {
         dateRange(w, p, "u.created_at", f);
         search(w, p, f, "u.first_name || ' ' || u.last_name || ' ' || u.email || ' ' || coalesce(u.document_number, '')");
         if (notBlank(f.status())) {
-            w.append(" AND u.account_status = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            w.append(" AND u.account_status IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         if (notBlank(f.category())) {
             w.append(" AND EXISTS (SELECT 1 FROM iam.user_roles ur2 JOIN iam.roles r2 ON r2.id = ur2.role_id "
-                    + "WHERE ur2.user_id = u.id AND r2.code = :role)");
-            p.addValue("role", f.category().trim().toUpperCase());
+                    + "WHERE ur2.user_id = u.id AND r2.code IN (:role))");
+            p.addValue("role", values(f.category()));
         }
         String inner = "SELECT trim(u.first_name || ' ' || u.last_name) AS name, u.email AS email, coalesce(u.phone, '—') AS phone, "
                 + "coalesce(string_agg(DISTINCT ro.name, ', '), '—') AS roles, u.account_status AS status, "
@@ -588,12 +588,12 @@ public class ReportDataService {
         }
         boolean incidentOnly = notBlank(f.status()) || notBlank(f.priority());
         if (notBlank(f.status())) {
-            inc.append(" AND i.status = :status");
-            p.addValue("status", f.status().trim().toUpperCase());
+            inc.append(" AND i.status IN (:status)");
+            p.addValue("status", values(f.status()));
         }
         if (notBlank(f.priority())) {
-            inc.append(" AND i.priority = :priority");
-            p.addValue("priority", f.priority().trim().toUpperCase());
+            inc.append(" AND i.priority IN (:priority)");
+            p.addValue("priority", values(f.priority()));
         }
         if (incidentOnly) {
             man.append(" AND false");
@@ -653,6 +653,17 @@ public class ReportDataService {
             return bd.stripTrailingZeros().scale() <= 0 ? (Object) bd.toBigInteger().longValue() : bd.doubleValue();
         }
         return value;
+    }
+
+    /** Valores separados por coma, en mayúsculas: permite filtrar por varios estados a la vez. */
+    private static List<String> values(String raw) {
+        List<String> out = new ArrayList<>();
+        for (String part : raw.split(",")) {
+            if (!part.isBlank()) {
+                out.add(part.trim().toUpperCase());
+            }
+        }
+        return out;
     }
 
     private static boolean notBlank(String value) {

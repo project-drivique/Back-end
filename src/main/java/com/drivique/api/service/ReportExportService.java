@@ -97,6 +97,7 @@ public class ReportExportService {
                 case "CSV" -> csv(doc);
                 case "EXCEL" -> excel(doc);
                 case "PDF" -> pdf(doc);
+                case "WORD" -> word(doc);
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Formato de exportación inválido: " + format);
             };
         } catch (IOException | DocumentException e) {
@@ -108,6 +109,7 @@ public class ReportExportService {
         return switch (format.toUpperCase()) {
             case "CSV" -> "text/csv; charset=UTF-8";
             case "EXCEL" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "WORD" -> "application/msword";
             default -> "application/pdf";
         };
     }
@@ -116,8 +118,43 @@ public class ReportExportService {
         return switch (format.toUpperCase()) {
             case "CSV" -> "csv";
             case "EXCEL" -> "xlsx";
+            case "WORD" -> "doc";
             default -> "pdf";
         };
+    }
+
+
+    /** Documento de Word (HTML con tabla): se abre en Word sin dependencias adicionales. */
+    private byte[] word(Document2 doc) {
+        StringBuilder html = new StringBuilder("<html><head><meta charset=\"UTF-8\"><style>body{font-family:Arial,sans-serif;font-size:11px}"
+                + "table{border-collapse:collapse;width:100%}th{background:#1e3a8a;color:#fff;padding:4px;text-align:left}"
+                + "td{border:1px solid #cbd5e1;padding:4px}</style></head><body>");
+        html.append("<h2>").append(escape(doc.title())).append("</h2><p>").append(escape(doc.subtitle())).append(" • Generado ")
+                .append(OffsetDateTime.now(ZONE).format(DATE_TIME)).append("</p>");
+        for (Map<String, String> filter : doc.filters()) {
+            html.append("<p><b>").append(escape(filter.get("label"))).append(":</b> ").append(escape(filter.get("value"))).append("</p>");
+        }
+        for (Map<String, String> kpi : doc.kpis()) {
+            html.append("<p><b>").append(escape(kpi.get("label"))).append(":</b> ").append(escape(kpi.get("value"))).append("</p>");
+        }
+        html.append("<table><tr>");
+        for (String header : doc.headers()) {
+            html.append("<th>").append(escape(header)).append("</th>");
+        }
+        html.append("</tr>");
+        for (List<String> row : doc.rows()) {
+            html.append("<tr>");
+            for (String cell : row) {
+                html.append("<td>").append(escape(cell)).append("</td>");
+            }
+            html.append("</tr>");
+        }
+        html.append("</table></body></html>");
+        return html.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static String escape(String value) {
+        return value == null ? "" : value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     // ---------------------------------------------------------------------------------------------

@@ -98,7 +98,7 @@ public class AdminReportController {
             @RequestParam(required = false) String format, Authentication authentication) {
         ReportHistoryDTO report = historyService.get(id, authentication.getName());
         String chosen = format == null || format.isBlank() ? report.format() : format.toUpperCase();
-        if (!List.of("PDF", "EXCEL", "CSV").contains(chosen)) {
+        if (!List.of("PDF", "EXCEL", "CSV", "WORD").contains(chosen)) {
             chosen = "PDF";
         }
         byte[] file = exportService.render(exportService.fromSnapshot((Map<String, Object>) report.snapshot()), chosen);
