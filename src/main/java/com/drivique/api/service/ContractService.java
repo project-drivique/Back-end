@@ -131,7 +131,7 @@ public class ContractService {
         ContractStatus draftStatus = contractStatusRepository.findByCodeIgnoreCase(initialContractStatus)
                 .orElseThrow(() -> new IllegalStateException("Estado contractual no encontrado: " + initialContractStatus));
 
-        List<ContractClause> activeClauses = clauseService.getOrSeedDefaultClauses();
+        List<ContractClause> activeClauses = clauseService.activeClauseEntities();
 
         String contractNumber = generateUniqueContractNumber();
 

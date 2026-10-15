@@ -120,7 +120,7 @@ class ContractServiceTests {
                 new ContractClause("v1.0", (short) 1, "Objeto", "Contenido objeto", true),
                 new ContractClause("v1.0", (short) 2, "Uso", "Contenido uso", true)
         );
-        when(clauseService.getOrSeedDefaultClauses()).thenReturn(clauses);
+        when(clauseService.activeClauseEntities()).thenReturn(clauses);
     }
 
     @Test
