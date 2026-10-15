@@ -19,28 +19,16 @@ public class ClauseService {
 
     @Transactional(readOnly = true)
     public List<ContractClauseResponseDTO> getActiveClauses() {
-        List<ContractClause> clauses = getOrSeedDefaultClauses();
+        List<ContractClause> clauses = activeClauseEntities();
         return clauses.stream()
                 .map(this::mapToDTO)
                 .toList();
     }
 
-    @Transactional
-    public List<ContractClause> getOrSeedDefaultClauses() {
-        List<ContractClause> activeClauses = contractClauseRepository.findByActiveTrueOrderBySortOrderAsc();
-        if (!activeClauses.isEmpty()) {
-            return activeClauses;
-        }
-
-        List<ContractClause> defaultClauses = List.of(
-                new ContractClause("v1.0", (short) 1, "Objeto del Contrato", "El arrendador entrega en arrendamiento al arrendatario el vehículo automotor descrito en la carátula del presente contrato.", true),
-                new ContractClause("v1.0", (short) 2, "Uso y Destinación", "El arrendatario se compromete a usar el vehículo exclusivamente para transporte particular lícito dentro del territorio nacional autorizado.", true),
-                new ContractClause("v1.0", (short) 3, "Obligaciones del Arrendatario", "El arrendatario deberá restituir el vehículo en la fecha, hora y sede acordadas, en el mismo estado mecánico y estético recibido.", true),
-                new ContractClause("v1.0", (short) 4, "Depósito de Garantía y Cargos", "El arrendatario autoriza el bloqueo del depósito de garantía y el cobro de deducibles, multas de tránsito o combustible faltante.", true),
-                new ContractClause("v1.0", (short) 5, "Firma y Validez Jurídica", "Las partes reconocen plena validez legal y probatoria a la firma electrónica y biométrica capturada en la plataforma Drivique.", true)
-        );
-
-        return contractClauseRepository.saveAll(defaultClauses);
+    /** Cláusulas vigentes: salen de la base de datos (se cargan con las migraciones), nunca del código. */
+    @Transactional(readOnly = true)
+    public List<ContractClause> activeClauseEntities() {
+        return contractClauseRepository.findByActiveTrueOrderBySortOrderAsc();
     }
 
     public ContractClauseResponseDTO mapToDTO(ContractClause clause) {

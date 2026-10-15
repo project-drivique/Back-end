@@ -13,7 +13,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import com.drivique.api.dto.OAuthUserInfo;
+import com.drivique.api.service.OAuthProviderService;
+import org.mockito.Mockito;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -42,12 +47,24 @@ class SocialAuthIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /** El proveedor real consulta a Google y Facebook; en las pruebas se simula solo aquí. */
+    @MockitoBean
+    private OAuthProviderService oauthProvider;
+
     private User existingUser;
     private Role customerRole;
 
     @BeforeEach
     void setUp() {
         resetIamTables();
+        Mockito.when(oauthProvider.verifyAndExtract(Mockito.any())).thenAnswer(invocation -> {
+            com.drivique.api.dto.SocialLoginRequestDTO request = invocation.getArgument(0);
+            String token = request.idToken() != null ? request.idToken() : request.accessToken();
+            int separator = token == null ? -1 : token.indexOf(':');
+            if (separator < 0) throw new BadCredentialsException("Token inválido");
+            String email = token.substring(separator + 1);
+            return new OAuthUserInfo(request.normalizedProvider(), "test-" + Math.abs(email.hashCode()), email, "Social", "User", request.nonce());
+        });
 
         customerRole = roleRepository.save(new Role("CUSTOMER", "Cliente", "Rol de cliente", true));
         roleRepository.save(new Role("SUPER_ADMIN", "Super Administrador", "Rol super admin", true));
