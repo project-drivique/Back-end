@@ -144,6 +144,16 @@ class AuditAspectTests {
             }
 
             @Override
+            public boolean includeArgs() {
+                return true;
+            }
+
+            @Override
+            public boolean includeResult() {
+                return true;
+            }
+
+            @Override
             public String description() {
                 return description;
             }
