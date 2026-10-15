@@ -26,5 +26,12 @@ public record UpdateUserProfileRequestDTO(
         LocalDate birthDate,
 
         @Schema(example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
-        UUID nationalityId
-) {}
+        UUID nationalityId,
+        @Schema(example = "Calle 10 # 20-30, Medellín")
+        @Size(max = 255, message = "La dirección no puede exceder 255 caracteres.")
+        String address
+) {
+    public UpdateUserProfileRequestDTO(String firstName, String lastName, String phone, LocalDate birthDate, UUID nationalityId) {
+        this(firstName, lastName, phone, birthDate, nationalityId, null);
+    }
+}
