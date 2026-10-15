@@ -89,7 +89,6 @@ class ReportGeneratorServiceTests {
 
     @Test
     void getReportTypes_ReturnsActiveTypes() {
-        when(reportTypeRepository.count()).thenReturn(2L);
         when(reportTypeRepository.findByActiveTrueOrderByCodeAsc()).thenReturn(List.of(occupancyType, revenueType));
 
         List<AdministrativeReportTypeResponseDTO> result = reportGeneratorService.getReportTypes();
@@ -114,7 +113,6 @@ class ReportGeneratorServiceTests {
         Vehicle vehicle = new Vehicle("ABC-123", "VIN123", brand, category, null, null, status, null,
                 "Toyota RAV4", (short) 2024, "Blanco", (short) 5, (short) 5, 500, 10000, new BigDecimal("200000"), null, true);
 
-        when(reportTypeRepository.count()).thenReturn(2L);
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("admin@drivique.com")).thenReturn(Optional.of(adminUser));
         when(reportTypeRepository.findByCodeIgnoreCase("FLEET_OCCUPANCY")).thenReturn(Optional.of(occupancyType));
         when(vehicleRepository.findAll()).thenReturn(List.of(vehicle));
@@ -140,7 +138,6 @@ class ReportGeneratorServiceTests {
                 LocalDate.now()
         );
 
-        when(reportTypeRepository.count()).thenReturn(2L);
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("admin@drivique.com")).thenReturn(Optional.of(adminUser));
         when(reportTypeRepository.findByCodeIgnoreCase("REVENUE_SUMMARY")).thenReturn(Optional.of(revenueType));
         when(rentalContractRepository.findAll()).thenReturn(List.of());
@@ -165,7 +162,6 @@ class ReportGeneratorServiceTests {
                 null
         );
 
-        when(reportTypeRepository.count()).thenReturn(2L);
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("admin@drivique.com")).thenReturn(Optional.of(adminUser));
         when(reportTypeRepository.findByCodeIgnoreCase("FLEET_OCCUPANCY")).thenReturn(Optional.of(occupancyType));
         when(vehicleRepository.findAll()).thenReturn(List.of());

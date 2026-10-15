@@ -46,7 +46,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
     @Override
     public String getProviderName() {
         JavaMailSender sender = mailSenderProvider.getIfAvailable();
-        return sender != null ? "JavaMailSender" : "MockEmailProvider";
+        return sender != null ? "JavaMailSender" : "NotConfigured";
     }
 
     @Override
@@ -278,9 +278,9 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
             }
         }
 
-        String simulatedId = "mock-email-" + UUID.randomUUID();
-        LOG.info("[MockEmailProvider] Correo simulado a '{}' [{}]: {}", recipient, subject, message);
-        return ProviderDeliveryResult.success(simulatedId);
+        // Sin servidor de correo configurado el envío falla de forma explícita: nunca se simula una entrega
+        LOG.error("No hay servidor de correo configurado; no se envió el mensaje a '{}'", recipient);
+        return ProviderDeliveryResult.failure("EMAIL_NOT_CONFIGURED", "El servidor de correo no está configurado.");
     }
 
     private static boolean isPaymentReminder(String subject) {
