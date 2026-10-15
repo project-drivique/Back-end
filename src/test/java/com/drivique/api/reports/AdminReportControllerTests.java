@@ -44,7 +44,7 @@ class AdminReportControllerTests {
 
     @BeforeEach
     void setUp() {
-        controller = new AdminReportController(reportGeneratorService, historyService);
+        controller = new AdminReportController(reportGeneratorService, historyService, null, null, null);
         mvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
