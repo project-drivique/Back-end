@@ -18,7 +18,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Base64;
 import java.util.Set;
 
 @Service
@@ -46,29 +45,17 @@ public class OAuthProviderService {
         String token = firstNonBlank(request.idToken(), request.accessToken(), request.authCode());
         if (blank(token)) throw new BadCredentialsException("Token de Google requerido.");
 
-        if (isSandbox(token, "sandbox_google", "mock_google", "google_token_")) {
-            String email = firstNonBlank(request.email(), sandboxEmail(token), "google.sandbox@drivique.local");
-            return info("GOOGLE", "google-sandbox-" + stableId(email), email, request.firstName(), request.lastName(), request.nonce());
-        }
-
         try {
             JsonNode profile;
             if (looksLikeJwt(token)) {
+                // Google valida la firma del token; el correo y la identidad salen solo de su respuesta
                 profile = getJson("https://oauth2.googleapis.com/tokeninfo?id_token=" + encode(token), null);
             } else {
                 profile = getJson("https://openidconnect.googleapis.com/v1/userinfo", token);
             }
             return googleProfile(profile, request);
         } catch (Exception providerFailure) {
-            if (looksLikeJwt(token)) {
-                try {
-                    JsonNode payload = decodeJwtPayload(token);
-                    validateGoogleClaims(payload, request);
-                    return googleProfile(payload, request);
-                } catch (Exception decodeFailure) {
-                    LOG.warn("Google token rejected: {}", decodeFailure.getMessage());
-                }
-            }
+            LOG.warn("Google token rejected: {}", providerFailure.getMessage());
             throw new BadCredentialsException("No fue posible validar el token con Google.");
         }
     }
@@ -77,24 +64,14 @@ public class OAuthProviderService {
         String token = firstNonBlank(request.accessToken(), request.idToken(), request.authCode());
         if (blank(token)) throw new BadCredentialsException("Access Token de Facebook requerido.");
 
-        if (isSandbox(token, "sandbox_fb", "sandbox_facebook", "mock_fb", "fb_token_")) {
-            String email = firstNonBlank(request.email(), sandboxEmail(token), "facebook.sandbox@drivique.local");
-            return info("FACEBOOK", "facebook-sandbox-" + stableId(email), email, request.firstName(), request.lastName(), request.nonce());
-        }
-
         try {
             JsonNode profile = getJson("https://graph.facebook.com/me?fields=id,email,first_name,last_name,name&access_token=" + encode(token), null);
             String id = text(profile, "id");
-            String email = firstNonBlank(text(profile, "email"), request.email());
+            String email = text(profile, "email");
             if (blank(id) || blank(email)) throw new BadCredentialsException("Facebook no entregó un identificador y correo válidos.");
-            return info("FACEBOOK", id, email,
-                    firstNonBlank(text(profile, "first_name"), request.firstName()),
-                    firstNonBlank(text(profile, "last_name"), request.lastName()), request.nonce());
+            return info("FACEBOOK", id, email, text(profile, "first_name"), text(profile, "last_name"), request.nonce());
         } catch (Exception graphFailure) {
             LOG.warn("Facebook Graph API unavailable or token rejected: {}", graphFailure.getMessage());
-            if (!blank(request.email())) {
-                return info("FACEBOOK", "facebook-token-" + stableId(token), request.email(), request.firstName(), request.lastName(), request.nonce());
-            }
             throw new BadCredentialsException("No fue posible validar el token con Facebook.");
         }
     }
@@ -102,11 +79,12 @@ public class OAuthProviderService {
     private OAuthUserInfo googleProfile(JsonNode profile, SocialLoginRequestDTO request) {
         validateGoogleClaims(profile, request);
         String sub = text(profile, "sub");
-        String email = firstNonBlank(text(profile, "email"), request.email());
+        String email = text(profile, "email");
         if (blank(sub) || blank(email)) throw new BadCredentialsException("Google no entregó un identificador y correo válidos.");
-        return info("GOOGLE", sub, email,
-                firstNonBlank(text(profile, "given_name"), request.firstName()),
-                firstNonBlank(text(profile, "family_name"), request.lastName()), request.nonce());
+        if (profile.has("email_verified") && !"true".equalsIgnoreCase(profile.path("email_verified").asText())) {
+            throw new BadCredentialsException("El correo de Google no está verificado.");
+        }
+        return info("GOOGLE", sub, email, text(profile, "given_name"), text(profile, "family_name"), request.nonce());
     }
 
     private void validateGoogleClaims(JsonNode payload, SocialLoginRequestDTO request) {
@@ -126,12 +104,6 @@ public class OAuthProviderService {
         HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() < 200 || response.statusCode() >= 300) throw new BadCredentialsException("El proveedor rechazó el token.");
         return mapper.readTree(response.body());
-    }
-
-    private JsonNode decodeJwtPayload(String token) throws Exception {
-        String[] parts = token.split("\\.");
-        if (parts.length != 3) throw new BadCredentialsException("JWT inválido.");
-        return mapper.readTree(new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8));
     }
 
     private OAuthUserInfo info(String provider, String sub, String email, String first, String last, String nonce) {
@@ -187,9 +159,6 @@ public class OAuthProviderService {
     }
 
     private static boolean looksLikeJwt(String token) { return token.split("\\.").length == 3; }
-    private static boolean isSandbox(String token, String... prefixes) { for (String p : prefixes) if (token.startsWith(p)) return true; return false; }
-    private static String sandboxEmail(String token) { int i = token.indexOf(':'); return i >= 0 && i + 1 < token.length() ? token.substring(i + 1).trim() : null; }
-    private static String stableId(String value) { return Integer.toUnsignedString(value.hashCode()); }
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static String text(JsonNode node, String field) { String value = node.path(field).asText(null); return blank(value) ? null : value; }
     private static String firstNonBlank(String... values) { for (String value : values) if (!blank(value)) return value.trim(); return null; }
