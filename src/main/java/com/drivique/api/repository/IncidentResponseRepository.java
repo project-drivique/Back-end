@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface IncidentResponseRepository extends JpaRepository<IncidentResponse, UUID> {
     List<IncidentResponse> findByIncidentIdOrderByCreatedAtAsc(UUID incidentId);
+
+    void deleteByIncidentId(UUID incidentId);
 }
