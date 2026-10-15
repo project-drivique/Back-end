@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -311,5 +312,159 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$[0].modality").value("TERMINAL"))
                 .andExpect(jsonPath("$[0].flightOrBusNumber").value("BOLIV-200"));
+    }
+
+    @Autowired private com.drivique.api.repository.BranchUserRepository branchUserRepository;
+
+    private void configureHomeReturn() throws Exception {
+        DeliveryPointRequestDTO pickup = new DeliveryPointRequestDTO("PICKUP", "BRANCH", branchId, null, null, null, null, null);
+        DeliveryPointRequestDTO returnPoint = new DeliveryPointRequestDTO("RETURN", "HOME_DELIVERY", null, cityId,
+                "El Poblado", "Calle 10 # 43E-20", null, "Portería");
+        ConfigureDeliveryPointsRequestDTO body = new ConfigureDeliveryPointsRequestDTO(List.of(pickup, returnPoint));
+        mvc.perform(post("/api/v1/reservations/{id}/delivery-points", reservationId)
+                        .contextPath("/api").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("customer@drivique.com"))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated());
+    }
+
+    private void createStaff(String email, UUID forBranchId) {
+        Role role = roleRepository.saveAndFlush(roleRepository.findByCode("BRANCH_ADMIN").orElseGet(() -> new Role("BRANCH_ADMIN", "BRANCH_ADMIN", "Branch manager", true)));
+        User staff = new User("Laura", "Encargada", email, "$2a$10$hash");
+        staff.setRoles(Set.of(role));
+        staff = userRepository.saveAndFlush(staff);
+        branchUserRepository.saveAndFlush(new com.drivique.api.model.BranchUser(staff, branchRepository.findById(forBranchId).orElseThrow()));
+    }
+
+    private static final String DRIVER = """
+            {"fullName": "Carlos Ramírez", "documentType": "CC", "documentNumber": "1018432910",
+             "phone": "3001112233", "licenseCategory": "C1", "vehicleDescription": "Moto"}
+            """;
+
+    @Test
+    @WithMockUser(username = "staff@drivique.com", roles = "BRANCH_ADMIN")
+    void staffManagesDriversAndAssignsThemToHomeDelivery() throws Exception {
+        configureHomeReturn();
+        createStaff("staff@drivique.com", branchId);
+
+        String created = mvc.perform(post("/api/v1/admin/delivery-drivers").contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content(DRIVER))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("AVAILABLE"))
+                .andExpect(jsonPath("$.branchName").value("Sede El Poblado"))
+                .andReturn().getResponse().getContentAsString();
+        String driverId = objectMapper.readTree(created).get("id").asText();
+
+        mvc.perform(post("/api/v1/admin/delivery-drivers").contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content(DRIVER))
+                .andExpect(status().isConflict());
+
+        mvc.perform(post("/api/v1/admin/deliveries/{id}/RETURN/assign", reservationId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"driverId\": \"" + driverId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deliveryStatus").value("ASSIGNED"))
+                .andExpect(jsonPath("$.driverName").value("Carlos Ramírez"))
+                .andExpect(jsonPath("$.deliveryPin").doesNotExist());
+
+        // La entrega por sucursal no admite conductor
+        mvc.perform(post("/api/v1/admin/deliveries/{id}/PICKUP/assign", reservationId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"driverId\": \"" + driverId + "\"}"))
+                .andExpect(status().isConflict());
+
+        String pin = jdbc.queryForObject("SELECT delivery_pin FROM rental.reservation_delivery_points WHERE point_type = 'RETURN'", String.class);
+
+        mvc.perform(post("/api/v1/admin/deliveries/{id}/RETURN/complete", reservationId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"pin\": \"" + ("0000".equals(pin) ? "1111" : "0000") + "\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/v1/admin/deliveries/{id}/RETURN/complete", reservationId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"pin\": \"" + pin + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deliveryStatus").value("COMPLETED"));
+        assertThat(jdbc.queryForObject("SELECT status FROM location.delivery_drivers", String.class)).isEqualTo("AVAILABLE");
+
+        mvc.perform(delete("/api/v1/admin/delivery-drivers/{id}", driverId).contextPath("/api"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @WithMockUser(username = "customer@drivique.com")
+    void onlyTheCustomerSeesTheDeliveryPin() throws Exception {
+        configureHomeReturn();
+        createStaff("staff@drivique.com", branchId);
+        jdbc.execute("INSERT INTO location.delivery_drivers (id, branch_id, full_name, document_type, document_number, status, created_at, updated_at) "
+                + "SELECT gen_random_uuid(), '" + branchId + "', 'Conductor', 'CC', '123', 'AVAILABLE', now(), now()");
+        jdbc.execute("UPDATE rental.reservation_delivery_points SET delivery_pin = '4821', delivery_status = 'ASSIGNED', "
+                + "driver_id = (SELECT id FROM location.delivery_drivers) WHERE point_type = 'RETURN'");
+
+        mvc.perform(get("/api/v1/reservations/{id}/delivery-points", reservationId).contextPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.pointType=='RETURN')].deliveryPin").value("4821"));
+    }
+
+    @Test
+    @WithMockUser(username = "otherstaff@drivique.com", roles = "BRANCH_ADMIN")
+    void staffFromAnotherBranchCannotUseThisReservation() throws Exception {
+        configureHomeReturn();
+        Branch otherBranch = branchRepository.saveAndFlush(new Branch("Sede Laureles", "Cra 70 # 1-1",
+                cityRepository.findById(cityId).orElseThrow(), "3009999999", LocalTime.of(8, 0), LocalTime.of(18, 0), true));
+        createStaff("otherstaff@drivique.com", otherBranch.getId());
+        jdbc.execute("INSERT INTO location.delivery_drivers (id, branch_id, full_name, document_type, document_number, status, created_at, updated_at) "
+                + "SELECT gen_random_uuid(), '" + otherBranch.getId() + "', 'Conductor', 'CC', '999', 'AVAILABLE', now(), now()");
+        String driverId = jdbc.queryForObject("SELECT id::text FROM location.delivery_drivers", String.class);
+
+        mvc.perform(post("/api/v1/admin/deliveries/{id}/RETURN/assign", reservationId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"driverId\": \"" + driverId + "\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Autowired private com.drivique.api.repository.BranchReviewRepository branchReviewRepository;
+
+    private UUID createReview() {
+        User customer = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("customer@drivique.com").orElseThrow();
+        com.drivique.api.model.BranchReview review = new com.drivique.api.model.BranchReview(
+                branchRepository.findById(branchId).orElseThrow(), customer,
+                reservationRepository.findById(reservationId).orElseThrow(), (short) 4, "Buena atención");
+        return branchReviewRepository.saveAndFlush(review).getId();
+    }
+
+    @Test
+    @WithMockUser(username = "staff@drivique.com", roles = "BRANCH_ADMIN")
+    void staffListsRepliesAndDeletesBranchReviews() throws Exception {
+        createStaff("staff@drivique.com", branchId);
+        UUID reviewId = createReview();
+
+        mvc.perform(get("/api/v1/admin/reviews/branches").contextPath("/api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].customerName").value("Carlos Gomez"))
+                .andExpect(jsonPath("$[0].reservationCode").value("RES-2026-9999"))
+                .andExpect(jsonPath("$[0].managerReply").doesNotExist());
+
+        mvc.perform(patch("/api/v1/admin/reviews/branches/{id}/reply", reviewId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reply\": \"Gracias por tu opinión\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.managerReply").value("Gracias por tu opinión"));
+
+        mvc.perform(patch("/api/v1/admin/reviews/branches/{id}/reply", reviewId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reply\": \"  \"}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(delete("/api/v1/admin/reviews/branches/{id}", reviewId).contextPath("/api"))
+                .andExpect(status().isNoContent());
+        assertThat(branchReviewRepository.count()).isZero();
+    }
+
+    @Test
+    @WithMockUser(username = "otherstaff@drivique.com", roles = "BRANCH_ADMIN")
+    void staffFromAnotherBranchCannotSeeOrAnswerThisReview() throws Exception {
+        UUID reviewId = createReview();
+        Branch otherBranch = branchRepository.saveAndFlush(new Branch("Sede Laureles", "Cra 70 # 1-1",
+                cityRepository.findById(cityId).orElseThrow(), "3009999999", LocalTime.of(8, 0), LocalTime.of(18, 0), true));
+        createStaff("otherstaff@drivique.com", otherBranch.getId());
+
+        mvc.perform(get("/api/v1/admin/reviews/branches").contextPath("/api"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(patch("/api/v1/admin/reviews/branches/{id}/reply", reviewId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reply\": \"Hola\"}"))
+                .andExpect(status().isForbidden());
     }
 }

@@ -49,6 +49,9 @@ class AdminVehicleIntegrationTests extends DatabaseHealthTestSupport {
     private BranchRepository branches;
 
     @Autowired
+    private com.drivique.api.repository.BranchCategoryRepository branchCategories;
+
+    @Autowired
     private CityRepository cities;
 
     @Autowired
@@ -74,6 +77,7 @@ class AdminVehicleIntegrationTests extends DatabaseHealthTestSupport {
 
         brand = brands.saveAndFlush(new VehicleBrand("Toyota"));
         category = categories.saveAndFlush(new VehicleCategory("SUV", new BigDecimal("180000.00"), new BigDecimal("1500000.00")));
+        branchCategories.saveAndFlush(new com.drivique.api.model.BranchCategory(branch.getId(), category.getId()));
         transmission = transmissions.saveAndFlush(new TransmissionType("AUTOMATIC", "Automática"));
         fuel = fuels.saveAndFlush(new FuelType("HYBRID", "Híbrido"));
         statusAvailable = statuses.saveAndFlush(new VehicleStatus("AVAILABLE", "Disponible", true));

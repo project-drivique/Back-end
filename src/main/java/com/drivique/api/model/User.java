@@ -33,6 +33,9 @@ public class User {
     @Column(name = "document_number", length = 50)
     private String documentNumber;
 
+    @Column(name = "address", length = 255)
+    private String address;
+
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
@@ -117,6 +120,9 @@ public class User {
 
     public UUID getDocumentTypeId() { return documentTypeId; }
     public void setDocumentTypeId(UUID documentTypeId) { this.documentTypeId = documentTypeId; }
+
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
 
     public String getDocumentNumber() { return documentNumber; }
     public void setDocumentNumber(String documentNumber) { this.documentNumber = documentNumber; }

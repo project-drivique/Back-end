@@ -11,7 +11,7 @@ public class BrandConfiguration {
     private UUID id;
     @Column(name = "company_name", nullable = false, length = 100)
     private String companyName;
-    @Column(name = "logo_url", length = 2048)
+    @Column(name = "logo_url", columnDefinition = "text")
     private String logoUrl;
     @Column(name = "favicon_url", length = 2048)
     private String faviconUrl;
@@ -25,6 +25,9 @@ public class BrandConfiguration {
     private String defaultTheme;
     @Column(name = "is_active", nullable = false)
     private boolean active;
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "previous_snapshot", columnDefinition = "jsonb")
+    private String previousSnapshot;
     protected BrandConfiguration() {}
     public void update(String companyName, String logoUrl, String faviconUrl, String primaryColor,
             String secondaryColor, String accentColor, String defaultTheme) {
@@ -44,4 +47,6 @@ public class BrandConfiguration {
     public String getSecondaryColor() { return secondaryColor; }
     public String getAccentColor() { return accentColor; }
     public String getDefaultTheme() { return defaultTheme; }
+    public String getPreviousSnapshot() { return previousSnapshot; }
+    public void setPreviousSnapshot(String previousSnapshot) { this.previousSnapshot = previousSnapshot; }
 }

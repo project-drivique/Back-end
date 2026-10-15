@@ -7,7 +7,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
+import jakarta.validation.Valid;
+import java.util.UUID;
+import com.drivique.api.dto.RoleRequestDTO;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,5 +37,25 @@ public class RoleController {
     @ApiResponse(responseCode = "403", description = "No autorizado")
     public List<RoleResponseDTO> getRoles() {
         return rbacService.getAllRoles();
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public RoleResponseDTO create(@Valid @RequestBody RoleRequestDTO request) {
+        return rbacService.createRole(request);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public RoleResponseDTO update(@PathVariable UUID id, @Valid @RequestBody RoleRequestDTO request) {
+        return rbacService.updateRole(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public void delete(@PathVariable UUID id) {
+        rbacService.deleteRole(id);
     }
 }

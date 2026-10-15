@@ -1,5 +1,6 @@
 package com.drivique.api.service;
 
+import com.drivique.api.config.Auditable;
 import com.drivique.api.dto.CityRequestDTO;
 import com.drivique.api.dto.CityResponseDTO;
 import com.drivique.api.dto.DepartmentResponseDTO;
@@ -50,6 +51,7 @@ public class LocationService {
 
     @Transactional
     @CacheEvict(value = {"activeCities", "departmentCities"}, allEntries = true)
+    @Auditable(domain = "LOCATION", entity = "City", action = "INSERT", description = "Creación de ciudad", includeResult = false)
     public CityResponseDTO create(CityRequestDTO input) {
         Department department = activeDepartment(input.departmentId());
         String name = input.name().strip();
@@ -65,6 +67,16 @@ public class LocationService {
 
     @Transactional
     @CacheEvict(value = {"activeCities", "departmentCities"}, allEntries = true)
+    @Auditable(domain = "LOCATION", entity = "City", action = "UPDATE", description = "Desactivación de ciudad")
+    public void deactivateCity(UUID cityId) {
+        City city = cities.findById(cityId).orElseThrow(() -> new com.drivique.api.exception.ResourceNotFoundException("City not found"));
+        city.deactivate();
+        cities.saveAndFlush(city);
+    }
+
+    @Transactional
+    @CacheEvict(value = {"activeCities", "departmentCities"}, allEntries = true)
+    @Auditable(domain = "LOCATION", entity = "City", action = "UPDATE", description = "Actualización de ciudad", includeResult = false)
     public CityResponseDTO update(UUID cityId, CityRequestDTO input) {
         City city = cities.findById(cityId).orElseThrow(() -> new ResourceNotFoundException("City not found"));
         Department department = activeDepartment(input.departmentId());
