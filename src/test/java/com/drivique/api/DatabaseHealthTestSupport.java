@@ -93,6 +93,7 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM fleet.vehicle_documents");
         jdbc.execute("DELETE FROM fleet.vehicle_images");
         jdbc.execute("DELETE FROM fleet.vehicles");
+        jdbc.execute("DELETE FROM location.delivery_drivers");
         jdbc.execute("DELETE FROM location.branch_users");
         jdbc.execute("DELETE FROM location.branches");
         jdbc.execute("DELETE FROM location.cities");
@@ -106,6 +107,8 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM support.notification_delivery_attempts");
         jdbc.execute("DELETE FROM support.notification_outbox");
         jdbc.execute("DELETE FROM support.notifications");
+        jdbc.execute("DELETE FROM support.incident_attachments");
+        jdbc.execute("DELETE FROM support.incident_status_history");
         jdbc.execute("DELETE FROM support.incident_responses");
         jdbc.execute("DELETE FROM support.incident_reports");
         jdbc.execute("DELETE FROM rental.branch_reviews");
@@ -129,6 +132,8 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     protected void resetCatalogTables() {
+        jdbc.execute("DELETE FROM support.incident_attachments");
+        jdbc.execute("DELETE FROM support.incident_status_history");
         jdbc.execute("DELETE FROM support.incident_responses");
         jdbc.execute("DELETE FROM support.incident_reports");
         jdbc.execute("DELETE FROM rental.branch_reviews");
