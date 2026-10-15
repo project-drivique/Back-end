@@ -32,6 +32,19 @@ public class GeneratedReport {
     @Column(name = "file_url", length = 500)
     private String fileUrl;
 
+    @Column(name = "report_code", length = 40)
+    private String reportCode;
+
+    @Column(name = "title", length = 200)
+    private String title;
+
+    @Column(name = "total_records", nullable = false)
+    private int totalRecords;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "snapshot", columnDefinition = "jsonb")
+    private String snapshot;
+
     @Column(name = "status", nullable = false, length = 20)
     private String status = "COMPLETED";
 
@@ -134,4 +147,13 @@ public class GeneratedReport {
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
+
+    public String getReportCode() { return reportCode; }
+    public void setReportCode(String reportCode) { this.reportCode = reportCode; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public int getTotalRecords() { return totalRecords; }
+    public void setTotalRecords(int totalRecords) { this.totalRecords = totalRecords; }
+    public String getSnapshot() { return snapshot; }
+    public void setSnapshot(String snapshot) { this.snapshot = snapshot; }
 }

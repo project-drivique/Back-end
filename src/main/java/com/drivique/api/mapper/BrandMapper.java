@@ -15,6 +15,6 @@ public final class BrandMapper {
     public static BrandResponseDTO response(BrandConfiguration brand) {
         return new BrandResponseDTO(brand.getId(), brand.getCompanyName(), brand.getLogoUrl(),
                 brand.getFaviconUrl(), brand.getPrimaryColor(), brand.getSecondaryColor(),
-                brand.getAccentColor(), brand.getDefaultTheme());
+                brand.getAccentColor(), brand.getDefaultTheme(), brand.getPreviousSnapshot() != null);
     }
 }

@@ -17,6 +17,45 @@ import java.util.UUID;
 @Service
 public class AdminVehicleService {
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private StaffBranchScope staffScope;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.ReservationRepository reservations;
+
+    private java.util.Optional<UUID> currentScope() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (staffScope == null || authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return java.util.Optional.empty();
+        }
+        return staffScope.forAuthentication(authentication);
+    }
+
+    private void assertBranchAllowed(UUID branchId) {
+        currentScope().ifPresent(scope -> {
+            if (branchId == null || !scope.equals(branchId)) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.FORBIDDEN, "Solo puedes gestionar vehículos de tu sucursal.");
+            }
+        });
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private BranchCategoryService branchCategories;
+
+    private void assertCategoryOffered(UUID branchId, UUID categoryId) {
+        if (branchCategories != null && branchId != null && categoryId != null && !branchCategories.isEnabled(branchId, categoryId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "La sucursal no tiene habilitada esa categoría de vehículo.");
+        }
+    }
+
+    private void assertVehicleAllowed(Vehicle vehicle) {
+        assertBranchAllowed(vehicle.getCurrentBranch() != null ? vehicle.getCurrentBranch().getId() : null);
+    }
+
+
     private final VehicleRepository vehicles;
     private final VehicleBrandRepository brands;
     private final VehicleCategoryRepository categories;
@@ -45,7 +84,10 @@ public class AdminVehicleService {
 
     @Transactional(readOnly = true)
     public PageResponseDTO<VehicleAdminResponseDTO> list(Pageable pageable) {
-        Page<Vehicle> page = vehicles.findAll(pageable);
+        java.util.Optional<UUID> scope = currentScope();
+        Page<Vehicle> page = scope.isPresent()
+                ? vehicles.findAll((root, query, cb) -> cb.equal(root.get("currentBranch").get("id"), scope.get()), pageable)
+                : vehicles.findAll(pageable);
         return new PageResponseDTO<>(
                 page.getContent().stream().map(VehicleMapper::toAdminDTO).toList(),
                 page.getNumber(),
@@ -58,14 +100,17 @@ public class AdminVehicleService {
 
     @Transactional(readOnly = true)
     public VehicleAdminResponseDTO detail(UUID id) {
-        return vehicles.findById(id)
-                .map(VehicleMapper::toAdminDTO)
+        Vehicle found = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
+        assertVehicleAllowed(found);
+        return VehicleMapper.toAdminDTO(found);
     }
 
     @Transactional
     @Auditable(domain = "FLEET", entity = "Vehicle", action = "CREATE", description = "Creación de vehículo")
     public VehicleAdminResponseDTO create(VehicleCreateRequestDTO input) {
+        assertBranchAllowed(input.currentBranchId());
+        assertCategoryOffered(input.currentBranchId(), input.categoryId());
         String plate = input.plate().strip().toUpperCase();
         String vin = input.vin().strip().toUpperCase();
 
@@ -126,6 +171,8 @@ public class AdminVehicleService {
     public VehicleAdminResponseDTO update(UUID id, VehicleUpdateRequestDTO input) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
+        assertVehicleAllowed(vehicle);
+        assertBranchAllowed(input.currentBranchId());
 
         if (input.mileage() < vehicle.getMileage()) {
             throw new IllegalArgumentException(
@@ -173,6 +220,7 @@ public class AdminVehicleService {
     public VehicleAdminResponseDTO updateStatus(UUID id, VehicleStatusUpdateRequestDTO input) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
+        assertVehicleAllowed(vehicle);
 
         VehicleStatus status;
         if (input.statusId() != null) {
@@ -193,6 +241,7 @@ public class AdminVehicleService {
     public VehicleAdminResponseDTO toggleStatus(UUID id) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
+        assertVehicleAllowed(vehicle);
         vehicle.toggleActive();
         return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(vehicle));
     }
@@ -202,6 +251,11 @@ public class AdminVehicleService {
     public void delete(UUID id) {
         Vehicle vehicle = vehicles.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found: " + id));
+        assertVehicleAllowed(vehicle);
+        if (reservations != null && reservations.existsActiveByVehicle(vehicle.getId())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT, "No se puede eliminar el vehículo porque tiene reservas activas.");
+        }
         // Logical soft deletion prevents breaking historical integrity with rentals and contracts
         vehicle.setActive(false);
         vehicles.saveAndFlush(vehicle);

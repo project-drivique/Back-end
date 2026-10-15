@@ -22,10 +22,17 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID>, JpaSpec
 
     Optional<Vehicle> findByIdAndActiveTrue(UUID id);
 
+    List<Vehicle> findTop2ByCategoryIdAndActiveTrueOrderByModelAsc(UUID categoryId);
+
+    List<Vehicle> findTop1ByActiveTrueOrderByModelAsc();
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Vehicle v WHERE v.id = :id AND v.active = true")
     Optional<Vehicle> findByIdWithPessimisticLock(@Param("id") UUID id);
 
+    boolean existsByCurrentBranchId(UUID branchId);
+    long countByCurrentBranchId(UUID branchId);
+    boolean existsByCurrentBranchIdAndCategoryIdAndActiveTrue(UUID branchId, UUID categoryId);
     boolean existsByPlateIgnoreCase(String plate);
     boolean existsByVinIgnoreCase(String vin);
     boolean existsByPlateIgnoreCaseAndIdNot(String plate, UUID id);

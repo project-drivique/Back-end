@@ -75,6 +75,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                 String amount = null;
                 String currency = null;
 
+                String paymentMethod = null;
                 if (metadata != null && !metadata.isBlank()) {
                     try {
                         com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(metadata);
@@ -99,6 +100,9 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                         }
                         if (root.hasNonNull("currency")) {
                             currency = root.get("currency").asText();
+                        }
+                        if (root.hasNonNull("paymentMethod")) {
+                            paymentMethod = root.get("paymentMethod").asText();
                         }
                     } catch (Exception e) {
                         LOG.debug("No se pudo parsear metadata en EmailNotificationProvider: {}", e.getMessage());
@@ -126,13 +130,16 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                 if (paymentStatus == null) {
                     if (safeSubject.toLowerCase().contains("problema") || safeSubject.toLowerCase().contains("rechazado") || safeSubject.toLowerCase().contains("fallo") || safeSubject.toLowerCase().contains("fallido")) {
                         paymentStatus = "DECLINED";
-                    } else if (safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante") || safeSubject.toLowerCase().contains("exitoso") || safeSubject.toLowerCase().contains("confirmado")) {
+                    } else if (!isPaymentReminder(safeSubject) && (safeSubject.toLowerCase().contains("aprobado") || safeSubject.toLowerCase().contains("comprobante") || safeSubject.toLowerCase().contains("exitoso") || safeSubject.toLowerCase().contains("confirmado"))) {
                         paymentStatus = "APPROVED";
                     }
                 }
 
                 String base = (frontendUrl != null ? frontendUrl : "http://localhost:5173").replaceAll("/+$", "");
-                if (actionUrl == null && (paymentStatus != null || safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante"))) {
+                if (actionUrl == null && isPaymentReminder(safeSubject)) {
+                    actionUrl = base + "/reservas";
+                    actionLabel = "Pagar mi reserva";
+                } else if (actionUrl == null && paymentStatus != null) {
                     boolean isApproved = !"DECLINED".equalsIgnoreCase(paymentStatus);
                     if (isApproved) {
                         actionUrl = base + "/reservas";
@@ -144,7 +151,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                 }
 
                 String receiptCardHtml = "";
-                if (paymentStatus != null || safeSubject.toLowerCase().contains("pago") || safeSubject.toLowerCase().contains("comprobante")) {
+                if (paymentStatus != null) {
                     boolean isApproved = !"DECLINED".equalsIgnoreCase(paymentStatus);
                     String badgeBg = isApproved ? "#ecfdf5" : "#fef2f2";
                     String badgeBorder = isApproved ? "#10b981" : "#ef4444";
@@ -186,7 +193,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                               </tr>
                               <tr>
                                 <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Pasarela de Pago:</td>
-                                <td style="color: #0f172a; padding: 5px 0; font-weight: 600; text-align: right;">Wompi Colombia (Segura)</td>
+                                <td style="color: #0f172a; padding: 5px 0; font-weight: 600; text-align: right;">%s</td>
                               </tr>
                               <tr>
                                 <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Fecha y Hora:</td>
@@ -207,6 +214,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                         formattedAmount, curr,
                         bookingCode != null && !bookingCode.isBlank() ? "<tr><td style=\"color: #64748b; padding: 5px 0; font-weight: 500;\">Código de Reserva:</td><td style=\"color: #0f172a; padding: 5px 0; font-weight: 700; text-align: right;\">" + bookingCode + "</td></tr>" : "",
                         statusColor, statusText,
+                        ("EFECTIVO".equalsIgnoreCase(paymentMethod) || (safeMessage + " " + safeSubject).toLowerCase().contains("efectivo")) ? "Efectivo en sucursal" : "Wompi Colombia (Segura)",
                         fechaStr,
                         explNote
                     );
@@ -273,5 +281,10 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
         String simulatedId = "mock-email-" + UUID.randomUUID();
         LOG.info("[MockEmailProvider] Correo simulado a '{}' [{}]: {}", recipient, subject, message);
         return ProviderDeliveryResult.success(simulatedId);
+    }
+
+    private static boolean isPaymentReminder(String subject) {
+        String lower = subject == null ? "" : subject.toLowerCase();
+        return lower.contains("vencer") || lower.contains("plazo") || lower.contains("recordatorio");
     }
 }

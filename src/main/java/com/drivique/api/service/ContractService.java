@@ -27,6 +27,62 @@ public class ContractService {
     private final ClauseService clauseService;
     private final FileStorageService storage;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.UserDocumentRepository userDocuments;
+
+    /** Estado de validación de la licencia de conducción más reciente del cliente (APPROVED, PENDING, REJECTED). */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.DocumentTypeRepository documentTypes;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.PaymentRepository paymentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PdfContractGeneratorService pdfGenerator;
+
+    private String paymentMethodCode(RentalContract c) {
+        if (paymentRepository == null) return c.getReservation().getCashPaymentCode() != null ? "CASH" : null;
+        return paymentRepository.findByContractId(c.getId()).stream()
+                .filter(p -> p.getPaymentMethod() != null)
+                .map(p -> p.getPaymentMethod().getCode())
+                .findFirst()
+                .orElse(c.getReservation().getCashPaymentCode() != null ? "CASH" : null);
+    }
+
+    public ContractPdfExtras pdfExtras(RentalContract c) {
+        User customer = c.getCustomer();
+        String documentTypeName = null;
+        if (documentTypes != null && customer != null && customer.getDocumentTypeId() != null) {
+            documentTypeName = documentTypes.findById(customer.getDocumentTypeId()).map(d -> switch (String.valueOf(d.getCode()).toUpperCase()) {
+                case "CC" -> "Cédula de Ciudadanía";
+                case "CE" -> "Cédula de Extranjería";
+                case "PASSPORT" -> "Pasaporte";
+                default -> d.getName();
+            }).orElse(null);
+        }
+        String license = driverLicenseStatus(customer);
+        String licenseText = "APPROVED".equalsIgnoreCase(license) ? "Vigente (validada por la sucursal)"
+                : "PENDING".equalsIgnoreCase(license) ? "Pendiente de validación"
+                : "REJECTED".equalsIgnoreCase(license) ? "Rechazada" : null;
+        String method = null;
+        if (paymentRepository != null) {
+            method = paymentRepository.findByContractId(c.getId()).stream()
+                    .filter(p -> p.getPaymentMethod() != null)
+                    .map(p -> p.getPaymentMethod().getCode())
+                    .findFirst().orElse(null);
+        }
+        return new ContractPdfExtras(documentTypeName, licenseText, method);
+    }
+
+    private String driverLicenseStatus(User customer) {
+        if (userDocuments == null || customer == null) return null;
+        return userDocuments.findByUserIdOrderByCreatedAtDesc(customer.getId()).stream()
+                .filter(d -> d.getDocumentType() != null && "DRIVER_LICENSE".equalsIgnoreCase(d.getDocumentType().getCode()))
+                .map(d -> d.getStatus() != null ? d.getStatus().getCode() : null)
+                .filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
+    }
+
     public ContractService(
             RentalContractRepository rentalContractRepository,
             ContractStatusRepository contractStatusRepository,
@@ -153,6 +209,38 @@ public class ContractService {
     }
 
     @Transactional(readOnly = true)
+    public byte[] downloadSignature(UUID id, String userEmail) {
+        RentalContract contract = rentalContractRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        validateAccess(contract.getReservation(), user);
+        if (contract.getSignatureUrl() == null) throw new ConflictException("El contrato aún no está firmado.");
+        return storage.read(contract.getSignatureUrl());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ContractEmailService contractEmail;
+
+    @Transactional(readOnly = true)
+    public boolean emailContract(UUID id, String userEmail) {
+        RentalContract contract = contractForEmail(id, userEmail);
+        if (contractEmail == null) return false;
+        byte[] pdf = downloadPdf(id, userEmail);
+        return contractEmail.sendSignedContract(ContractEmailService.delivery(contract.getCustomer(), contract, pdf));
+    }
+
+    @Transactional(readOnly = true)
+    public com.drivique.api.model.RentalContract contractForEmail(UUID id, String userEmail) {
+        RentalContract contract = rentalContractRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        validateAccess(contract.getReservation(), user);
+        return contract;
+    }
+
+    @Transactional(readOnly = true)
     public byte[] downloadPdf(UUID id, String userEmail) {
         RentalContract contract = rentalContractRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
@@ -160,6 +248,9 @@ public class ContractService {
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
         validateAccess(contract.getReservation(), user);
         if (contract.getPdfUrl() == null) throw new ConflictException("El contrato aún no está firmado.");
+        if (pdfGenerator != null && contract.getSignatureUrl() != null) {
+            return pdfGenerator.generate(contract, storage.read(contract.getSignatureUrl()), pdfExtras(contract));
+        }
         return storage.read(contract.getPdfUrl());
     }
 
@@ -245,10 +336,27 @@ public class ContractService {
                 c.getVehicle().getId(),
                 c.getVehicle().getModel(),
                 c.getVehicle().getPlate(),
+                c.getVehicle().getMainImageUrl(),
+                c.getVehicle().getBrand() != null ? c.getVehicle().getBrand().getName() : null,
+                c.getVehicle().getColor(),
+                (int) c.getVehicle().getYear(),
+                paymentMethodCode(c),
+                c.getReservation().getCashPaymentBranch() != null ? c.getReservation().getCashPaymentBranch().getName() : null,
+                c.getReservation().getAdditionalServices() == null ? List.of()
+                        : c.getReservation().getAdditionalServices().stream()
+                                .map(s -> s.getAdditionalService() != null ? s.getAdditionalService().getName() : null)
+                                .filter(java.util.Objects::nonNull).toList(),
                 c.getStatus().getCode(),
                 c.getStatus().getName(),
                 c.getPickupBranch().getId(),
                 c.getPickupBranch().getName(),
+                c.getPickupBranch().getAddress(),
+                c.getCustomer() != null ? c.getCustomer().getPhone() : null,
+                c.getCustomer() != null ? c.getCustomer().getDocumentNumber() : null,
+                c.getCustomer() != null ? c.getCustomer().getAddress() : null,
+                driverLicenseStatus(c.getCustomer()),
+                c.getReservation().getInsuranceCoverage() != null ? c.getReservation().getInsuranceCoverage().getName() : null,
+                c.getReservation().getMileagePlan() != null ? c.getReservation().getMileagePlan().getName() : null,
                 c.getPickupBranch().getCity().getId(),
                 c.getPickupBranch().getCity().getName(),
                 c.getReturnBranch().getId(),
