@@ -98,6 +98,7 @@ public class SecurityConfig {
                                 "/v1/auth/validate-reset-code",
                                 "/v1/auth/reset-password"
                         ).permitAll()
+                        .requestMatchers("/v1/public/deliveries/action").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/languages",
                                 "/v1/currencies",
