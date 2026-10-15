@@ -66,6 +66,13 @@ public class VehicleInspectionService {
                             java.util.Map.of("licensePlate", contract.getVehicle() != null ? contract.getVehicle().getPlate() : "N/A", "totalCharges", saved.getTotalCharge() != null ? saved.getTotalCharge() : BigDecimal.ZERO),
                             "RETURN-" + saved.getId()
                     );
+                    java.util.Map<String, Object> thanksMeta = java.util.Map.of("actionPath", "/reservas", "actionLabel", "Calificar mi experiencia");
+                    String thanks = "Gracias por reservar con Drivique, " + contract.getCustomer().getFirstName()
+                            + ". Esperamos que hayas disfrutado tu viaje y que sigas reservando con nosotros. Cuéntanos cómo te fue: califica el vehículo y la sucursal desde Mis reservas.";
+                    for (String channel : java.util.List.of("IN_APP", "EMAIL")) {
+                        notificationService.sendWithMetadata(contract.getCustomer(), channel, "RESERVATION", "¡Gracias por reservar con Drivique!",
+                                thanks, contract.getReservation().getId(), thanksMeta, "THANKS-" + contract.getReservation().getId() + "-" + channel);
+                    }
                 }
             } catch (Exception e) {}
         }
