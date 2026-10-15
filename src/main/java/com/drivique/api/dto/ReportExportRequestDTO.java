@@ -9,7 +9,7 @@ import java.util.UUID;
 public record ReportExportRequestDTO(
         @NotBlank(message = "El tipo de reporte es obligatorio") String type,
         @NotBlank(message = "El formato es obligatorio")
-        @Pattern(regexp = "PDF|EXCEL|CSV", message = "El formato debe ser PDF, EXCEL o CSV") String format,
+        @Pattern(regexp = "PDF|EXCEL|CSV|WORD", message = "El formato debe ser PDF, EXCEL, CSV o WORD") String format,
         LocalDate from,
         LocalDate to,
         UUID branchId,
