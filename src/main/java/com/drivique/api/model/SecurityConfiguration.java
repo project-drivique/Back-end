@@ -13,4 +13,9 @@ public class SecurityConfiguration {
     protected SecurityConfiguration() {}
     public String getConfigKey() { return configKey; }
     public String getConfigValue() { return configValue; }
+    @Column(name = "description", length = 255) private String description;
+    @Column(name = "updated_at") private java.time.Instant updatedAt;
+    public String getDescription() { return description; }
+    public java.time.Instant getUpdatedAt() { return updatedAt; }
+    public void changeValue(String value) { this.configValue = value; this.updatedAt = java.time.Instant.now(); }
 }
