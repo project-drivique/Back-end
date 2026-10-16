@@ -127,6 +127,9 @@ public class Promotion {
     public boolean isFeatured() { return featured; }
     public void setFeatured(boolean featured) { this.featured = featured; }
     public boolean isActive() { return active; }
+    @Column(name = "notification_sent_at") private Instant notificationSentAt;
+    public Instant getNotificationSentAt() { return notificationSentAt; }
+    public void markNotified() { this.notificationSentAt = Instant.now(); }
     public void setActive(boolean active) { this.active = active; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
