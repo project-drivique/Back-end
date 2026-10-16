@@ -425,4 +425,17 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                         .content(newLoginBody))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void unregisteredEmailsAreToldTheAccountDoesNotExistAndNoCodeIsSent() throws Exception {
+        String unknown = "{\"email\":\"nadie.registrado@drivique.com\",\"password\":\"Cualquiera#12345\"}";
+        mvc.perform(post("/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(unknown))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("No existe una cuenta registrada con ese correo."));
+        mvc.perform(post("/v1/auth/forgot-password").contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"nadie.registrado@drivique.com\"}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/v1/auth/resend-verification").contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"nadie.registrado@drivique.com\"}"))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM iam.verification_codes", Integer.class)).isZero();
+    }
 }
