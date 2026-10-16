@@ -58,6 +58,9 @@ management:
       show-details: never
       probes:
         enabled: true
+  health:
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:false}
   info:
     env:
       enabled: true

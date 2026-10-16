@@ -1,5 +1,6 @@
 package com.drivique.api.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import com.drivique.api.config.Auditable;
 import com.drivique.api.dto.PromotionRequestDTO;
 import com.drivique.api.dto.PromotionResponseDTO;
@@ -85,7 +86,9 @@ public class PromotionAdminService {
         Promotion promotion = new Promotion(code, request.offerType(), request.discountType(), request.discountValue(),
                 Instant.now(), Instant.now().plusSeconds(1), 1, null, 0);
         apply(promotion, request);
-        return toDto(promotions.save(promotion));
+        Promotion saved = promotions.save(promotion);
+        announce();
+        return toDto(saved);
     }
 
     @Transactional
@@ -102,7 +105,9 @@ public class PromotionAdminService {
         promotion.setDiscountType(request.discountType());
         promotion.setDiscountValue(request.discountValue());
         apply(promotion, request);
-        return toDto(promotions.save(promotion));
+        Promotion saved = promotions.save(promotion);
+        announce();
+        return toDto(saved);
     }
 
     @Transactional
@@ -111,7 +116,9 @@ public class PromotionAdminService {
     public PromotionResponseDTO toggleActive(UUID id) {
         Promotion promotion = find(id);
         promotion.setActive(!promotion.isActive());
-        return toDto(promotions.save(promotion));
+        Promotion saved = promotions.save(promotion);
+        announce();
+        return toDto(saved);
     }
 
     @Transactional
@@ -120,7 +127,9 @@ public class PromotionAdminService {
     public PromotionResponseDTO toggleFeatured(UUID id) {
         Promotion promotion = find(id);
         promotion.setFeatured(!promotion.isFeatured());
-        return toDto(promotions.save(promotion));
+        Promotion saved = promotions.save(promotion);
+        announce();
+        return toDto(saved);
     }
 
     @Transactional
@@ -162,6 +171,19 @@ public class PromotionAdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Vehículo no encontrado")));
         promotion.setVehicleCategory(request.vehicleCategoryId() == null ? null : categories.findById(request.vehicleCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada")));
+    }
+
+    @Autowired(required = false)
+    private PromotionNotificationService promotionNotifications;
+
+    private void announce() {
+        if (promotionNotifications != null) {
+            try {
+                promotionNotifications.notifyPending();
+            } catch (Exception ignored) {
+                // la tarea programada lo reintenta
+            }
+        }
     }
 
     private Promotion find(UUID id) {

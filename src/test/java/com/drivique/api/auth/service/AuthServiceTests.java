@@ -307,16 +307,16 @@ class AuthServiceTests {
     }
 
     @Test
-    void forgotPasswordSafeWhenUserDoesNotExist() {
+    void forgotPasswordTellsWhenTheAccountDoesNotExistAndSendsNoCode() {
         com.drivique.api.dto.ForgotPasswordRequestDTO request =
                 new com.drivique.api.dto.ForgotPasswordRequestDTO("unknown@drivique.com");
 
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("unknown@drivique.com"))
                 .thenReturn(Optional.empty());
 
-        var response = authService.forgotPassword(request);
-
-        assertThat(response.message()).contains("se ha enviado un código");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> authService.forgotPassword(request))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("No existe una cuenta registrada con ese correo.");
         verify(verificationCodeService, never()).createVerificationCode(any(), any(), anyInt());
     }
 
