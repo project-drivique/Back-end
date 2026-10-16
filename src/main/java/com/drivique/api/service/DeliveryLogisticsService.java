@@ -89,6 +89,9 @@ public class DeliveryLogisticsService {
             throw new ConflictException("La entrega ya fue completada");
         }
         DeliveryDriver driver = drivers.findById(driverId).orElseThrow(() -> new ResourceNotFoundException("Conductor no encontrado"));
+        if (driver.getEmail() == null || driver.getEmail().isBlank()) {
+            throw new ConflictException("El conductor no tiene un correo registrado: edítalo para poder enviarle la entrega");
+        }
         UUID pointBranch = branchOf(point);
         if (pointBranch != null && !pointBranch.equals(driver.getBranch().getId())) {
             throw new ConflictException("El conductor pertenece a otra sucursal");
@@ -100,7 +103,58 @@ public class DeliveryLogisticsService {
         point.assignDriver(driver, pin);
         driver.setStatus("ON_ROUTE");
         drivers.save(driver);
-        return DeliveryPointResponseDTO.from(points.saveAndFlush(point), false);
+        ReservationDeliveryPoint saved = points.saveAndFlush(point);
+        if (notices != null) {
+            notices.driverAssigned(saved, driver, pin);
+        }
+        return DeliveryPointResponseDTO.from(saved, false);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DeliveryNotificationService notices;
+
+    /** El conductor confirma desde su correo que el código del cliente coincide. */
+    @Transactional
+    @Auditable(domain = "RESERVATIONS", entity = "DeliveryPoint", action = "UPDATE", description = "Entrega a domicilio confirmada por el conductor desde el correo", includeArgs = false, includeResult = false)
+    public void confirmByDriver(UUID reservationId, String pointType) {
+        ReservationDeliveryPoint point = pendingPoint(reservationId, pointType);
+        point.completeDelivery();
+        DeliveryDriver driver = point.getDriver();
+        driver.setStatus("AVAILABLE");
+        drivers.save(driver);
+        points.saveAndFlush(point);
+        if (notices != null) {
+            notices.notifyStaff(point, "Entrega confirmada por el conductor",
+                    driver.getFullName() + " confirmó la entrega de la reserva " + point.getReservation().getCode() + ".");
+            notices.notifyCustomer(point, "Entrega confirmada", "Tu " + ("RETURN".equals(point.getPointType()) ? "devolución" : "entrega")
+                    + " de la reserva " + point.getReservation().getCode() + " fue confirmada por el conductor. ¡Gracias por elegir Drivique!");
+        }
+    }
+
+    /** El conductor avisa que el código que le dio el cliente no coincide: la entrega sigue pendiente y se avisa a la sucursal. */
+    @Transactional
+    @Auditable(domain = "RESERVATIONS", entity = "DeliveryPoint", action = "UPDATE", description = "Código de entrega rechazado por el conductor desde el correo", includeArgs = false, includeResult = false)
+    public void rejectByDriver(UUID reservationId, String pointType) {
+        ReservationDeliveryPoint point = pendingPoint(reservationId, pointType);
+        if (notices != null) {
+            notices.notifyStaff(point, "Código de entrega rechazado",
+                    point.getDriver().getFullName() + " reportó que el código del cliente no coincide en la reserva "
+                            + point.getReservation().getCode() + ". Revisa el PIN con el cliente.");
+            notices.notifyCustomer(point, "Revisa tu código de entrega", "El conductor reportó que el código que le diste no coincide con el de tu reserva "
+                    + point.getReservation().getCode() + ". Verifica el PIN en Mis reservas.");
+        }
+    }
+
+    private ReservationDeliveryPoint pendingPoint(UUID reservationId, String pointType) {
+        ReservationDeliveryPoint point = points.findByReservationIdAndPointType(reservationId, pointType.toUpperCase())
+                .orElseThrow(() -> new ResourceNotFoundException("Punto de entrega no encontrado"));
+        if (!"HOME_DELIVERY".equals(point.getModality()) || point.getDriver() == null) {
+            throw new ConflictException("La entrega no tiene un conductor asignado");
+        }
+        if ("COMPLETED".equals(point.getDeliveryStatus())) {
+            throw new ConflictException("La entrega ya fue completada");
+        }
+        return point;
     }
 
     /** El cliente entrega el PIN al conductor; con él se confirma la entrega o devolución. */

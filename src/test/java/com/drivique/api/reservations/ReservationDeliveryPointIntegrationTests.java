@@ -337,7 +337,7 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
 
     private static final String DRIVER = """
             {"fullName": "Carlos Ramírez", "documentType": "CC", "documentNumber": "1018432910",
-             "phone": "3001112233", "licenseCategory": "C1", "vehicleDescription": "Moto"}
+             "email": "carlos.conductor@drivique.com", "phone": "3001112233", "licenseCategory": "C1", "vehicleDescription": "Moto"}
             """;
 
     @Test
@@ -466,5 +466,64 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
         mvc.perform(patch("/api/v1/admin/reviews/branches/{id}/reply", reviewId).contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"reply\": \"Hola\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.drivique.api.service.DeliveryActionTokens actionTokens;
+
+    private String assignDriverAndGetToken(String action) throws Exception {
+        configureHomeReturn();
+        createStaff("staff@drivique.com", branchId);
+        String created = mvc.perform(post("/api/v1/admin/delivery-drivers").contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content(DRIVER)).andReturn().getResponse().getContentAsString();
+        String driverId = objectMapper.readTree(created).get("id").asText();
+        mvc.perform(post("/api/v1/admin/deliveries/{id}/RETURN/assign", reservationId).contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"driverId\": \"" + driverId + "\"}"))
+                .andExpect(status().isOk());
+        return actionTokens.create(java.util.UUID.fromString(String.valueOf(reservationId)), "RETURN", action, java.time.Instant.now().plusSeconds(3600));
+    }
+
+    @Test
+    @WithMockUser(username = "staff@drivique.com", roles = "BRANCH_ADMIN")
+    void driverConfirmsFromTheEmailLinkAndEveryoneIsNotified() throws Exception {
+        String token = assignDriverAndGetToken("CONFIRM");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Tu conductor ya fue asignado' AND message LIKE '%PIN%'", Integer.class)).isEqualTo(2);
+
+        // abrir el enlace solo muestra la página: no confirma nada por sí solo
+        mvc.perform(get("/api/v1/public/deliveries/action").contextPath("/api").param("token", token))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT delivery_status FROM rental.reservation_delivery_points WHERE point_type = 'RETURN'", String.class)).isEqualTo("ASSIGNED");
+
+        mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT delivery_status FROM rental.reservation_delivery_points WHERE point_type = 'RETURN'", String.class)).isEqualTo("COMPLETED");
+        assertThat(jdbc.queryForObject("SELECT status FROM location.delivery_drivers", String.class)).isEqualTo("AVAILABLE");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Entrega confirmada'", Integer.class)).isGreaterThan(0);
+
+        // el enlace ya no sirve para volver a confirmar
+        mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @WithMockUser(username = "staff@drivique.com", roles = "BRANCH_ADMIN")
+    void driverRejectsTheCodeAndTheDeliveryStaysPending() throws Exception {
+        String token = assignDriverAndGetToken("REJECT");
+        mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT delivery_status FROM rental.reservation_delivery_points WHERE point_type = 'RETURN'", String.class)).isEqualTo("ASSIGNED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Código de entrega rechazado'", Integer.class)).isGreaterThan(0);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Revisa tu código de entrega'", Integer.class)).isGreaterThan(0);
+    }
+
+    @Test
+    void tamperedOrExpiredLinksAreRefused() throws Exception {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        String expired = actionTokens.create(id, "RETURN", "CONFIRM", java.time.Instant.now().minusSeconds(10));
+        String tampered = actionTokens.create(id, "RETURN", "CONFIRM", java.time.Instant.now().plusSeconds(600)) + "x";
+        for (String token : java.util.List.of(expired, tampered, "basura")) {
+            mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
+                    .andExpect(status().isGone());
+        }
     }
 }
