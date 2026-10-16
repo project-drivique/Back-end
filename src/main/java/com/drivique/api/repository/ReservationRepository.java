@@ -43,6 +43,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
     @Query("SELECT r FROM Reservation r WHERE r.status.code = 'IN_PROGRESS' AND r.returnDate < :now")
     List<Reservation> findInProgressOverdue(@org.springframework.data.repository.query.Param("now") java.time.Instant now);
 
+    @Query("SELECT r FROM Reservation r WHERE r.vehicle.id = :vehicleId AND r.blocksAvailability = true AND r.returnDate > :now ORDER BY r.pickupDate")
+    List<Reservation> findUpcomingBlockingByVehicle(@Param("vehicleId") UUID vehicleId, @Param("now") java.time.Instant now);
+
     @Query("SELECT COUNT(r) > 0 FROM Reservation r " +
            "WHERE r.vehicle.id = :vehicleId " +
            "AND r.blocksAvailability = true " +

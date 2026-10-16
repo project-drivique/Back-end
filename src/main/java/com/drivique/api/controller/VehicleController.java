@@ -21,10 +21,13 @@ public class VehicleController {
 
     private final VehicleSearchService searchService;
     private final com.drivique.api.service.FeatureService featureService;
+    private final com.drivique.api.repository.ReservationRepository reservationRepository;
 
-    public VehicleController(VehicleSearchService searchService, com.drivique.api.service.FeatureService featureService) {
+    public VehicleController(VehicleSearchService searchService, com.drivique.api.service.FeatureService featureService,
+                             com.drivique.api.repository.ReservationRepository reservationRepository) {
         this.searchService = searchService;
         this.featureService = featureService;
+        this.reservationRepository = reservationRepository;
     }
 
     @GetMapping("/search")
@@ -71,5 +74,17 @@ public class VehicleController {
     @Operation(summary = "Consultar características y equipamiento de un vehículo")
     public List<com.drivique.api.dto.FeatureResponseDTO> features(@PathVariable UUID id) {
         return featureService.listByVehicle(id);
+    }
+
+    @GetMapping("/{id}/occupied-dates")
+    @Operation(summary = "Rangos de fechas ocupados de un vehículo", description = "Solo fechas (hora Colombia), sin datos de clientes.")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<java.util.Map<String, String>> occupiedDates(@PathVariable UUID id) {
+        java.time.ZoneId zone = java.time.ZoneId.of("America/Bogota");
+        return reservationRepository.findUpcomingBlockingByVehicle(id, java.time.Instant.now()).stream()
+                .map(r -> java.util.Map.of(
+                        "fechaInicio", r.getPickupDate().atZone(zone).toLocalDate().toString(),
+                        "fechaFin", r.getReturnDate().atZone(zone).toLocalDate().toString()))
+                .toList();
     }
 }
