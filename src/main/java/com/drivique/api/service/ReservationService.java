@@ -58,6 +58,9 @@ public class ReservationService {
     @Autowired(required = false)
     private CurrencyRepository currencyRepository;
 
+    @Autowired(required = false)
+    private ContractService contractService;
+
     public ReservationService(
             ReservationRepository reservationRepository,
             ReservationStatusRepository reservationStatusRepository,
@@ -403,10 +406,31 @@ public class ReservationService {
                 .toList();
     }
 
+    private Reservation findReservationByIdOrCode(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            throw new ResourceNotFoundException("Identificador de reserva no proporcionado");
+        }
+        try {
+            UUID id = UUID.fromString(identifier.trim());
+            Optional<Reservation> byId = reservationRepository.findById(id);
+            if (byId.isPresent()) {
+                return byId.get();
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Not a UUID, fallback to code search
+        }
+        return reservationRepository.findByCodeIgnoreCase(identifier.trim())
+                .orElseThrow(() -> new ResourceNotFoundException("Retención o reserva no encontrada: " + identifier));
+    }
+
     @Transactional
     public ReservationResponseDTO confirmReservationPayment(UUID holdId, String userEmail) {
-        Reservation r = reservationRepository.findById(holdId)
-                .orElseThrow(() -> new ResourceNotFoundException("Retención no encontrada"));
+        return confirmReservationPayment(holdId != null ? holdId.toString() : null, userEmail);
+    }
+
+    @Transactional
+    public ReservationResponseDTO confirmReservationPayment(String holdIdentifier, String userEmail) {
+        Reservation r = findReservationByIdOrCode(holdIdentifier);
         
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
@@ -421,18 +445,16 @@ public class ReservationService {
             throw new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada hasta que los documentos sean aprobados por el encargado de la sucursal.");
         }
 
-        if (!r.getCode().startsWith("HLD-")) {
-            // Idempotency: if it's already a RES-, it was already confirmed. Return it.
-            return mapFromEntity(r);
+        if (r.getCode().startsWith("HLD-")) {
+            String realCode = generateUniqueReservationCode();
+            r.setCode(realCode);
         }
-
-        String realCode = generateUniqueReservationCode();
-        r.setCode(realCode);
 
         RentalContract existingContract = rentalContractRepository != null ? rentalContractRepository.findByReservationId(r.getId()).orElse(null) : null;
         boolean isContractSigned = existingContract != null && existingContract.getStatus() != null && "ACTIVE".equalsIgnoreCase(existingContract.getStatus().getCode());
         String targetStatusCode = isContractSigned ? "CONFIRMED" : "PENDING_SIGNATURE";
         ReservationStatus targetStatus = reservationStatusRepository.findByCodeIgnoreCase(targetStatusCode)
+                .or(() -> reservationStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE"))
                 .or(() -> reservationStatusRepository.findByCodeIgnoreCase("CONFIRMED"))
                 .orElseThrow(() -> new IllegalStateException("Estado " + targetStatusCode + " no encontrado"));
         r.setStatus(targetStatus);
@@ -440,7 +462,14 @@ public class ReservationService {
         Reservation saved = reservationRepository.save(r);
 
         if (rentalContractRepository != null) {
-            rentalContractRepository.findByReservationId(saved.getId()).ifPresent(contract -> {
+            RentalContract contract = rentalContractRepository.findByReservationId(saved.getId()).orElse(null);
+            if (contract == null && contractService != null) {
+                try {
+                    contractService.generateContract(new com.drivique.api.dto.GenerateContractRequestDTO(saved.getId()), userEmail);
+                    contract = rentalContractRepository.findByReservationId(saved.getId()).orElse(null);
+                } catch (Exception ignored) {}
+            }
+            if (contract != null) {
                 if (contractStatusRepository != null && contract.getStatus() != null && "DRAFT".equalsIgnoreCase(contract.getStatus().getCode())) {
                     contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE")
                             .ifPresent(contract::setStatus);
@@ -450,13 +479,13 @@ public class ReservationService {
                     PaymentStatus approved = paymentStatusRepository != null ? paymentStatusRepository.findByCodeIgnoreCase("APPROVED").orElse(null) : null;
                     com.drivique.api.model.Currency currency = currencyRepository != null ? currencyRepository.findByCodeIgnoreCaseAndActiveTrue("COP").or(() -> currencyRepository.findAll().stream().findFirst()).orElse(null) : null;
                     if (method != null && approved != null && currency != null) {
-                        Payment p = new Payment(contract, method, approved, "ONLINE", "CONF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10), contract.getBaseAmount() != null ? contract.getBaseAmount() : java.math.BigDecimal.valueOf(398000), currency, null);
+                        Payment p = new Payment(contract, method, approved, "WOMPI", "CONF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10), contract.getBaseAmount() != null ? contract.getBaseAmount() : java.math.BigDecimal.valueOf(398000), currency, null);
                         p.setPaidAt(Instant.now());
                         paymentRepository.saveAndFlush(p);
                     }
                 }
                 rentalContractRepository.saveAndFlush(contract);
-            });
+            }
         }
         
         auditLogRepository.save(new AuditLog(
@@ -515,7 +544,18 @@ public class ReservationService {
 
     @Transactional
     public void reportPaymentFailed(UUID holdId, String userEmail) {
-        Reservation r = reservationRepository.findById(holdId).orElse(null);
+        reportPaymentFailed(holdId != null ? holdId.toString() : null, userEmail);
+    }
+
+    @Transactional
+    public void reportPaymentFailed(String holdIdentifier, String userEmail) {
+        if (holdIdentifier == null || holdIdentifier.isBlank()) return;
+        Reservation r = null;
+        try {
+            r = findReservationByIdOrCode(holdIdentifier);
+        } catch (Exception ignored) {
+            return;
+        }
         if (r == null) return;
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail).orElse(null);
         if (user == null || !r.getCustomer().getId().equals(user.getId())) return;

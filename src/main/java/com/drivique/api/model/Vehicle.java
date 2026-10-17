@@ -159,6 +159,14 @@ public class Vehicle {
     public void setPassengerCapacity(short passengerCapacity) { this.passengerCapacity = passengerCapacity; }
     public void setDoorsCount(Short doorsCount) { this.doorsCount = doorsCount; }
     public void setTrunkCapacityLiters(Integer trunkCapacityLiters) { this.trunkCapacityLiters = trunkCapacityLiters; }
+    public void setModel(String model) { this.model = model; }
+    public void setYear(short year) { this.year = year; }
+    public void setBrand(VehicleBrand brand) { this.brand = brand; }
+    public void setCategory(VehicleCategory category) { this.category = category; }
+    public void setTransmissionType(TransmissionType transmissionType) { this.transmissionType = transmissionType; }
+    public void setFuelType(FuelType fuelType) { this.fuelType = fuelType; }
+    public void setPlate(String plate) { this.plate = plate; }
+    public void setVin(String vin) { this.vin = vin; }
     public void setActive(boolean active) { this.active = active; }
     public java.util.Set<Feature> getFeatures() { return features; }
     public void setFeatures(java.util.Set<Feature> features) { this.features = features != null ? features : new java.util.HashSet<>(); }
