@@ -701,7 +701,7 @@ class ReservationServiceTests {
                 eq(user),
                 eq("EMAIL"),
                 eq("RESERVATION_PENDING_DOCUMENT_REVIEW"),
-                eq("Reserva registrada, documentos en revisión"),
+                eq("Reserva registrada - Documentos en validación"),
                 anyString(),
                 any()
         );
@@ -709,7 +709,7 @@ class ReservationServiceTests {
                 eq(user),
                 eq("IN_APP"),
                 eq("RESERVATION_PENDING_DOCUMENT_REVIEW"),
-                eq("Reserva registrada, documentos en revisión"),
+                eq("Reserva registrada - Documentos en validación"),
                 anyString(),
                 any()
         );

@@ -21,5 +21,6 @@ public record PromotionRequestDTO(
         UUID vehicleId,
         @Pattern(regexp = "ALL|NEW|FREQUENT", message = "Audiencia inválida") String audience,
         Boolean featured,
-        Boolean active
+        Boolean active,
+        UUID branchId
 ) {}

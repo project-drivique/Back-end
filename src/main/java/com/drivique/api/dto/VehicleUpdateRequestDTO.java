@@ -33,5 +33,14 @@ public record VehicleUpdateRequestDTO(
         Short doorsCount,
 
         @Min(value = 0, message = "Trunk capacity must be non-negative")
-        Integer trunkCapacityLiters
+        Integer trunkCapacityLiters,
+
+        String model,
+        Integer year,
+        UUID brandId,
+        UUID categoryId,
+        UUID transmissionTypeId,
+        UUID fuelTypeId,
+        String plate,
+        String vin
 ) {}
