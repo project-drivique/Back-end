@@ -53,7 +53,7 @@ public class ContractSignatureService {
         // Auto-promote DRAFT contract if its reservation is confirmed, pending signature or in progress
         if ("DRAFT".equalsIgnoreCase(contract.getStatus().getCode())) {
             if (contract.getReservation() != null && contract.getReservation().getStatus() != null &&
-                    java.util.List.of("CONFIRMED", "IN_PROGRESS", "PENDING_SIGNATURE").contains(contract.getReservation().getStatus().getCode().toUpperCase())) {
+                    java.util.List.of("CONFIRMED", "IN_PROGRESS", "PENDING_SIGNATURE", "PENDING_PAYMENT").contains(contract.getReservation().getStatus().getCode().toUpperCase())) {
                 contract.setStatus(statuses.findByCodeIgnoreCase("PENDING_SIGNATURE")
                         .orElseThrow(() -> new ResourceNotFoundException("Estado PENDING_SIGNATURE no encontrado")));
                 contract = contracts.saveAndFlush(contract);
@@ -69,12 +69,12 @@ public class ContractSignatureService {
 
         if (!payments.existsByContractIdAndStatusCodeIgnoreCase(id, "APPROVED")) {
             if (contract.getReservation() != null && contract.getReservation().getStatus() != null &&
-                    java.util.List.of("CONFIRMED", "IN_PROGRESS", "PENDING_SIGNATURE").contains(contract.getReservation().getStatus().getCode().toUpperCase())) {
+                    java.util.List.of("CONFIRMED", "IN_PROGRESS", "PENDING_SIGNATURE", "PENDING_PAYMENT").contains(contract.getReservation().getStatus().getCode().toUpperCase())) {
                 PaymentMethod method = paymentMethods != null ? paymentMethods.findByCodeIgnoreCaseAndActiveTrue("CARD").or(() -> paymentMethods.findAll().stream().findFirst()).orElse(null) : null;
                 PaymentStatus approved = paymentStatuses != null ? paymentStatuses.findByCodeIgnoreCase("APPROVED").orElse(null) : null;
                 com.drivique.api.model.Currency currency = currencies != null ? currencies.findByCodeIgnoreCaseAndActiveTrue("COP").or(() -> currencies.findAll().stream().findFirst()).orElse(null) : null;
                 if (method != null && approved != null && currency != null) {
-                    Payment p = new Payment(contract, method, approved, "ONLINE", "CONF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10), contract.getBaseAmount() != null ? contract.getBaseAmount() : java.math.BigDecimal.valueOf(398000), currency, null);
+                    Payment p = new Payment(contract, method, approved, "WOMPI", "CONF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10), contract.getBaseAmount() != null ? contract.getBaseAmount() : java.math.BigDecimal.valueOf(398000), currency, null);
                     p.setPaidAt(Instant.now());
                     payments.saveAndFlush(p);
                 }
