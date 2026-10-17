@@ -128,7 +128,7 @@ class ReservationDocumentReviewServiceTests {
     }
 
     @Test
-    void validateCanBePaid_WhenPendingDocumentReview_ThrowsConflictException() {
+    void validateCanBePaid_WhenPendingDocumentReview_DoesNotThrow() {
         Vehicle vehicle = mock(Vehicle.class);
         InsuranceCoverage insurance = mock(InsuranceCoverage.class);
         MileagePlan plan = mock(MileagePlan.class);
@@ -139,9 +139,7 @@ class ReservationDocumentReviewServiceTests {
                 BigDecimal.valueOf(100), BigDecimal.valueOf(300), null, null, true
         );
 
-        assertThatThrownBy(() -> reviewService.validateCanBePaid(reservation))
-                .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("revisión de documentos");
+        reviewService.validateCanBePaid(reservation);
     }
 
     @Test

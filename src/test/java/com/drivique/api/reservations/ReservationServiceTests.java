@@ -718,9 +718,9 @@ class ReservationServiceTests {
     }
 
     @Test
-    void confirmReservationPayment_WhenStatusPendingDocumentReview_ThrowsConflictException() {
+    void confirmReservationPayment_WhenScheduleConflict_ThrowsConflictException() {
         ReservationStatus docReviewStatus = mock(ReservationStatus.class);
-        when(docReviewStatus.getCode()).thenReturn("PENDING_DOCUMENT_REVIEW");
+        when(docReviewStatus.getCode()).thenReturn("PENDING_SCHEDULE");
 
         Reservation r = new Reservation(
                 "HLD-12345", user, vehicle, docReviewStatus, insurance, mileagePlan, branch,
@@ -728,12 +728,12 @@ class ReservationServiceTests {
                 new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
         );
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
-        doThrow(new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada hasta que los documentos sean aprobados por el encargado de la sucursal."))
+        doThrow(new ConflictException("La reserva fue registrada fuera del horario de atención"))
                 .when(reservationDocumentReviewService).validateCanBePaid(r);
 
         assertThatThrownBy(() -> service.confirmReservationPayment(reservationId, userEmail))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("revisión de documentos");
+                .hasMessageContaining("horario de atención");
     }
 
     @Test

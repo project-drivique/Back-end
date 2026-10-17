@@ -85,9 +85,6 @@ public class ReservationDocumentReviewService {
     public void validateCanBePaid(Reservation reservation) {
         if (reservation != null && reservation.getStatus() != null) {
             String code = reservation.getStatus().getCode();
-            if ("PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(code)) {
-                throw new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser procesada hasta que los documentos sean aprobados por el encargado de la sucursal.");
-            }
             if ("PENDING_SCHEDULE".equalsIgnoreCase(code)) {
                 throw new ConflictException("La reserva fue registrada fuera del horario de atención de la sucursal y se activará automáticamente al inicio de la jornada de atención.");
             }
