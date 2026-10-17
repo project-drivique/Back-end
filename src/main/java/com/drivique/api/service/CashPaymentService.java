@@ -91,9 +91,6 @@ public class CashPaymentService {
 
         User cashier = users.findByEmailIgnoreCaseAndDeletedAtIsNull(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Cajero no encontrado"));
-        reservation.setStatus(reservationStatuses.findByCodeIgnoreCase("CONFIRMED")
-                .orElseThrow(() -> new ResourceNotFoundException("Estado CONFIRMED no encontrado")));
-        reservations.saveAndFlush(reservation);
 
         RentalContract contract = contracts.findByReservationId(reservation.getId()).orElseGet(() -> {
             contractService.generateContract(new GenerateContractRequestDTO(reservation.getId()), email);
@@ -101,10 +98,19 @@ public class CashPaymentService {
                     .orElseThrow(() -> new IllegalStateException("No se pudo generar el contrato para la reserva."));
         });
 
+        boolean contractSigned = false;
         if (contractStatuses != null && contract.getStatus() != null && "DRAFT".equalsIgnoreCase(contract.getStatus().getCode())) {
             contract.setStatus(contractStatuses.findByCodeIgnoreCase("PENDING_SIGNATURE")
                     .orElseThrow(() -> new ResourceNotFoundException("Estado PENDING_SIGNATURE no encontrado")));
+        } else if (contract.getStatus() != null && "ACTIVE".equalsIgnoreCase(contract.getStatus().getCode())) {
+            contractSigned = true;
         }
+
+        String resStatusCode = contractSigned ? "CONFIRMED" : "PENDING_SIGNATURE";
+        reservation.setStatus(reservationStatuses.findByCodeIgnoreCase(resStatusCode)
+                .or(() -> reservationStatuses.findByCodeIgnoreCase("CONFIRMED"))
+                .orElseThrow(() -> new ResourceNotFoundException("Estado de reserva no encontrado")));
+        reservations.saveAndFlush(reservation);
 
         Payment payment = new Payment(contract,
                 methods.findByCodeIgnoreCaseAndActiveTrue("CASH").orElseThrow(() -> new ResourceNotFoundException("Método CASH no encontrado")),

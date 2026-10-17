@@ -146,8 +146,8 @@ public class BranchScheduleNotificationScheduler {
 
         String subject = "¡Ya puedes seguir con tu reserva en Drivique!";
         String message = approvedKyc
-                ? "La sucursal " + branch.getName() + " ya abrió sus puertas. Tus documentos están al día, ya puedes continuar con el pago de tu reserva " + r.getCode() + "."
-                : "La sucursal " + branch.getName() + " ya abrió sus puertas. El encargado de la sucursal estará validando tus documentos para habilitar el pago de tu reserva " + r.getCode() + ".";
+                ? "La sucursal " + branch.getName() + " ya abrió sus puertas. Tus documentos están al día, ya puedes continuar con tu reserva " + r.getCode() + "."
+                : "La sucursal " + branch.getName() + " ya abrió sus puertas. El encargado de la sucursal estará validando tus documentos para tu reserva " + r.getCode() + ".";
 
         try {
             notificationService.sendWithMetadata(r.getCustomer(), "IN_APP", "RESERVATION", subject, message, r.getId(), metadata);

@@ -175,6 +175,9 @@ public class IncidentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El mensaje es obligatorio.");
         }
         boolean owner = isOwner(user, report);
+        if (!owner && isGlobalAdmin(user) && !isBranchStaff(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El Administrador General solo tiene permisos de supervisión y lectura sobre las incidencias operativas.");
+        }
         IncidentResponse saved = responses.saveAndFlush(new IncidentResponse(report, user, message.trim(), null));
         storeFiles(report, saved, user, files);
 
@@ -243,6 +246,9 @@ public class IncidentService {
         User user = current(email);
         IncidentReport report = load(id);
         assertAccess(user, report);
+        if (isGlobalAdmin(user) && !isBranchStaff(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El Administrador General solo tiene permisos de supervisión y lectura sobre las incidencias operativas.");
+        }
         if (isOwner(user, report) && !isStaffUser(user)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permiso para asignar incidencias.");
         }
@@ -278,6 +284,9 @@ public class IncidentService {
     public void deleteOwnInternal(UUID id, String email) {
         User user = current(email);
         IncidentReport report = reports.findById(id).orElseThrow(() -> new ResourceNotFoundException("Incidencia no encontrada"));
+        if (isGlobalAdmin(user) && !isBranchStaff(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El Administrador General solo tiene permisos de supervisión y lectura sobre las incidencias operativas.");
+        }
         if (!isOwner(user, report) || !isStaffUser(user)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Los reportes creados por los clientes no pueden ser eliminados por control de auditoría.");
         }
@@ -299,6 +308,14 @@ public class IncidentService {
 
     private boolean isStaffUser(User user) {
         return user.getRoles().stream().anyMatch(r -> UNRESTRICTED_ROLES.contains(r.getCode()) || BRANCH_ROLES.contains(r.getCode()));
+    }
+
+    private boolean isGlobalAdmin(User user) {
+        return user.getRoles().stream().anyMatch(r -> "ADMIN".equals(r.getCode()) || "SUPER_ADMIN".equals(r.getCode()));
+    }
+
+    private boolean isBranchStaff(User user) {
+        return user.getRoles().stream().anyMatch(r -> "BRANCH_ADMIN".equals(r.getCode()) || "EMPLOYEE".equals(r.getCode()));
     }
 
     /** null = sin acceso de personal; vacío = todas las sedes; valor = solo esa sede. */
@@ -325,6 +342,9 @@ public class IncidentService {
     }
 
     private void assertCanOperate(User user, IncidentReport report) {
+        if (isGlobalAdmin(user) && !isBranchStaff(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El Administrador General solo tiene permisos de supervisión y lectura sobre las incidencias operativas.");
+        }
         if (!canOperate(user, report)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permiso para atender esta incidencia.");
         }
@@ -450,6 +470,9 @@ public class IncidentService {
         boolean open = "OPEN".equals(r.getStatus()) || "IN_REVIEW".equals(r.getStatus());
         Vehicle v = r.getVehicle();
         Reservation res = r.getReservation();
+        boolean isReadOnlySupervisor = staffView && (isGlobalAdmin(viewer) && !isBranchStaff(viewer));
+        List<String> allowedTransitions = isReadOnlySupervisor ? List.of()
+                : IncidentWorkflow.allowedTransitions(r.getStatus(), staffView);
         return new IncidentDTO(r.getId(), r.getIncidentCode(), r.getCategory(), r.getStatus(), r.getPriority(), r.getSubject(),
                 r.getDescription(), v != null ? v.getId() : null, v != null ? v.getPlate() : null, v != null ? v.getModel() : null,
                 res != null ? res.getId() : null, res != null ? res.getCode() : null,
@@ -459,6 +482,6 @@ public class IncidentService {
                 r.getAssignedTo() != null ? r.getAssignedTo().getId() : null, r.getAssignedTo() != null ? r.getAssignedTo().getFullName() : null,
                 r.getSlaDueAt(), open && r.getSlaDueAt() != null && Instant.now().isAfter(r.getSlaDueAt()),
                 r.getCreatedAt(), r.getUpdatedAt(), r.getResolvedAt(), r.getClosedAt(),
-                IncidentWorkflow.allowedTransitions(r.getStatus(), staffView), initial, timeline);
+                allowedTransitions, initial, timeline);
     }
 }

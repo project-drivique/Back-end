@@ -74,16 +74,29 @@ public class UserService {
         return mapToDetailDTO(user);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.repository.DocumentTypeRepository documentTypeRepository;
+
     @Transactional
     public UserProfileDetailResponseDTO updateProfile(String email, UpdateUserProfileRequestDTO request) {
         User user = findUserByEmail(email);
 
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        if (request.phone() != null) user.setPhone(request.phone());
+        if (request.phone() != null) user.setPhone(request.phone().isBlank() ? null : request.phone().trim());
         if (request.birthDate() != null) user.setBirthDate(request.birthDate());
         if (request.nationalityId() != null) user.setNationalityId(request.nationalityId());
         if (request.address() != null) user.setAddress(request.address().isBlank() ? null : request.address().trim());
+
+        if (request.documentNumber() != null && !request.documentNumber().isBlank()) {
+            user.setDocumentNumber(request.documentNumber().trim());
+        }
+        if (request.documentTypeId() != null) {
+            user.setDocumentTypeId(request.documentTypeId());
+        } else if (request.documentTypeCode() != null && !request.documentTypeCode().isBlank() && documentTypeRepository != null) {
+            documentTypeRepository.findByCode(request.documentTypeCode().trim().toUpperCase())
+                    .ifPresent(dt -> user.setDocumentTypeId(dt.getId()));
+        }
 
         boolean isComplete = user.getFirstName() != null && !user.getFirstName().isBlank()
                 && user.getLastName() != null && !user.getLastName().isBlank()

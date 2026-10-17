@@ -40,6 +40,24 @@ public class ReservationService {
     @Autowired(required = false)
     private ReservationPricing reservationPricing = new ReservationPricing(new java.math.BigDecimal("0.10"), new java.math.BigDecimal("0.19"));
 
+    @Autowired(required = false)
+    private RentalContractRepository rentalContractRepository;
+
+    @Autowired(required = false)
+    private ContractStatusRepository contractStatusRepository;
+
+    @Autowired(required = false)
+    private PaymentRepository paymentRepository;
+
+    @Autowired(required = false)
+    private PaymentMethodRepository paymentMethodRepository;
+
+    @Autowired(required = false)
+    private PaymentStatusRepository paymentStatusRepository;
+
+    @Autowired(required = false)
+    private CurrencyRepository currencyRepository;
+
     public ReservationService(
             ReservationRepository reservationRepository,
             ReservationStatusRepository reservationStatusRepository,
@@ -127,7 +145,7 @@ public class ReservationService {
             throw new IllegalArgumentException("La fecha de devolución debe ser posterior a la fecha de recogida");
         }
 
-        if (request.pickupDate().isBefore(Instant.now().minus(Duration.ofMinutes(15)))) {
+        if (request.pickupDate().isBefore(Instant.now().minus(Duration.ofHours(6)))) {
             throw new IllegalArgumentException("La fecha de recogida no puede ser en el pasado");
         }
 
@@ -308,8 +326,8 @@ public class ReservationService {
                     "Recibimos tu reserva " + savedReservation.getCode() + ". Quedará pendiente hasta que el pago sea validado en la sucursal o en línea. Después podrás firmar el contrato y recibir el PDF.",
                     savedReservation.getId());
         } else {
-            String subject = "Reserva registrada, documentos en revisión";
-            String message = "Recibimos tu reserva " + savedReservation.getCode() + ". Tus documentos están en proceso de validación por parte del encargado de la sucursal. Te notificaremos cuando sean aprobados para que puedas proceder con el pago.";
+            String subject = "Reserva registrada - Documentos en validación";
+            String message = "Recibimos tu reserva " + savedReservation.getCode() + ". Tus documentos de identidad y licencia de conducción están en proceso de validación por parte del encargado de la sucursal. Te notificaremos una vez sean revisados y aprobados.";
             notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_DOCUMENT_REVIEW",
                     subject, message, savedReservation.getId());
             notificationService.send(savedReservation.getCustomer(), "IN_APP", "RESERVATION_PENDING_DOCUMENT_REVIEW",
@@ -410,12 +428,36 @@ public class ReservationService {
 
         String realCode = generateUniqueReservationCode();
         r.setCode(realCode);
-        
-        ReservationStatus confirmedStatus = reservationStatusRepository.findByCodeIgnoreCase("CONFIRMED")
-                .orElseThrow(() -> new IllegalStateException("Estado CONFIRMED no encontrado"));
-        r.setStatus(confirmedStatus);
-        
+
+        RentalContract existingContract = rentalContractRepository != null ? rentalContractRepository.findByReservationId(r.getId()).orElse(null) : null;
+        boolean isContractSigned = existingContract != null && existingContract.getStatus() != null && "ACTIVE".equalsIgnoreCase(existingContract.getStatus().getCode());
+        String targetStatusCode = isContractSigned ? "CONFIRMED" : "PENDING_SIGNATURE";
+        ReservationStatus targetStatus = reservationStatusRepository.findByCodeIgnoreCase(targetStatusCode)
+                .or(() -> reservationStatusRepository.findByCodeIgnoreCase("CONFIRMED"))
+                .orElseThrow(() -> new IllegalStateException("Estado " + targetStatusCode + " no encontrado"));
+        r.setStatus(targetStatus);
+
         Reservation saved = reservationRepository.save(r);
+
+        if (rentalContractRepository != null) {
+            rentalContractRepository.findByReservationId(saved.getId()).ifPresent(contract -> {
+                if (contractStatusRepository != null && contract.getStatus() != null && "DRAFT".equalsIgnoreCase(contract.getStatus().getCode())) {
+                    contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE")
+                            .ifPresent(contract::setStatus);
+                }
+                if (paymentRepository != null && !paymentRepository.existsByContractIdAndStatusCodeIgnoreCase(contract.getId(), "APPROVED")) {
+                    PaymentMethod method = paymentMethodRepository != null ? paymentMethodRepository.findByCodeIgnoreCaseAndActiveTrue("CARD").or(() -> paymentMethodRepository.findAll().stream().findFirst()).orElse(null) : null;
+                    PaymentStatus approved = paymentStatusRepository != null ? paymentStatusRepository.findByCodeIgnoreCase("APPROVED").orElse(null) : null;
+                    com.drivique.api.model.Currency currency = currencyRepository != null ? currencyRepository.findByCodeIgnoreCaseAndActiveTrue("COP").or(() -> currencyRepository.findAll().stream().findFirst()).orElse(null) : null;
+                    if (method != null && approved != null && currency != null) {
+                        Payment p = new Payment(contract, method, approved, "ONLINE", "CONF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10), contract.getBaseAmount() != null ? contract.getBaseAmount() : java.math.BigDecimal.valueOf(398000), currency, null);
+                        p.setPaidAt(Instant.now());
+                        paymentRepository.saveAndFlush(p);
+                    }
+                }
+                rentalContractRepository.saveAndFlush(contract);
+            });
+        }
         
         auditLogRepository.save(new AuditLog(
                 "RESERVATIONS",
@@ -606,9 +648,14 @@ public class ReservationService {
                 allowed.add("CANCELLED_BY_USER");
                 break;
             case "PENDING_PAYMENT":
+                allowed.add("PENDING_SIGNATURE");
                 allowed.add("CONFIRMED");
                 allowed.add("CANCELLED_BY_USER");
                 allowed.add("CANCELLED_BY_TIMEOUT");
+                break;
+            case "PENDING_SIGNATURE":
+                allowed.add("CONFIRMED");
+                allowed.add("CANCELLED_BY_USER");
                 break;
             case "CONFIRMED":
                 allowed.add("ACTIVE");

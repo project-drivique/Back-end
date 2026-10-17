@@ -67,7 +67,7 @@ public class RbacService {
         return new UserRolesResponseDTO(saved.getId(), saved.getEmail(), roleCodes);
     }
 
-    private static final Set<String> SYSTEM_ROLES = Set.of("SUPER_ADMIN", "BRANCH_ADMIN", "EMPLOYEE", "CUSTOMER");
+    private static final Set<String> SYSTEM_ROLES = Set.of("SUPER_ADMIN", "BRANCH_ADMIN", "CUSTOMER");
 
     @Transactional
     @com.drivique.api.config.Auditable(domain = "IAM", entity = "Role", action = "INSERT", description = "Creación de rol")
