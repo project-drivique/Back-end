@@ -223,7 +223,7 @@ public class AdminVehicleService {
             vehicle.setModel(input.model().strip());
         }
         if (input.year() != null) {
-            vehicle.setYear(input.year());
+            vehicle.setYear(input.year().shortValue());
         }
         if (input.brandId() != null) {
             VehicleBrand brand = brands.findById(input.brandId())

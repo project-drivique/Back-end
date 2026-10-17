@@ -441,8 +441,6 @@ public class ReservationService {
 
         if (reservationDocumentReviewService != null) {
             reservationDocumentReviewService.validateCanBePaid(r);
-        } else if (r.getStatus() != null && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(r.getStatus().getCode())) {
-            throw new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada hasta que los documentos sean aprobados por el encargado de la sucursal.");
         }
 
         if (r.getCode().startsWith("HLD-")) {
