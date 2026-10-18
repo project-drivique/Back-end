@@ -115,6 +115,43 @@ class ReturnAndPromotionNoticesTests extends DatabaseHealthTestSupport {
     }
 
     @Test
+    void customerAndStaffAreNotifiedTheMomentTheReservationExpiresAndOnlyOnce() {
+        reservation("RES-EXPIRES-NOW", Instant.now().minus(5, ChronoUnit.DAYS), Instant.now().minusSeconds(30));
+
+        assertThat(reminders.sendOverdueNotices()).isEqualTo(3);
+        assertThat(count("subject = 'Tu alquiler ya venció' AND channel = 'IN_APP'")).isEqualTo(1);
+        assertThat(count("subject = 'Tu alquiler ya venció' AND channel = 'EMAIL'")).isEqualTo(1);
+        assertThat(count("subject = 'Reserva vencida sin devolver'")).isEqualTo(1);
+
+        // La tarea corre cada minuto: el segundo pase no crea avisos repetidos
+        reminders.sendOverdueNotices();
+        assertThat(count("subject = 'Tu alquiler ya venció'")).isEqualTo(2);
+        assertThat(count("subject = 'Reserva vencida sin devolver'")).isEqualTo(1);
+    }
+
+    @Test
+    void reservationNotYetExpiredIsNotNotifiedByTheExactTimeJob() {
+        reservation("RES-STILL-OPEN", Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.HOURS));
+
+        assertThat(reminders.sendOverdueNotices()).isZero();
+        assertThat(count("subject = 'Tu alquiler ya venció'")).isZero();
+    }
+
+    @Test
+    void theDailyJobDoesNotRepeatTheNoticeOfAReservationThatExpiredToday() {
+        Instant startOfToday = LocalDate.now(ZoneId.of("America/Bogota")).atStartOfDay(ZoneId.of("America/Bogota")).toInstant();
+        Instant expiredEarlierToday = startOfToday.plusSeconds(1);
+        org.junit.jupiter.api.Assumptions.assumeTrue(expiredEarlierToday.isBefore(Instant.now()));
+        reservation("RES-EXPIRED-TODAY", startOfToday.minus(3, ChronoUnit.DAYS), expiredEarlierToday);
+
+        reminders.sendOverdueNotices();
+        reminders.sendReminders();
+
+        assertThat(count("subject = 'Tu alquiler ya venció'")).isEqualTo(2);
+        assertThat(count("subject = 'Reserva vencida sin devolver'")).isEqualTo(1);
+    }
+
+    @Test
     void reservationsFarFromTheirReturnAreNotNotified() {
         reservation("RES-LATER", Instant.now(), Instant.now().plus(10, ChronoUnit.DAYS));
         assertThat(reminders.sendReminders()).isZero();
