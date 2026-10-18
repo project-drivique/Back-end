@@ -20,6 +20,19 @@ import java.util.List;
 
 @Service
 public class CashPaymentService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DeliveryNotificationService deliveryNotices;
+
+    private void avisarDomicilioPagado(com.drivique.api.model.Reservation reservation) {
+        try {
+            if (deliveryNotices != null) {
+                deliveryNotices.homeDeliveryPaid(reservation);
+            }
+        } catch (RuntimeException ex) {
+            // el aviso al encargado no debe impedir confirmar el pago
+        }
+    }
+
     private final ReservationRepository reservations;
     private final RentalContractRepository contracts;
     private final PaymentRepository payments;
@@ -111,6 +124,7 @@ public class CashPaymentService {
                 .or(() -> reservationStatuses.findByCodeIgnoreCase("CONFIRMED"))
                 .orElseThrow(() -> new ResourceNotFoundException("Estado de reserva no encontrado")));
         reservations.saveAndFlush(reservation);
+        avisarDomicilioPagado(reservation);
 
         Payment payment = new Payment(contract,
                 methods.findByCodeIgnoreCaseAndActiveTrue("CASH").orElseThrow(() -> new ResourceNotFoundException("Método CASH no encontrado")),
@@ -137,7 +151,9 @@ public class CashPaymentService {
                             "bookingCode", reservation.getCode(),
                             "amount", saved.getAmount(),
                             "currency", "COP",
-                            "paymentMethod", "EFECTIVO"
+                            "paymentMethod", "EFECTIVO",
+                            "actionPath", "/reservas",
+                            "actionLabel", "Continuar y Firmar Contrato"
                     ),
                     "PAY-" + saved.getId()
             );
