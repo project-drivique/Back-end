@@ -15,6 +15,13 @@ import java.util.UUID;
 
 @Component
 public class EmailNotificationProvider implements NotificationChannelProvider {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    private String brand(String html) {
+        return brandTheme == null ? html : brandTheme.apply(html);
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(EmailNotificationProvider.class);
 
@@ -76,6 +83,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                 String currency = null;
 
                 String paymentMethod = null;
+                boolean reviewInvite = false;
                 if (metadata != null && !metadata.isBlank()) {
                     try {
                         com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(metadata);
@@ -104,6 +112,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                         if (root.hasNonNull("paymentMethod")) {
                             paymentMethod = root.get("paymentMethod").asText();
                         }
+                        reviewInvite = root.path("reviewInvite").asBoolean(false);
                     } catch (Exception e) {
                         LOG.debug("No se pudo parsear metadata en EmailNotificationProvider: {}", e.getMessage());
                     }
@@ -220,6 +229,16 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     );
                 }
 
+                if (reviewInvite) {
+                    receiptCardHtml = receiptCardHtml + """
+                        <div style="margin: 18px 0 4px; padding: 20px; text-align: center; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 14px;">
+                          <div style="font-size: 34px; letter-spacing: 6px; color: #f59e0b; line-height: 1;">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+                          <p style="margin: 10px 0 0; font-size: 15px; font-weight: 800; color: #92400e;">¿Cómo estuvo tu viaje?</p>
+                          <p style="margin: 6px 0 0; font-size: 13px; color: #a16207; line-height: 1.5;">Califica el vehículo, deja tu reseña y cuéntanos tu experiencia con la sucursal.</p>
+                        </div>
+                        """;
+                }
+
                 String actionButtonHtml = "";
                 String textMessage = safeMessage;
                 if (actionUrl != null && !actionUrl.isBlank()) {
@@ -266,7 +285,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                         .replace("{{RECEIPT_CARD}}", receiptCardHtml)
                         .replace("{{ACTION_BUTTON}}", actionButtonHtml);
 
-                helper.setText(textMessage, html);
+                helper.setText(textMessage, brand(html));
                 mailSender.send(mimeMessage);
 
                 String messageId = "mail-" + UUID.randomUUID();

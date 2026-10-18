@@ -15,6 +15,13 @@ import org.springframework.stereotype.Service;
 /** Envía al cliente su contrato firmado en PDF, protegido con su número de documento. */
 @Service
 public class ContractEmailService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    private String brand(String html) {
+        return brandTheme == null ? html : brandTheme.apply(html);
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(ContractEmailService.class);
 
@@ -80,7 +87,7 @@ public class ContractEmailService {
                     </body></html>
                     """.replace("{{NAME}}", escape(delivery.firstName())).replace("{{NUMBER}}", escape(number))
                     .replace("{{RESERVATION}}", escape(reservationCode)).replace("{{BASE}}", base);
-            helper.setText("Hola " + delivery.firstName() + ", adjuntamos tu contrato " + number + " de la reserva " + reservationCode + ".", html);
+            helper.setText("Hola " + delivery.firstName() + ", adjuntamos tu contrato " + number + " de la reserva " + reservationCode + ".", brand(html));
             helper.addAttachment(number + ".pdf", new org.springframework.core.io.ByteArrayResource(protectedPdf), "application/pdf");
             sender.send(message);
             LOG.info("Contrato {} enviado por correo a {}", number, delivery.email());
