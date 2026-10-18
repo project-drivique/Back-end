@@ -105,13 +105,7 @@ public class ReservationDocumentReviewService {
             if (r.getStatus() != null && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(r.getStatus().getCode())) {
                 r.setStatus(pendingPaymentStatus);
 
-                if (r.getCashPaymentBranch() != null || r.getCashPaymentCode() != null) {
-                    Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
-                    Instant expiresAt = (r.getPickupDate() != null && standard72h.isAfter(r.getPickupDate()))
-                            ? r.getPickupDate()
-                            : standard72h;
-                    r.setCashPaymentExpiresAt(expiresAt);
-                }
+                r.setCashPaymentExpiresAt(ReservationExpirationService.paymentDeadline(Instant.now(), r.getPickupDate()));
 
                 Reservation saved = reservationRepository.save(r);
 

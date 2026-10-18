@@ -610,11 +610,16 @@ class ReservationServiceTests {
                 true
         );
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        // La confirmación ya no regresa antes de tiempo: una reserva sin contrato firmado pasa a PENDING_SIGNATURE
+        when(reservationStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE"))
+                .thenReturn(Optional.of(new ReservationStatus("PENDING_SIGNATURE", "Pending signature", true)));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ReservationResponseDTO response = service.confirmReservationPayment(reservationId, userEmail);
 
         assertThat(response).isNotNull();
         assertThat(response.code()).isEqualTo("RES-2026-0001");
+        assertThat(response.status()).isEqualTo("PENDING_SIGNATURE");
     }
 
     @Test
@@ -672,7 +677,7 @@ class ReservationServiceTests {
     }
 
     @Test
-    void createReservation_WhenDocumentsNotApproved_SetsStatusPendingDocumentReviewAndDoesNotExpireCash() {
+    void createReservation_WhenDocumentsNotApproved_SetsStatusPendingDocumentReviewWithPaymentWindow() {
         when(reservationDocumentReviewService.hasApprovedRequiredDocuments(user.getId())).thenReturn(false);
 
         ReservationStatus docReviewStatus = mock(ReservationStatus.class);
@@ -695,7 +700,8 @@ class ReservationServiceTests {
         assertThat(response).isNotNull();
         assertThat(response.status()).isEqualTo("PENDING_DOCUMENT_REVIEW");
         assertThat(response.cashPaymentCode()).isNotNull();
-        assertThat(response.cashPaymentExpiresAt()).isNull();
+        // toda reserva pendiente vence con el mismo plazo, para no bloquear fechas para siempre
+        assertThat(response.cashPaymentExpiresAt()).isNotNull();
 
         verify(notificationService).send(
                 eq(user),
