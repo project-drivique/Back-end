@@ -477,7 +477,7 @@ public class IncidentService {
                 r.getDescription(), v != null ? v.getId() : null, v != null ? v.getPlate() : null, v != null ? v.getModel() : null,
                 res != null ? res.getId() : null, res != null ? res.getCode() : null,
                 r.getBranch() != null ? r.getBranch().getId() : null, r.getBranch() != null ? r.getBranch().getName() : null,
-                r.getReporter().getId(), r.getReporter().getFullName(), r.getReporter().getEmail(),
+                r.getReporter().getId(), r.getReporter().getFullName(), r.getReporter().getEmail(), r.getReporter().getPhone(),
                 isStaffUser(r.getReporter()),
                 r.getAssignedTo() != null ? r.getAssignedTo().getId() : null, r.getAssignedTo() != null ? r.getAssignedTo().getFullName() : null,
                 r.getSlaDueAt(), open && r.getSlaDueAt() != null && Instant.now().isAfter(r.getSlaDueAt()),

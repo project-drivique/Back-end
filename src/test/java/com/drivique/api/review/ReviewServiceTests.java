@@ -60,6 +60,45 @@ class ReviewServiceTests {
         assertTrue(result.canReviewVehicle());
         assertTrue(result.canReviewBranch());
         assertNull(result.vehicleReview());
+        assertEquals(fixture.branchId, result.branchId());
+        assertEquals("Drivique Medellín Aeropuerto", result.branchName());
+    }
+
+    @Test
+    void existingBranchReviewIsReturnedWithItsCommentAndStars() {
+        Fixture fixture = completedFixture();
+        when(ratings.findByReservationId(fixture.reservationId)).thenReturn(Optional.empty());
+        Reservation reservedFor = reservations.findById(fixture.reservationId).orElseThrow();
+        BranchReview published = mock(BranchReview.class);
+        when(published.getId()).thenReturn(UUID.randomUUID());
+        when(published.getUser()).thenReturn(fixture.user);
+        when(published.getRating()).thenReturn((short) 4);
+        when(published.getComment()).thenReturn("Muy buena atención");
+        when(published.getReservation()).thenReturn(reservedFor);
+        when(branchReviews.findByBranchIdOrderByCreatedAtDesc(fixture.branchId)).thenReturn(List.of(published));
+        when(branchReviews.findFirstByReservationIdOrderByCreatedAtDesc(fixture.reservationId)).thenReturn(Optional.of(published));
+
+        ReviewEligibilityResponseDTO result = service.reviewEligibility(fixture.reservationId, fixture.email);
+
+        assertFalse(result.canReviewBranch());
+        assertNotNull(result.branchReview());
+        assertEquals("Muy buena atención", result.branchReview().comment());
+        assertEquals(4, result.branchReview().rating());
+    }
+
+    @Test
+    void inactiveBranchIsNotOfferedForReview() {
+        Fixture fixture = completedFixture();
+        when(ratings.findByReservationId(fixture.reservationId)).thenReturn(Optional.empty());
+        when(branchReviews.findByBranchIdOrderByCreatedAtDesc(fixture.branchId)).thenReturn(List.of());
+        Reservation reservation = reservations.findById(fixture.reservationId).orElseThrow();
+        when(reservation.getVehicle().getCurrentBranch().isActive()).thenReturn(false);
+
+        ReviewEligibilityResponseDTO result = service.reviewEligibility(fixture.reservationId, fixture.email);
+
+        assertTrue(result.canReviewVehicle());
+        assertFalse(result.canReviewBranch());
+        assertNull(result.branchId());
     }
 
     @Test
@@ -129,6 +168,8 @@ class ReviewServiceTests {
         when(vehicle.isActive()).thenReturn(true);
         when(vehicle.getCurrentBranch()).thenReturn(branch);
         when(branch.getId()).thenReturn(branchId);
+        when(branch.isActive()).thenReturn(true);
+        when(branch.getName()).thenReturn("Drivique Medellín Aeropuerto");
         when(reservation.getDeliveryPoints()).thenReturn(List.of());
         when(reservations.findById(reservationId)).thenReturn(Optional.of(reservation));
         when(users.findByEmailIgnoreCaseAndDeletedAtIsNull(email)).thenReturn(Optional.of(user));

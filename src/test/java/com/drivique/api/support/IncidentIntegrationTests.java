@@ -122,6 +122,19 @@ class IncidentIntegrationTests extends DatabaseHealthTestSupport {
     }
 
     @Test
+    void staffSeesThePhoneRegisteredInTheReportersAccount() throws Exception {
+        User reporter = users.findByEmailIgnoreCaseAndDeletedAtIsNull("cliente1@drivique.com").orElseThrow();
+        reporter.setPhone("3223163531");
+        users.save(reporter);
+        String id = createIncident("Consulta general", "Necesito información");
+
+        mvc.perform(get("/api/v1/incidents/" + id).contextPath("/api").header("Authorization", "Bearer " + employeeAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reporterPhone").value("3223163531"))
+                .andExpect(jsonPath("$.reporterEmail").value("cliente1@drivique.com"));
+    }
+
+    @Test
     void onlyTheOwnerAndStaffOfTheBranchCanSeeAnIncident() throws Exception {
         String id = createIncident("Consulta general", "Necesito información");
 
