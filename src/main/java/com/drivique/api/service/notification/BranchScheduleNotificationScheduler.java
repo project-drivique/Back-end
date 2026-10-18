@@ -87,12 +87,8 @@ public class BranchScheduleNotificationScheduler {
                     ReservationStatus newStatus = approved ? pendingPayment : pendingKyc;
                     r.setStatus(newStatus);
 
-                    if (approved && (r.getCashPaymentBranch() != null || r.getCashPaymentCode() != null)) {
-                        Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
-                        Instant expiresAt = (r.getPickupDate() != null && standard72h.isAfter(r.getPickupDate()))
-                                ? r.getPickupDate()
-                                : standard72h;
-                        r.setCashPaymentExpiresAt(expiresAt);
+                    if (approved) {
+                        r.setCashPaymentExpiresAt(com.drivique.api.service.ReservationExpirationService.paymentDeadline(Instant.now(), r.getPickupDate()));
                     }
 
                     Reservation saved = reservationRepository.save(r);

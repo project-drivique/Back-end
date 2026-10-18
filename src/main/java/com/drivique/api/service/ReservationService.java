@@ -19,6 +19,19 @@ import java.util.*;
 
 @Service
 public class ReservationService {
+    @Autowired(required = false)
+    private DeliveryNotificationService deliveryNotices;
+
+    private void avisarDomicilioPagado(Reservation reservation) {
+        try {
+            if (deliveryNotices != null) {
+                deliveryNotices.homeDeliveryPaid(reservation);
+            }
+        } catch (RuntimeException ex) {
+            // el aviso al encargado no debe impedir confirmar el pago
+        }
+    }
+
 
     private final ReservationRepository reservationRepository;
     private final ReservationStatusRepository reservationStatusRepository;
@@ -286,11 +299,12 @@ public class ReservationService {
         Instant cashPaymentExpiresAt = null;
         if (cashBranch != null || request.cashPaymentBranchId() != null) {
             cashPaymentCode = "CASH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-            if ("PENDING_PAYMENT".equals(initialStatusCode)) {
-                Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
-                cashPaymentExpiresAt = standard72h.isBefore(request.pickupDate()) ? standard72h : request.pickupDate();
-            }
         }
+        // El plazo de pago (el mismo del efectivo) corre cuando la reserva está lista para pagar; si espera a la sucursal
+        // (horario o documentos) retiene las fechas como máximo hasta la hora de retiro
+        cashPaymentExpiresAt = "PENDING_PAYMENT".equals(initialStatusCode)
+                ? ReservationExpirationService.paymentDeadline(Instant.now(), request.pickupDate())
+                : ReservationExpirationService.waitingDeadline(Instant.now(), request.pickupDate());
 
         String reservationCode = "HLD-" + UUID.randomUUID().toString().substring(0, 15).toUpperCase();
 
@@ -458,6 +472,7 @@ public class ReservationService {
         r.setStatus(targetStatus);
 
         Reservation saved = reservationRepository.save(r);
+        avisarDomicilioPagado(saved);
 
         if (rentalContractRepository != null) {
             RentalContract contract = rentalContractRepository.findByReservationId(saved.getId()).orElse(null);
@@ -528,8 +543,8 @@ public class ReservationService {
                             "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "398000",
                             "currency", "COP",
                             "status", "APPROVED",
-                            "actionPath", "/contrato/" + saved.getId(),
-                            "actionLabel", "Continuar y Firmar mi Contrato"
+                            "actionPath", "/reservas",
+                            "actionLabel", "Continuar y Firmar Contrato"
                     ),
                     "PAY-CONF-" + saved.getId()
             );
