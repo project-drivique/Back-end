@@ -10,6 +10,13 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class AuthEmailService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    private String brand(String html) {
+        return brandTheme == null ? html : brandTheme.apply(html);
+    }
+
     private final ObjectProvider<JavaMailSender> sender;
     private final String from;
 
@@ -74,7 +81,7 @@ public class AuthEmailService {
                 """.replace("{{PURPOSE}}", purpose).replace("{{CODE}}", code);
 
             String text = "Tu código de seguridad Drivique para " + purpose + " es: " + code + ". Vence en 15 minutos.";
-            helper.setText(text, html);
+            helper.setText(text, brand(html));
 
             mailSender.send(mimeMessage);
             LOG.info("Correo con código OTP enviado exitosamente a {}", email);
