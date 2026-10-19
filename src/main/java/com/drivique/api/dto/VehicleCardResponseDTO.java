@@ -28,5 +28,7 @@ public record VehicleCardResponseDTO(
         java.util.List<String> imageUrls,
         boolean isFeatured,
         boolean isActive,
-        boolean allowsReservation
+        boolean allowsReservation,
+        Double averageRating,
+        long reviewCount
 ) {}

@@ -73,6 +73,13 @@ public class Vehicle {
     @Column(name = "main_image_url", length = 2048)
     private String mainImageUrl;
 
+    // Promedio y cantidad de calificaciones del vehículo, calculados por la base de datos al cargarlo.
+    @org.hibernate.annotations.Formula("(select avg(r.rating) from rental.vehicle_ratings r where r.vehicle_id = id)")
+    private Double averageRating;
+
+    @org.hibernate.annotations.Formula("(select count(*) from rental.vehicle_ratings r where r.vehicle_id = id)")
+    private Long reviewCount;
+
     @OneToMany(mappedBy = "vehicle")
     @OrderBy("sortOrder ASC")
     @BatchSize(size = 50)
@@ -155,6 +162,8 @@ public class Vehicle {
     public BigDecimal getDailyRate() { return dailyRate; }
     public String getMainImageUrl() { return mainImageUrl; }
     public List<VehicleImage> getImages() { return images; }
+    public Double getAverageRating() { return averageRating; }
+    public Long getReviewCount() { return reviewCount; }
     public boolean isFeatured() { return featured; }
     public boolean isActive() { return active; }
 

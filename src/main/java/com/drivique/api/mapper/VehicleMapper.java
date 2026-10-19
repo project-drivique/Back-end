@@ -34,7 +34,9 @@ public final class VehicleMapper {
                 galleryUrls(v),
                 v.isFeatured(),
                 v.isActive(),
-                v.getStatus() != null && v.getStatus().allowsReservation()
+                v.getStatus() != null && v.getStatus().allowsReservation(),
+                v.getAverageRating() == null ? null : Math.round(v.getAverageRating() * 10.0) / 10.0,
+                v.getReviewCount() == null ? 0L : v.getReviewCount()
         );
     }
 
