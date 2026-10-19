@@ -2,7 +2,10 @@ package com.drivique.api.model;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import org.hibernate.annotations.BatchSize;
 import java.util.UUID;
 
 @Entity
@@ -69,6 +72,11 @@ public class Vehicle {
 
     @Column(name = "main_image_url", length = 2048)
     private String mainImageUrl;
+
+    @OneToMany(mappedBy = "vehicle")
+    @OrderBy("sortOrder ASC")
+    @BatchSize(size = 50)
+    private List<VehicleImage> images = new ArrayList<>();
 
     @Column(name = "is_featured", nullable = false)
     private boolean featured;
@@ -146,6 +154,7 @@ public class Vehicle {
     public int getMileage() { return mileage; }
     public BigDecimal getDailyRate() { return dailyRate; }
     public String getMainImageUrl() { return mainImageUrl; }
+    public List<VehicleImage> getImages() { return images; }
     public boolean isFeatured() { return featured; }
     public boolean isActive() { return active; }
 
