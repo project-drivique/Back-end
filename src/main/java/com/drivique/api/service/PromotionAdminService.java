@@ -27,7 +27,13 @@ import java.util.UUID;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import com.drivique.api.model.Branch;
+import com.drivique.api.model.User;
+import com.drivique.api.repository.BranchRepository;
+import com.drivique.api.repository.BranchUserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Gestión (admin) y publicación (cliente) de promociones y cupones. */
 @Service
@@ -53,9 +59,53 @@ public class PromotionAdminService {
         this.users = users;
     }
 
+    @Autowired(required = false)
+    private BranchRepository branchRepository;
+
+    @Autowired(required = false)
+    private BranchUserRepository branchUserRepository;
+
     @Transactional(readOnly = true)
     public List<PromotionResponseDTO> listAll() {
         return promotions.findAll().stream()
+                .sorted(Comparator.comparing(Promotion::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(this::toDto)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PromotionResponseDTO> listForUser(String email) {
+        if (email == null) {
+            return listAll();
+        }
+        User user = users.findByEmailIgnoreCaseAndDeletedAtIsNull(email).orElse(null);
+        if (user == null) {
+            return listAll();
+        }
+        boolean isSuperAdmin = user.getRoles().stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getCode()) || "ADMIN".equalsIgnoreCase(r.getCode()));
+        if (isSuperAdmin) {
+            return listAll();
+        }
+
+        // Branch manager: filter strictly to their branch's promotions!
+        UUID branchId = branchUserRepository != null
+                ? branchUserRepository.findByUserId(user.getId()).map(com.drivique.api.model.BranchUser::getBranchId).orElse(null)
+                : null;
+
+        if (branchId == null) {
+            return List.of();
+        }
+
+        return promotions.findAll().stream()
+                .filter(p -> {
+                    if (p.getBranch() != null && branchId.equals(p.getBranch().getId())) {
+                        return true;
+                    }
+                    if (p.getVehicle() != null && p.getVehicle().getCurrentBranch() != null && branchId.equals(p.getVehicle().getCurrentBranch().getId())) {
+                        return true;
+                    }
+                    return false;
+                })
                 .sorted(Comparator.comparing(Promotion::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(this::toDto)
                 .toList();
@@ -79,6 +129,14 @@ public class PromotionAdminService {
     @CacheEvict(value = "featuredPromotions", allEntries = true)
     @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "INSERT", description = "Creación de promoción o cupón")
     public PromotionResponseDTO create(PromotionRequestDTO request) {
+        return create(request, null);
+    }
+
+    @Transactional
+    @CacheEvict(value = "featuredPromotions", allEntries = true)
+    @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "INSERT", description = "Creación de promoción o cupón")
+    public PromotionResponseDTO create(PromotionRequestDTO request, String email) {
+        assertCanManagePromotions(email);
         String code = request.code().strip().toUpperCase();
         if (promotions.findByCodeIgnoreCase(code).isPresent()) {
             throw new ConflictException("Ya existe una promoción o cupón con el código " + code);
@@ -86,6 +144,7 @@ public class PromotionAdminService {
         Promotion promotion = new Promotion(code, request.offerType(), request.discountType(), request.discountValue(),
                 Instant.now(), Instant.now().plusSeconds(1), 1, null, 0);
         apply(promotion, request);
+        resolveBranchForPromotion(promotion, request, email);
         Promotion saved = promotions.save(promotion);
         announce();
         return toDto(saved);
@@ -95,7 +154,15 @@ public class PromotionAdminService {
     @CacheEvict(value = "featuredPromotions", allEntries = true)
     @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "UPDATE", description = "Actualización de promoción o cupón")
     public PromotionResponseDTO update(UUID id, PromotionRequestDTO request) {
+        return update(id, request, null);
+    }
+
+    @Transactional
+    @CacheEvict(value = "featuredPromotions", allEntries = true)
+    @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "UPDATE", description = "Actualización de promoción o cupón")
+    public PromotionResponseDTO update(UUID id, PromotionRequestDTO request, String email) {
         Promotion promotion = find(id);
+        assertBranchManagerOwnership(promotion, email);
         String code = request.code().strip().toUpperCase();
         promotions.findByCodeIgnoreCase(code).filter(other -> !other.getId().equals(id)).ifPresent(other -> {
             throw new ConflictException("Ya existe una promoción o cupón con el código " + code);
@@ -105,6 +172,7 @@ public class PromotionAdminService {
         promotion.setDiscountType(request.discountType());
         promotion.setDiscountValue(request.discountValue());
         apply(promotion, request);
+        resolveBranchForPromotion(promotion, request, email);
         Promotion saved = promotions.save(promotion);
         announce();
         return toDto(saved);
@@ -114,7 +182,15 @@ public class PromotionAdminService {
     @CacheEvict(value = "featuredPromotions", allEntries = true)
     @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "UPDATE", description = "Activación o desactivación de promoción")
     public PromotionResponseDTO toggleActive(UUID id) {
+        return toggleActive(id, null);
+    }
+
+    @Transactional
+    @CacheEvict(value = "featuredPromotions", allEntries = true)
+    @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "UPDATE", description = "Activación o desactivación de promoción")
+    public PromotionResponseDTO toggleActive(UUID id, String email) {
         Promotion promotion = find(id);
+        assertBranchManagerOwnership(promotion, email);
         promotion.setActive(!promotion.isActive());
         Promotion saved = promotions.save(promotion);
         announce();
@@ -125,7 +201,15 @@ public class PromotionAdminService {
     @CacheEvict(value = "featuredPromotions", allEntries = true)
     @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "UPDATE", description = "Cambio de promoción destacada")
     public PromotionResponseDTO toggleFeatured(UUID id) {
+        return toggleFeatured(id, null);
+    }
+
+    @Transactional
+    @CacheEvict(value = "featuredPromotions", allEntries = true)
+    @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "UPDATE", description = "Cambio de promoción destacada")
+    public PromotionResponseDTO toggleFeatured(UUID id, String email) {
         Promotion promotion = find(id);
+        assertBranchManagerOwnership(promotion, email);
         promotion.setFeatured(!promotion.isFeatured());
         Promotion saved = promotions.save(promotion);
         announce();
@@ -136,7 +220,15 @@ public class PromotionAdminService {
     @CacheEvict(value = "featuredPromotions", allEntries = true)
     @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "DELETE", description = "Eliminación de promoción")
     public void delete(UUID id) {
+        delete(id, null);
+    }
+
+    @Transactional
+    @CacheEvict(value = "featuredPromotions", allEntries = true)
+    @Auditable(domain = "PROMOTIONS", entity = "Promotion", action = "DELETE", description = "Eliminación de promoción")
+    public void delete(UUID id, String email) {
         Promotion promotion = find(id);
+        assertBranchManagerOwnership(promotion, email);
         try {
             promotions.delete(promotion);
             promotions.flush();
@@ -214,6 +306,59 @@ public class PromotionAdminService {
         return new PromotionVehicleDTO(v.getId(), v.getBrand().getName() + " " + v.getModel(), v.getCategory().getName(), v.getDailyRate(), urls);
     }
 
+    private void assertCanManagePromotions(String email) {
+        if (email == null) return;
+        User user = users.findByEmailIgnoreCaseAndDeletedAtIsNull(email).orElse(null);
+        if (user == null) return;
+        boolean isSuperAdmin = user.getRoles().stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getCode()) || "ADMIN".equalsIgnoreCase(r.getCode()));
+        if (isSuperAdmin) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El administrador general solo puede visualizar ofertas y cupones. La creación y edición es gestionada por cada encargado de sucursal.");
+        }
+    }
+
+    private void assertBranchManagerOwnership(Promotion promotion, String email) {
+        if (email == null) return;
+        User user = users.findByEmailIgnoreCaseAndDeletedAtIsNull(email).orElse(null);
+        if (user == null) return;
+        boolean isSuperAdmin = user.getRoles().stream().anyMatch(r -> "SUPER_ADMIN".equalsIgnoreCase(r.getCode()) || "ADMIN".equalsIgnoreCase(r.getCode()));
+        if (isSuperAdmin) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El administrador general solo puede visualizar ofertas y cupones. La gestión operativa corresponde al encargado de la sucursal.");
+        }
+        if (branchUserRepository != null) {
+            UUID managerBranchId = branchUserRepository.findByUserId(user.getId())
+                    .map(com.drivique.api.model.BranchUser::getBranchId)
+                    .orElse(null);
+            if (managerBranchId != null) {
+                if (promotion.getBranch() != null && !managerBranchId.equals(promotion.getBranch().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permiso para modificar promociones de otra sucursal.");
+                }
+                if (promotion.getVehicle() != null && promotion.getVehicle().getCurrentBranch() != null
+                        && !managerBranchId.equals(promotion.getVehicle().getCurrentBranch().getId())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El vehículo seleccionado pertenece a otra sucursal.");
+                }
+            }
+        }
+    }
+
+    private void resolveBranchForPromotion(Promotion promotion, PromotionRequestDTO request, String email) {
+        UUID branchId = request.branchId();
+        if (branchId == null && email != null && branchUserRepository != null) {
+            User user = users.findByEmailIgnoreCaseAndDeletedAtIsNull(email).orElse(null);
+            if (user != null) {
+                branchId = branchUserRepository.findByUserId(user.getId())
+                        .map(com.drivique.api.model.BranchUser::getBranchId)
+                        .orElse(null);
+            }
+        }
+        if (branchId == null && promotion.getVehicle() != null && promotion.getVehicle().getCurrentBranch() != null) {
+            branchId = promotion.getVehicle().getCurrentBranch().getId();
+        }
+        if (branchId != null && branchRepository != null) {
+            Branch b = branchRepository.findById(branchId).orElse(null);
+            promotion.setBranch(b);
+        }
+    }
+
     private PromotionResponseDTO toDto(Promotion p) {
         Vehicle vehicle = p.getVehicle();
         List<Vehicle> targets;
@@ -225,6 +370,10 @@ public class PromotionAdminService {
             targets = vehicles.findTop1ByActiveTrueOrderByModelAsc();
         }
         List<PromotionVehicleDTO> vehicleDtos = targets.stream().map(this::toVehicleDto).toList();
+
+        UUID branchId = p.getBranch() != null ? p.getBranch().getId() : (vehicle != null && vehicle.getCurrentBranch() != null ? vehicle.getCurrentBranch().getId() : null);
+        String branchName = p.getBranch() != null ? p.getBranch().getName() : (vehicle != null && vehicle.getCurrentBranch() != null ? vehicle.getCurrentBranch().getName() : null);
+
         return new PromotionResponseDTO(
                 p.getId(), p.getCode(), p.getName(), p.getConditions(), p.getOfferType(), p.getDiscountType(),
                 p.getDiscountValue(), p.getStartsAt().atZone(ZONE).toLocalDate(), p.getEndsAt().atZone(ZONE).toLocalDate(),
@@ -233,6 +382,7 @@ public class PromotionAdminService {
                 p.getVehicleCategory() == null ? null : p.getVehicleCategory().getName(),
                 vehicle == null ? null : vehicle.getId(),
                 vehicle == null ? null : vehicle.getBrand().getName() + " " + vehicle.getModel(),
-                vehicleDtos, p.getAudience(), p.isFeatured(), p.isActive(), p.getCreatedAt(), p.getUpdatedAt());
+                vehicleDtos, p.getAudience(), p.isFeatured(), p.isActive(), p.getCreatedAt(), p.getUpdatedAt(),
+                branchId, branchName);
     }
 }

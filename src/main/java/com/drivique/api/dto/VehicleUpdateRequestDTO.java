@@ -24,6 +24,9 @@ public record VehicleUpdateRequestDTO(
         @Size(max = 2048, message = "Image URL cannot exceed 2048 characters")
         String mainImageUrl,
 
+        @Size(max = 8, message = "A vehicle can have at most 8 images")
+        java.util.List<@Size(max = 2048, message = "Image URL cannot exceed 2048 characters") String> imageUrls,
+
         Boolean isFeatured,
 
         @Min(value = 1, message = "Passenger capacity must be at least 1")
@@ -33,5 +36,14 @@ public record VehicleUpdateRequestDTO(
         Short doorsCount,
 
         @Min(value = 0, message = "Trunk capacity must be non-negative")
-        Integer trunkCapacityLiters
+        Integer trunkCapacityLiters,
+
+        String model,
+        Integer year,
+        UUID brandId,
+        UUID categoryId,
+        UUID transmissionTypeId,
+        UUID fuelTypeId,
+        String plate,
+        String vin
 ) {}

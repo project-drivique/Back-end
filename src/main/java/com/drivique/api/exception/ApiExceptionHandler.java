@@ -81,7 +81,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Object> badRequest(IllegalArgumentException ex, HttpServletRequest request) {
         LOG.warn("400 {} -> {}", request.getRequestURI(), ex.getMessage());
-        return response(HttpStatus.BAD_REQUEST, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(HttpStatus.BAD_REQUEST, request.getRequestURI(), ex.getMessage(), List.of()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
