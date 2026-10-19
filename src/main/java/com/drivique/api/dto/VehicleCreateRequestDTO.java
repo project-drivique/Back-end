@@ -65,5 +65,8 @@ public record VehicleCreateRequestDTO(
         @Size(max = 2048, message = "Image URL cannot exceed 2048 characters")
         String mainImageUrl,
 
+        @Size(max = 3, message = "A vehicle can have at most 3 images")
+        java.util.List<@Size(max = 2048, message = "Image URL cannot exceed 2048 characters") String> imageUrls,
+
         Boolean isFeatured
 ) {}

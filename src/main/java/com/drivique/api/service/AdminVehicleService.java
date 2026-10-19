@@ -44,6 +44,31 @@ public class AdminVehicleService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private BranchCategoryService branchCategories;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.drivique.api.repository.VehicleImageRepository imageRepository;
+
+    /** Reemplaza la galería (hasta 3 URLs, la primera es la principal) cuando el cliente la envía. */
+    private void syncGallery(Vehicle vehicle, java.util.List<String> urls) {
+        if (urls == null) return;
+        java.util.List<String> clean = urls.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::strip)
+                .filter(u -> !u.isBlank())
+                .distinct()
+                .limit(3)
+                .toList();
+        imageRepository.deleteByVehicleId(vehicle.getId());
+        imageRepository.flush();
+        java.util.List<com.drivique.api.model.VehicleImage> saved = new java.util.ArrayList<>();
+        for (int i = 0; i < clean.size(); i++) {
+            saved.add(new com.drivique.api.model.VehicleImage(vehicle, clean.get(i), i == 0, (short) (i + 1)));
+        }
+        saved = imageRepository.saveAllAndFlush(saved);
+        vehicle.getImages().clear();
+        vehicle.getImages().addAll(saved);
+        vehicle.setMainImageUrl(clean.isEmpty() ? null : clean.get(0));
+    }
+
     private void assertCategoryOffered(UUID branchId, UUID categoryId) {
         if (branchCategories != null && branchId != null && categoryId != null && !branchCategories.isEnabled(branchId, categoryId)) {
             throw new org.springframework.web.server.ResponseStatusException(
@@ -166,7 +191,9 @@ public class AdminVehicleService {
                 Boolean.TRUE.equals(input.isFeatured())
         );
 
-        return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(vehicle));
+        Vehicle created = vehicles.saveAndFlush(vehicle);
+        syncGallery(created, input.imageUrls());
+        return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(created));
     }
 
     @Transactional
@@ -260,6 +287,7 @@ public class AdminVehicleService {
             vehicle.setVin(v);
         }
 
+        syncGallery(vehicle, input.imageUrls());
         return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(vehicle));
     }
 

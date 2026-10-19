@@ -11,6 +11,7 @@ import java.util.UUID;
 @Repository
 public interface VehicleImageRepository extends JpaRepository<VehicleImage, UUID> {
     List<VehicleImage> findByVehicleIdOrderBySortOrderAsc(UUID vehicleId);
+    void deleteByVehicleId(UUID vehicleId);
     Optional<VehicleImage> findByVehicleIdAndPrimaryTrue(UUID vehicleId);
     boolean existsByVehicleIdAndSortOrder(UUID vehicleId, short sortOrder);
     boolean existsByVehicleIdAndSortOrderAndIdNot(UUID vehicleId, short sortOrder, UUID id);
