@@ -195,7 +195,7 @@ class ReservationDocumentReviewServiceTests {
                 eq(user),
                 eq("IN_APP"),
                 eq("RESERVATION"),
-                eq("¡Documentos aprobados! Ya puedes pagar tu reserva"),
+                eq("¡Documentos validados exitosamente!"),
                 anyString(),
                 eq(reservation.getId()),
                 metadataCaptor.capture()
@@ -210,7 +210,7 @@ class ReservationDocumentReviewServiceTests {
                 eq(user),
                 eq("EMAIL"),
                 eq("RESERVATION"),
-                eq("¡Documentos aprobados! Ya puedes pagar tu reserva"),
+                eq("¡Documentos validados exitosamente!"),
                 anyString(),
                 eq(reservation.getId()),
                 any()
