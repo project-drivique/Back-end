@@ -66,17 +66,47 @@ public class VehicleInspectionService {
                             java.util.Map.of("licensePlate", contract.getVehicle() != null ? contract.getVehicle().getPlate() : "N/A", "totalCharges", saved.getTotalCharge() != null ? saved.getTotalCharge() : BigDecimal.ZERO),
                             "RETURN-" + saved.getId()
                     );
-                    java.util.Map<String, Object> thanksMeta = java.util.Map.of("actionPath", "/reservas", "actionLabel", "Calificar mi experiencia");
+                    java.util.Map<String, Object> thanksMeta = java.util.Map.of(
+                            "actionPath", "/reservas?calificar=" + java.net.URLEncoder.encode(contract.getReservation().getCode(), java.nio.charset.StandardCharsets.UTF_8),
+                            "actionLabel", "Calificar y reseñar mi experiencia", "reviewInvite", true);
                     String thanks = "Gracias por reservar con Drivique, " + contract.getCustomer().getFirstName()
-                            + ". Esperamos que hayas disfrutado tu viaje y que sigas reservando con nosotros. Cuéntanos cómo te fue: califica el vehículo y la sucursal desde Mis reservas.";
+                            + ". Esperamos que hayas disfrutado tu viaje. Tu opinión nos ayuda a mejorar: califica el vehículo con estrellas y cuéntanos tu experiencia con la sucursal en Mis reservas.";
                     for (String channel : java.util.List.of("IN_APP", "EMAIL")) {
                         notificationService.sendWithMetadata(contract.getCustomer(), channel, "RESERVATION", "¡Gracias por reservar con Drivique!",
                                 thanks, contract.getReservation().getId(), thanksMeta, "THANKS-" + contract.getReservation().getId() + "-" + channel);
                     }
                 }
             } catch (Exception e) {}
+            notifyNovelties(saved, contract, type);
         }
         return map(saved,kmDiff,fuelDiff);
+    }
+    /** Avisa al administrador general cuando el encargado registra novedades en una entrega o devolución. */
+    private void notifyNovelties(VehicleInspection saved, RentalContract contract, String type) {
+        try {
+            List<InspectionChecklistAnswer> novelties = saved.getAnswers().stream().filter(a -> !a.isCompliant()).toList();
+            if (novelties.isEmpty()) return;
+            String step = "CHECK_IN".equals(type) ? "entrega" : "devolución";
+            String detail = novelties.stream()
+                    .map(a -> a.getChecklistItem().getName() + ": " + a.getObservation())
+                    .collect(java.util.stream.Collectors.joining("; "));
+            String inspector = saved.getInspector() != null
+                    ? (saved.getInspector().getFirstName() + " " + saved.getInspector().getLastName()).trim() : "El encargado";
+            String code = contract.getReservation().getCode();
+            String vehicle = contract.getVehicle().getModel() + " (" + contract.getVehicle().getPlate() + ")";
+            String subject = "Novedad en la " + step + " de la reserva " + code;
+            String message = inspector + " registró " + novelties.size() + (novelties.size() == 1 ? " novedad" : " novedades")
+                    + " en la " + step + " del vehículo " + vehicle + " (reserva " + code + "). " + detail + ".";
+            java.util.Map<String, Object> metadata = java.util.Map.of("actionPath", "/admin/reservations", "actionLabel", "Ver reserva");
+            for (User admin : users.findActiveByRoleCode("SUPER_ADMIN")) {
+                for (String channel : List.of("IN_APP", "EMAIL")) {
+                    try {
+                        notificationService.sendWithMetadata(admin, channel, "RESERVATION", subject, message,
+                                contract.getReservation().getId(), metadata, "INSP-NOV-" + saved.getId() + "-" + admin.getId() + "-" + channel);
+                    } catch (Exception ignored) { /* un canal que falle no debe impedir los demás */ }
+                }
+            }
+        } catch (Exception ignored) { /* el aviso nunca debe impedir el registro de la inspección */ }
     }
     @Transactional(readOnly=true) public List<VehicleInspectionResponseDTO> list(UUID contractId,String email){RentalContract c=contracts.findById(contractId).orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));validateAccess(c,user(email));return inspections.findByContractIdOrderByCreatedAtAsc(contractId).stream().map(i -> map(i,null,null)).toList();}
     @Transactional(readOnly=true) public List<InspectionChecklistItemResponseDTO> checklist(){return checklistItems.findAll().stream().filter(InspectionChecklistItem::isActive).map(i -> new InspectionChecklistItemResponseDTO(i.getId(),i.getName(),i.getDescription())).toList();}

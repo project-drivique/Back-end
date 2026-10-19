@@ -144,8 +144,9 @@ class SocialAuthServiceTests {
     }
 
     @Test
-    void loginWithLockedAccount_ThrowsAccountLockedException() {
+    void loginWithLockedAccount_UnlocksAccountAndSucceeds() {
         testUser.setLockedUntil(Instant.now().plusSeconds(600));
+        testUser.setAccountStatus("LOCKED");
         SocialLoginRequestDTO request = new SocialLoginRequestDTO("GOOGLE", "token", null, null, null, null, null, "Web");
         OAuthUserInfo oauthInfo = new OAuthUserInfo("GOOGLE", "sub", "juan.perez@drivique.com", "Juan", "Perez", null);
         UserSocialAccount socialAccount = new UserSocialAccount(testUser, "GOOGLE", "sub", "juan.perez@drivique.com");
@@ -153,8 +154,16 @@ class SocialAuthServiceTests {
         when(oAuthProviderService.verifyAndExtract(request)).thenReturn(oauthInfo);
         when(socialAccountRepository.findByProviderIgnoreCaseAndProviderUserId("GOOGLE", "sub"))
                 .thenReturn(Optional.of(socialAccount));
+        when(jwtService.generateAccessToken(any(), any(), any(), any(), any(), any(), any())).thenReturn("access-token-jwt");
+        when(jwtService.generateRefreshToken()).thenReturn("refresh-token-plain");
+        when(jwtService.hashToken("refresh-token-plain")).thenReturn("hashed-refresh-token");
+        when(jwtService.getRefreshTokenExpirationDays()).thenReturn(30L);
+        when(jwtService.getAccessTokenExpirationSeconds()).thenReturn(900L);
 
-        assertThatThrownBy(() -> socialAuthService.login(request, "127.0.0.1", "Agent"))
-                .isInstanceOf(AccountLockedException.class);
+        var response = socialAuthService.login(request, "127.0.0.1", "Agent");
+
+        assertThat(response).isNotNull();
+        assertThat(testUser.isLocked()).isFalse();
+        assertThat(testUser.getAccountStatus()).isEqualTo("ACTIVE");
     }
 }

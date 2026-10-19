@@ -86,7 +86,7 @@ public class DeliveryLogisticsService {
     public DeliveryPointResponseDTO assign(String email, UUID reservationId, String pointType, UUID driverId) {
         ReservationDeliveryPoint point = homePoint(email, reservationId, pointType);
         if ("COMPLETED".equals(point.getDeliveryStatus())) {
-            throw new ConflictException("La entrega ya fue completada");
+            throw new ConflictException(("RETURN".equals(point.getPointType()) ? "La devolución" : "La entrega") + " ya fue completada");
         }
         DeliveryDriver driver = drivers.findById(driverId).orElseThrow(() -> new ResourceNotFoundException("Conductor no encontrado"));
         if (driver.getEmail() == null || driver.getEmail().isBlank()) {
@@ -124,9 +124,11 @@ public class DeliveryLogisticsService {
         drivers.save(driver);
         points.saveAndFlush(point);
         if (notices != null) {
-            notices.notifyStaff(point, "Entrega confirmada por el conductor",
-                    driver.getFullName() + " confirmó la entrega de la reserva " + point.getReservation().getCode() + ".");
-            notices.notifyCustomer(point, "Entrega confirmada", "Tu " + ("RETURN".equals(point.getPointType()) ? "devolución" : "entrega")
+            String label = "RETURN".equals(point.getPointType()) ? "devolución" : "entrega";
+            String title = "RETURN".equals(point.getPointType()) ? "Devolución" : "Entrega";
+            notices.notifyStaff(point, title + " confirmada por el conductor",
+                    driver.getFullName() + " confirmó la " + label + " de la reserva " + point.getReservation().getCode() + ".");
+            notices.notifyCustomer(point, title + " confirmada", "Tu " + label
                     + " de la reserva " + point.getReservation().getCode() + " fue confirmada por el conductor. ¡Gracias por elegir Drivique!");
         }
     }
@@ -137,10 +139,11 @@ public class DeliveryLogisticsService {
     public void rejectByDriver(UUID reservationId, String pointType) {
         ReservationDeliveryPoint point = pendingPoint(reservationId, pointType);
         if (notices != null) {
-            notices.notifyStaff(point, "Código de entrega rechazado",
+            String label = "RETURN".equals(point.getPointType()) ? "devolución" : "entrega";
+            notices.notifyStaff(point, "Código de " + label + " rechazado",
                     point.getDriver().getFullName() + " reportó que el código del cliente no coincide en la reserva "
                             + point.getReservation().getCode() + ". Revisa el PIN con el cliente.");
-            notices.notifyCustomer(point, "Revisa tu código de entrega", "El conductor reportó que el código que le diste no coincide con el de tu reserva "
+            notices.notifyCustomer(point, "Revisa tu código de " + label, "El conductor reportó que el código que le diste no coincide con el de tu reserva "
                     + point.getReservation().getCode() + ". Verifica el PIN en Mis reservas.");
         }
     }
@@ -152,7 +155,7 @@ public class DeliveryLogisticsService {
             throw new ConflictException("La entrega no tiene un conductor asignado");
         }
         if ("COMPLETED".equals(point.getDeliveryStatus())) {
-            throw new ConflictException("La entrega ya fue completada");
+            throw new ConflictException(("RETURN".equals(point.getPointType()) ? "La devolución" : "La entrega") + " ya fue completada");
         }
         return point;
     }
@@ -166,7 +169,7 @@ public class DeliveryLogisticsService {
             throw new ConflictException("Primero asigna un conductor");
         }
         if ("COMPLETED".equals(point.getDeliveryStatus())) {
-            throw new ConflictException("La entrega ya fue completada");
+            throw new ConflictException(("RETURN".equals(point.getPointType()) ? "La devolución" : "La entrega") + " ya fue completada");
         }
         if (pin == null || !pin.equals(point.getDeliveryPin())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El PIN no coincide.");

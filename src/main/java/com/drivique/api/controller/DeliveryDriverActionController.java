@@ -30,7 +30,7 @@ public class DeliveryDriverActionController {
     }
 
     @GetMapping(produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> preview(@RequestParam String token) {
+    public ResponseEntity<String> preview(@RequestParam String token, jakarta.servlet.http.HttpServletRequest request) {
         Optional<DeliveryActionTokens.Action> action = tokens.parse(token);
         if (action.isEmpty()) {
             return page(410, "Enlace no válido", "Este enlace venció o no es válido. Pide al encargado que reenvíe la asignación.");
@@ -42,14 +42,15 @@ public class DeliveryDriverActionController {
                 : "Al rechazar, la entrega sigue pendiente y se avisa a la sucursal y al cliente para que revisen el código.";
         String color = confirm ? "#16a34a" : "#dc2626";
         String button = confirm ? "Sí, confirmar entrega" : "Sí, rechazar el código";
-        String body = "<p>" + text + "</p><form method=\"post\"><input type=\"hidden\" name=\"token\" value=\"" + escape(token) + "\">"
+        String actionUrl = request.getRequestURI();
+        String body = "<p>" + text + "</p><form method=\"post\" action=\"" + escape(actionUrl) + "\"><input type=\"hidden\" name=\"token\" value=\"" + escape(token) + "\">"
                 + "<button type=\"submit\" style=\"background:" + color + ";color:#fff;border:0;border-radius:10px;padding:14px 24px;font-weight:700;font-size:16px;cursor:pointer\">"
                 + button + "</button></form>";
         return page(200, title, body, true);
     }
 
-    @PostMapping(produces = MediaType.TEXT_HTML_VALUE, consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-    public ResponseEntity<String> execute(@RequestParam String token) {
+    @PostMapping(produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> execute(@RequestParam(name = "token", required = false) String token) {
         Optional<DeliveryActionTokens.Action> action = tokens.parse(token);
         if (action.isEmpty()) {
             return page(410, "Enlace no válido", "Este enlace venció o no es válido.");
