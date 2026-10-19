@@ -21,16 +21,17 @@ class VehicleGalleryTests {
     }
 
     @Test
-    void galleryHasAtMostThreePhotosWithThePrimaryFirst() {
-        List<VehicleImage> images = List.of(
-                image("https://x/2.jpg", false, 2),
-                image("https://x/1.jpg", true, 1),
-                image("https://x/3.jpg", false, 3),
-                image("https://x/4.jpg", false, 4));
+    void galleryHasAtMostEightPhotosWithThePrimaryFirst() {
+        List<VehicleImage> images = new java.util.ArrayList<>();
+        images.add(image("https://x/2.jpg", false, 2));
+        images.add(image("https://x/1.jpg", true, 1));
+        for (int i = 3; i <= 9; i++) {
+            images.add(image("https://x/" + i + ".jpg", false, i));
+        }
         Vehicle vehicle = mock(Vehicle.class);
         when(vehicle.getImages()).thenReturn(images);
 
-        assertEquals(List.of("https://x/1.jpg", "https://x/2.jpg", "https://x/3.jpg"), VehicleMapper.galleryUrls(vehicle));
+        assertEquals(List.of("https://x/1.jpg", "https://x/2.jpg", "https://x/3.jpg", "https://x/4.jpg", "https://x/5.jpg", "https://x/6.jpg", "https://x/7.jpg", "https://x/8.jpg"), VehicleMapper.galleryUrls(vehicle));
     }
 
     @Test

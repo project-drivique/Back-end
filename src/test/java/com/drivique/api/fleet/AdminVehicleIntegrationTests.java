@@ -271,7 +271,7 @@ class AdminVehicleIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    void savesUpToThreePhotoUrlsAndTheFirstOneIsTheMainPhoto() throws Exception {
+    void savesSeveralPhotoUrlsAndTheFirstOneIsTheMainPhoto() throws Exception {
         String payload = """
                 {
                     "plate": "IMG-123",
