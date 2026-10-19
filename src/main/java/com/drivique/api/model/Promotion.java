@@ -56,6 +56,10 @@ public class Promotion {
     @JoinColumn(name = "vehicle_id")
     private Vehicle vehicle;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private Branch branch;
+
     @Column(nullable = false, length = 20)
     private String audience = "ALL";
 
@@ -131,6 +135,8 @@ public class Promotion {
     public Instant getNotificationSentAt() { return notificationSentAt; }
     public void markNotified() { this.notificationSentAt = Instant.now(); }
     public void setActive(boolean active) { this.active = active; }
+    public Branch getBranch() { return branch; }
+    public void setBranch(Branch branch) { this.branch = branch; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

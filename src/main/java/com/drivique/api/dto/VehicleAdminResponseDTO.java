@@ -33,6 +33,7 @@ public record VehicleAdminResponseDTO(
         int mileage,
         BigDecimal dailyRate,
         String mainImageUrl,
+        java.util.List<String> imageUrls,
         boolean isFeatured,
         boolean isActive
 ) {}
