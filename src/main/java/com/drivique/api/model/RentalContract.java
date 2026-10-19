@@ -220,6 +220,11 @@ public class RentalContract {
         this.updatedAt = Instant.now();
     }
 
+    public void setDocumentVersion(String documentVersion) {
+        this.documentVersion = documentVersion;
+        this.updatedAt = Instant.now();
+    }
+
     public void addClause(ContractClause clause) {
         if (clause != null) {
             this.clauses.add(clause);

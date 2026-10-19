@@ -49,6 +49,10 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired private AdditionalServiceRepository additionalServiceRepository;
     @Autowired private PromotionRepository promotionRepository;
     @Autowired private ReservationStatusRepository reservationStatusRepository;
+    @Autowired private DocumentStatusRepository documentStatusRepository;
+    @Autowired private ContractStatusRepository contractStatusRepository;
+    @Autowired private DocumentTypeRepository documentTypeRepository;
+    @Autowired private UserDocumentRepository userDocumentRepository;
 
     private UUID vehicleId;
     private UUID insuranceId;
@@ -68,6 +72,13 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
         User customer = new User("Carlos", "Gomez", "customer@drivique.com", "$2a$10$hash");
         customer.setProfileComplete(true);
         userRepository.saveAndFlush(customer);
+
+        // Con los documentos de identidad y licencia aprobados la reserva queda lista para pagar (si no, espera la revisión de la sucursal)
+        DocumentStatus approved = documentStatusRepository.saveAndFlush(new DocumentStatus("APPROVED", "Aprobado", "Aprobado"));
+        DocumentType identity = documentTypeRepository.saveAndFlush(new DocumentType("CC", "Cédula de Ciudadanía", "Documento de identidad", true, true, true));
+        DocumentType license = documentTypeRepository.saveAndFlush(new DocumentType("DRIVER_LICENSE", "Licencia de conducción", "Licencia", true, true, true));
+        userDocumentRepository.saveAndFlush(new UserDocument(customer, identity, approved, "10203040", "front.jpg", "back.jpg"));
+        userDocumentRepository.saveAndFlush(new UserDocument(customer, license, approved, "DL12345", "front.jpg", "back.jpg"));
 
         // 2. Location
         Department department = departmentRepository.saveAndFlush(new Department("Antioquia"));
@@ -154,6 +165,10 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
         // 5. Reservation Status
         reservationStatusRepository.saveAndFlush(new ReservationStatus("PENDING_PAYMENT", "Pending payment", true));
         reservationStatusRepository.saveAndFlush(new ReservationStatus("CONFIRMED", "Confirmed", true));
+
+        // Estados del contrato que se genera al confirmar el pago
+        contractStatusRepository.saveAndFlush(new ContractStatus("DRAFT", "Draft", true, false));
+        contractStatusRepository.saveAndFlush(new ContractStatus("PENDING_SIGNATURE", "Pending signature", true, false));
     }
 
     @Test

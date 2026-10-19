@@ -25,7 +25,10 @@ public record VehicleCardResponseDTO(
         int mileage,
         BigDecimal dailyRate,
         String mainImageUrl,
+        java.util.List<String> imageUrls,
         boolean isFeatured,
         boolean isActive,
-        boolean allowsReservation
+        boolean allowsReservation,
+        Double averageRating,
+        long reviewCount
 ) {}
