@@ -31,10 +31,29 @@ public final class VehicleMapper {
                 v.getMileage(),
                 v.getDailyRate(),
                 v.getMainImageUrl(),
+                galleryUrls(v),
                 v.isFeatured(),
                 v.isActive(),
-                v.getStatus() != null && v.getStatus().allowsReservation()
+                v.getStatus() != null && v.getStatus().allowsReservation(),
+                v.getAverageRating() == null ? null : Math.round(v.getAverageRating() * 10.0) / 10.0,
+                v.getReviewCount() == null ? 0L : v.getReviewCount()
         );
+    }
+
+    /** Fotos del vehículo para el carrusel (hasta 8): la galería ordenada y, si no hay, la foto principal. */
+    static java.util.List<String> galleryUrls(Vehicle v) {
+        java.util.List<String> urls = v.getImages().stream()
+                .sorted(java.util.Comparator.comparing(com.drivique.api.model.VehicleImage::isPrimary).reversed()
+                        .thenComparing(com.drivique.api.model.VehicleImage::getSortOrder))
+                .map(com.drivique.api.model.VehicleImage::getUrl)
+                .filter(u -> u != null && !u.isBlank())
+                .distinct()
+                .limit(8)
+                .toList();
+        if (urls.isEmpty() && v.getMainImageUrl() != null && !v.getMainImageUrl().isBlank()) {
+            return java.util.List.of(v.getMainImageUrl());
+        }
+        return urls;
     }
 
     public static VehicleAdminResponseDTO toAdminDTO(Vehicle v) {
@@ -68,6 +87,7 @@ public final class VehicleMapper {
                 v.getMileage(),
                 v.getDailyRate(),
                 v.getMainImageUrl(),
+                galleryUrls(v),
                 v.isFeatured(),
                 v.isActive()
         );

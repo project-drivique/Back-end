@@ -32,7 +32,14 @@ public class DeliveryActionTokens {
     /** Vacío si el enlace está alterado o venció. */
     public Optional<Action> parse(String token) {
         try {
-            if (token == null || !token.contains(".")) {
+            if (token == null) {
+                return Optional.empty();
+            }
+            if (token.contains(",")) {
+                token = token.split(",")[0].trim();
+            }
+            token = token.trim();
+            if (!token.contains(".")) {
                 return Optional.empty();
             }
             String[] parts = token.split("\\.", 2);

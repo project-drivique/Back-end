@@ -44,6 +44,31 @@ public class AdminVehicleService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private BranchCategoryService branchCategories;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.drivique.api.repository.VehicleImageRepository imageRepository;
+
+    /** Reemplaza la galería (hasta 8 URLs, la primera es la principal) cuando el cliente la envía. */
+    private void syncGallery(Vehicle vehicle, java.util.List<String> urls) {
+        if (urls == null) return;
+        java.util.List<String> clean = urls.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::strip)
+                .filter(u -> !u.isBlank())
+                .distinct()
+                .limit(8)
+                .toList();
+        imageRepository.deleteByVehicleId(vehicle.getId());
+        imageRepository.flush();
+        java.util.List<com.drivique.api.model.VehicleImage> saved = new java.util.ArrayList<>();
+        for (int i = 0; i < clean.size(); i++) {
+            saved.add(new com.drivique.api.model.VehicleImage(vehicle, clean.get(i), i == 0, (short) (i + 1)));
+        }
+        saved = imageRepository.saveAllAndFlush(saved);
+        vehicle.getImages().clear();
+        vehicle.getImages().addAll(saved);
+        vehicle.setMainImageUrl(clean.isEmpty() ? null : clean.get(0));
+    }
+
     private void assertCategoryOffered(UUID branchId, UUID categoryId) {
         if (branchCategories != null && branchId != null && categoryId != null && !branchCategories.isEnabled(branchId, categoryId)) {
             throw new org.springframework.web.server.ResponseStatusException(
@@ -86,8 +111,11 @@ public class AdminVehicleService {
     public PageResponseDTO<VehicleAdminResponseDTO> list(Pageable pageable) {
         java.util.Optional<UUID> scope = currentScope();
         Page<Vehicle> page = scope.isPresent()
-                ? vehicles.findAll((root, query, cb) -> cb.equal(root.get("currentBranch").get("id"), scope.get()), pageable)
-                : vehicles.findAll(pageable);
+                ? vehicles.findAll((root, query, cb) -> cb.and(
+                        cb.equal(root.get("currentBranch").get("id"), scope.get()),
+                        cb.isTrue(root.get("active"))
+                  ), pageable)
+                : vehicles.findAll((root, query, cb) -> cb.isTrue(root.get("active")), pageable);
         return new PageResponseDTO<>(
                 page.getContent().stream().map(VehicleMapper::toAdminDTO).toList(),
                 page.getNumber(),
@@ -163,7 +191,9 @@ public class AdminVehicleService {
                 Boolean.TRUE.equals(input.isFeatured())
         );
 
-        return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(vehicle));
+        Vehicle created = vehicles.saveAndFlush(vehicle);
+        syncGallery(created, input.imageUrls());
+        return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(created));
     }
 
     @Transactional
@@ -174,7 +204,7 @@ public class AdminVehicleService {
         assertVehicleAllowed(vehicle);
         assertBranchAllowed(input.currentBranchId());
 
-        if (input.mileage() < vehicle.getMileage()) {
+        if (input.mileage() != null && input.mileage() < vehicle.getMileage()) {
             throw new IllegalArgumentException(
                     "New mileage (" + input.mileage() + ") cannot be lower than current vehicle mileage (" + vehicle.getMileage() + ")"
             );
@@ -183,8 +213,12 @@ public class AdminVehicleService {
         Branch branch = branches.findById(input.currentBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + input.currentBranchId()));
 
-        vehicle.setMileage(input.mileage());
-        vehicle.setDailyRate(input.dailyRate());
+        if (input.mileage() != null) {
+            vehicle.setMileage(input.mileage());
+        }
+        if (input.dailyRate() != null) {
+            vehicle.setDailyRate(input.dailyRate());
+        }
         vehicle.setCurrentBranch(branch);
 
         if (input.statusId() != null) {
@@ -212,6 +246,48 @@ public class AdminVehicleService {
             vehicle.setTrunkCapacityLiters(input.trunkCapacityLiters());
         }
 
+        if (input.model() != null && !input.model().isBlank()) {
+            vehicle.setModel(input.model().strip());
+        }
+        if (input.year() != null) {
+            vehicle.setYear(input.year().shortValue());
+        }
+        if (input.brandId() != null) {
+            VehicleBrand brand = brands.findById(input.brandId())
+                    .orElseThrow(() -> new ResourceNotFoundException("VehicleBrand not found: " + input.brandId()));
+            vehicle.setBrand(brand);
+        }
+        if (input.categoryId() != null) {
+            VehicleCategory category = categories.findById(input.categoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("VehicleCategory not found: " + input.categoryId()));
+            vehicle.setCategory(category);
+        }
+        if (input.transmissionTypeId() != null) {
+            TransmissionType transmission = transmissions.findById(input.transmissionTypeId())
+                    .orElseThrow(() -> new ResourceNotFoundException("TransmissionType not found: " + input.transmissionTypeId()));
+            vehicle.setTransmissionType(transmission);
+        }
+        if (input.fuelTypeId() != null) {
+            FuelType fuel = fuels.findById(input.fuelTypeId())
+                    .orElseThrow(() -> new ResourceNotFoundException("FuelType not found: " + input.fuelTypeId()));
+            vehicle.setFuelType(fuel);
+        }
+        if (input.plate() != null && !input.plate().isBlank()) {
+            String p = input.plate().strip().toUpperCase();
+            if (vehicles.existsByPlateIgnoreCaseAndIdNot(p, vehicle.getId())) {
+                throw new ConflictException("Vehicle with plate " + p + " already exists");
+            }
+            vehicle.setPlate(p);
+        }
+        if (input.vin() != null && !input.vin().isBlank()) {
+            String v = input.vin().strip().toUpperCase();
+            if (vehicles.existsByVinIgnoreCaseAndIdNot(v, vehicle.getId())) {
+                throw new ConflictException("Vehicle with VIN " + v + " already exists");
+            }
+            vehicle.setVin(v);
+        }
+
+        syncGallery(vehicle, input.imageUrls());
         return VehicleMapper.toAdminDTO(vehicles.saveAndFlush(vehicle));
     }
 
