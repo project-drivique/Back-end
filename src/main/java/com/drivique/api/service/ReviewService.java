@@ -93,23 +93,31 @@ public class ReviewService {
         Optional<VehicleRating> existingVehicleReview = ratings.findByReservationId(r.getId());
         boolean canReviewVehicle = isCompleted && existingVehicleReview.isEmpty();
 
-        Set<UUID> reservationBranchIds = new HashSet<>();
+        java.util.Map<UUID, Branch> reservationBranches = new java.util.LinkedHashMap<>();
         if (r.getVehicle().getCurrentBranch() != null) {
-            reservationBranchIds.add(r.getVehicle().getCurrentBranch().getId());
+            reservationBranches.put(r.getVehicle().getCurrentBranch().getId(), r.getVehicle().getCurrentBranch());
         }
         r.getDeliveryPoints().stream()
                 .map(ReservationDeliveryPoint::getBranch)
                 .filter(Objects::nonNull)
-                .map(Branch::getId)
-                .forEach(reservationBranchIds::add);
-        boolean canReviewBranch = isCompleted && reservationBranchIds.stream().anyMatch(branchId ->
-                branchReviews.findByBranchIdOrderByCreatedAtDesc(branchId).stream()
-                        .noneMatch(review -> review.getReservation().getId().equals(r.getId())));
+                .forEach(b -> reservationBranches.putIfAbsent(b.getId(), b));
+        // Sede que todavía se puede reseñar para esta reserva (la web la ofrece junto con la calificación del vehículo)
+        Branch reviewableBranch = isCompleted ? reservationBranches.values().stream()
+                .filter(Branch::isActive)
+                .filter(b -> branchReviews.findByBranchIdOrderByCreatedAtDesc(b.getId()).stream()
+                        .noneMatch(review -> review.getReservation().getId().equals(r.getId())))
+                .findFirst().orElse(null) : null;
+        boolean canReviewBranch = reviewableBranch != null;
 
         VehicleReviewResponseDTO existingReview = existingVehicleReview
                 .map(v -> new VehicleReviewResponseDTO(v.getId(), v.getUser().getFullName(), v.getRating(), v.getComment(), v.getCreatedAt()))
                 .orElse(null);
-        return new ReviewEligibilityResponseDTO(canReviewVehicle, canReviewBranch, existingReview);
+        BranchReviewResponseDTO existingBranchReview = branchReviews.findFirstByReservationIdOrderByCreatedAtDesc(r.getId())
+                .map(b -> new BranchReviewResponseDTO(b.getId(), b.getUser().getFullName(), b.getRating(), b.getComment(), b.getCreatedAt()))
+                .orElse(null);
+        return new ReviewEligibilityResponseDTO(canReviewVehicle, canReviewBranch, existingReview,
+                reviewableBranch != null ? reviewableBranch.getId() : null, reviewableBranch != null ? reviewableBranch.getName() : null,
+                existingBranchReview);
     }
 
     private Reservation completedOwned(UUID id, String email) {

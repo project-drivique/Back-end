@@ -21,6 +21,28 @@ public class ReservationExpirationService {
     public static final String PENDING_PAYMENT_STATUS = "PENDING_PAYMENT";
     public static final String CANCELLED_BY_TIMEOUT_STATUS = "CANCELLED_BY_TIMEOUT";
 
+    /** Plazo para pagar: 8 h, o el tiempo que falta para el retiro si es menor, con un mínimo de 2 h. */
+    public static final long PAYMENT_WINDOW_HOURS = 8;
+
+    public static Instant paymentDeadline(Instant now, Instant pickupDate) {
+        Instant standard = now.plus(PAYMENT_WINDOW_HOURS, java.time.temporal.ChronoUnit.HOURS);
+        Instant deadline = (pickupDate != null && pickupDate.isBefore(standard)) ? pickupDate : standard;
+        Instant minimum = now.plus(2, java.time.temporal.ChronoUnit.HOURS);
+        return deadline.isBefore(minimum) ? minimum : deadline;
+    }
+
+    /**
+     * Reserva que espera a la sucursal (apertura u revisión de documentos): el reloj del pago aún no corre.
+     * Retiene las fechas hasta la hora de retiro (mínimo 2 h) para no bloquearlas para siempre si nadie la gestiona.
+     */
+    public static Instant waitingDeadline(Instant now, Instant pickupDate) {
+        Instant minimum = now.plus(2, java.time.temporal.ChronoUnit.HOURS);
+        return (pickupDate == null || pickupDate.isBefore(minimum)) ? minimum : pickupDate;
+    }
+
+    /** Estados pendientes que retienen fechas y vencen si nadie los gestiona dentro del plazo. */
+    private static final List<String> EXPIRABLE_STATUSES = List.of("PENDING_PAYMENT", "PENDING_SCHEDULE", "PENDING_DOCUMENT_REVIEW");
+
     private final ReservationRepository reservationRepository;
     private final ReservationStatusRepository reservationStatusRepository;
     private final ReservationNotificationService notificationService;
@@ -38,12 +60,24 @@ public class ReservationExpirationService {
     @Transactional
     public ExpiredReservationsSummaryDTO expirePendingReservations() {
         Instant now = Instant.now();
-        List<Reservation> expiredReservations = reservationRepository.findExpiredPendingReservations(PENDING_PAYMENT_STATUS, now);
+        List<Reservation> expiredReservations = new ArrayList<>();
+        for (String statusCode : EXPIRABLE_STATUSES) {
+            List<Reservation> found = reservationRepository.findExpiredPendingReservations(statusCode, now);
+            if (found != null) {
+                expiredReservations.addAll(found);
+            }
+        }
 
         // Aviso a reservas pendientes con vencimiento próximo (próximas 24 horas)
         try {
             Instant warningWindow = now.plus(24, java.time.temporal.ChronoUnit.HOURS);
-            List<Reservation> expiringSoon = reservationRepository.findExpiringPendingReservations(PENDING_PAYMENT_STATUS, now, warningWindow);
+            List<Reservation> expiringSoon = new ArrayList<>();
+            for (String statusCode : EXPIRABLE_STATUSES) {
+                List<Reservation> found = reservationRepository.findExpiringPendingReservations(statusCode, now, warningWindow);
+                if (found != null) {
+                    expiringSoon.addAll(found);
+                }
+            }
             for (Reservation reservation : expiringSoon) {
                 if (reservation.getCashPaymentExpiresAt() != null) {
                     long hoursRemaining = Math.max(1, java.time.Duration.between(now, reservation.getCashPaymentExpiresAt()).toHours());

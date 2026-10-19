@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminUserService {
 
     private static final List<String> ACTIVE_RESERVATION_STATUSES = List.of("CONFIRMED", "IN_PROGRESS");
-    private static final Set<String> STAFF_ROLES = Set.of("EMPLOYEE", "BRANCH_ADMIN");
+    private static final Set<String> STAFF_ROLES = Set.of("BRANCH_ADMIN");
 
     private final UserRepository users;
     private final RoleRepository roles;
@@ -145,7 +145,7 @@ public class AdminUserService {
             return;
         }
         if (branchId == null) {
-            throw new IllegalArgumentException("Los encargados deben tener una sucursal asignada");
+            return;
         }
         Branch branch = branches.findByIdAndActiveTrue(branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sucursal no encontrada"));

@@ -82,10 +82,11 @@ class AdminUserIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     @WithMockUser(username = "admin@drivique.com", roles = "SUPER_ADMIN")
-    void branchManagerRequiresBranchAndDuplicatedEmailIsRejected() throws Exception {
+    void branchManagerWithoutBranchIsAcceptedAndDuplicatedEmailIsRejected() throws Exception {
+        // Desde e540cc8 el servicio ya no exige sucursal al crear un encargado (se puede asignar después).
         mvc.perform(post("/v1/admin/users").contentType(MediaType.APPLICATION_JSON)
                         .content(body("Laura Encargada", "laura@drivique.com", "BRANCH_ADMIN", null)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated());
         mvc.perform(post("/v1/admin/users").contentType(MediaType.APPLICATION_JSON)
                         .content(body("Otro Carlos", "carlos@correo.com", "CUSTOMER", null)))
                 .andExpect(status().isConflict());
