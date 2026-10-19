@@ -25,6 +25,13 @@ import org.springframework.stereotype.Service;
 /** Avisos del domicilio: el cliente recibe conductor y PIN; el conductor recibe los datos y dos botones (confirmar o rechazar). */
 @Service
 public class DeliveryNotificationService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    private String brand(String html) {
+        return brandTheme == null ? html : brandTheme.apply(html);
+    }
+
 
     private static final Logger LOG = LoggerFactory.getLogger(DeliveryNotificationService.class);
 
@@ -67,6 +74,22 @@ public class DeliveryNotificationService {
             }
         }
         sendDriverEmail(point, driver, pin, type, where);
+    }
+
+    /** Cuando el cliente paga: los puntos a domicilio sin conductor se avisan a la sucursal para que asigne uno. */
+    public void homeDeliveryPaid(com.drivique.api.model.Reservation reservation) {
+        if (reservation == null || reservation.getDeliveryPoints() == null) {
+            return;
+        }
+        for (ReservationDeliveryPoint point : reservation.getDeliveryPoints()) {
+            if (!"HOME_DELIVERY".equals(point.getModality()) || point.getDriver() != null) {
+                continue;
+            }
+            String kind = "RETURN".equals(point.getPointType()) ? "devolución" : "entrega";
+            notifyStaff(point, "Domicilio pagado: asigna un conductor",
+                    "La reserva " + reservation.getCode() + " ya fue pagada. Asigna un conductor para la " + kind
+                            + " a domicilio" + (point.getAddress() != null ? " en " + point.getAddress() : "") + ".");
+        }
     }
 
     /** Aviso a la sucursal (encargados) por un hecho del domicilio. */
@@ -141,7 +164,7 @@ public class DeliveryNotificationService {
             helper.setFrom(new InternetAddress(fromAddress, "Drivique"));
             helper.setTo(driver.getEmail());
             helper.setSubject("Nueva " + type + " a domicilio - reserva " + reservation.getCode());
-            helper.setText("Se te asignó una " + type + " a domicilio. Código: " + pin + ". Confirmar: " + confirm + " Rechazar: " + reject, html);
+            helper.setText("Se te asignó una " + type + " a domicilio. Código: " + pin + ". Confirmar: " + confirm + " Rechazar: " + reject, brand(html));
             sender.send(message);
             LOG.info("Correo de {} enviado al conductor {}", type, driver.getEmail());
         } catch (Exception e) {
