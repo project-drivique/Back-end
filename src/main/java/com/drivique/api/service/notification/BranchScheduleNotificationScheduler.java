@@ -87,12 +87,8 @@ public class BranchScheduleNotificationScheduler {
                     ReservationStatus newStatus = approved ? pendingPayment : pendingKyc;
                     r.setStatus(newStatus);
 
-                    if (approved && (r.getCashPaymentBranch() != null || r.getCashPaymentCode() != null)) {
-                        Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
-                        Instant expiresAt = (r.getPickupDate() != null && standard72h.isAfter(r.getPickupDate()))
-                                ? r.getPickupDate()
-                                : standard72h;
-                        r.setCashPaymentExpiresAt(expiresAt);
+                    if (approved) {
+                        r.setCashPaymentExpiresAt(com.drivique.api.service.ReservationExpirationService.paymentDeadline(Instant.now(), r.getPickupDate()));
                     }
 
                     Reservation saved = reservationRepository.save(r);
@@ -146,8 +142,8 @@ public class BranchScheduleNotificationScheduler {
 
         String subject = "¡Ya puedes seguir con tu reserva en Drivique!";
         String message = approvedKyc
-                ? "La sucursal " + branch.getName() + " ya abrió sus puertas. Tus documentos están al día, ya puedes continuar con el pago de tu reserva " + r.getCode() + "."
-                : "La sucursal " + branch.getName() + " ya abrió sus puertas. El encargado de la sucursal estará validando tus documentos para habilitar el pago de tu reserva " + r.getCode() + ".";
+                ? "La sucursal " + branch.getName() + " ya abrió sus puertas. Tus documentos están al día, ya puedes continuar con tu reserva " + r.getCode() + "."
+                : "La sucursal " + branch.getName() + " ya abrió sus puertas. El encargado de la sucursal estará validando tus documentos para tu reserva " + r.getCode() + ".";
 
         try {
             notificationService.sendWithMetadata(r.getCustomer(), "IN_APP", "RESERVATION", subject, message, r.getId(), metadata);

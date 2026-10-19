@@ -21,7 +21,7 @@ public class ReservationDocumentReviewService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReservationDocumentReviewService.class);
 
-    private static final Set<String> IDENTITY_DOC_CODES = Set.of("CC", "CE", "PASSPORT");
+    private static final Set<String> IDENTITY_DOC_CODES = Set.of("CC", "CE", "PASSPORT", "PASAPORTE", "DNI", "PPT", "PEP");
 
     private final UserDocumentRepository userDocumentRepository;
     private final ReservationRepository reservationRepository;
@@ -62,12 +62,6 @@ public class ReservationDocumentReviewService {
         if (userId == null) {
             return false;
         }
-        if (userRepository != null) {
-            Optional<User> uOpt = userRepository.findById(userId);
-            if (uOpt.isPresent() && uOpt.get().isProfileComplete()) {
-                return true;
-            }
-        }
 
         List<UserDocument> userDocs = userDocumentRepository.findByUserId(userId);
         boolean hasApprovedLicense = false;
@@ -91,9 +85,6 @@ public class ReservationDocumentReviewService {
     public void validateCanBePaid(Reservation reservation) {
         if (reservation != null && reservation.getStatus() != null) {
             String code = reservation.getStatus().getCode();
-            if ("PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(code)) {
-                throw new ConflictException("La reserva se encuentra en revisión de documentos y no puede ser pagada hasta que los documentos sean aprobados por el encargado de la sucursal.");
-            }
             if ("PENDING_SCHEDULE".equalsIgnoreCase(code)) {
                 throw new ConflictException("La reserva fue registrada fuera del horario de atención de la sucursal y se activará automáticamente al inicio de la jornada de atención.");
             }
@@ -114,13 +105,7 @@ public class ReservationDocumentReviewService {
             if (r.getStatus() != null && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(r.getStatus().getCode())) {
                 r.setStatus(pendingPaymentStatus);
 
-                if (r.getCashPaymentBranch() != null || r.getCashPaymentCode() != null) {
-                    Instant standard72h = Instant.now().plus(72, ChronoUnit.HOURS);
-                    Instant expiresAt = (r.getPickupDate() != null && standard72h.isAfter(r.getPickupDate()))
-                            ? r.getPickupDate()
-                            : standard72h;
-                    r.setCashPaymentExpiresAt(expiresAt);
-                }
+                r.setCashPaymentExpiresAt(ReservationExpirationService.paymentDeadline(Instant.now(), r.getPickupDate()));
 
                 Reservation saved = reservationRepository.save(r);
 
@@ -135,9 +120,9 @@ public class ReservationDocumentReviewService {
                         "reservationId", saved.getId().toString()
                 );
 
-                String subject = "¡Documentos aprobados! Ya puedes pagar tu reserva";
-                String message = "Tus documentos fueron aprobados por la sucursal. Tu reserva " + saved.getCode()
-                        + " ahora está lista para ser pagada.";
+                String subject = "¡Documentos validados exitosamente!";
+                String message = "Tus documentos de identidad y licencia han sido aprobados por el encargado de la sucursal. Tu reserva " + saved.getCode()
+                        + " ha sido validada para continuar con tu proceso.";
 
                 try {
                     notificationService.sendWithMetadata(user, "IN_APP", "RESERVATION", subject, message, saved.getId(), metadata);

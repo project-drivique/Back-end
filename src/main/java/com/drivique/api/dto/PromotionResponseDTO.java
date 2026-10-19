@@ -29,5 +29,7 @@ public record PromotionResponseDTO(
         boolean featured,
         boolean active,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        UUID branchId,
+        String branchName
 ) {}
