@@ -77,8 +77,11 @@ public class SocialAuthService {
             user = existingSocial.get().getUser();
             if (user.getEmailVerifiedAt() == null) {
                 user.setEmailVerifiedAt(Instant.now());
-                userRepository.save(user);
             }
+            if ("PENDING_VERIFICATION".equalsIgnoreCase(user.getAccountStatus())) {
+                user.setAccountStatus("ACTIVE");
+            }
+            userRepository.save(user);
         } else {
             // 2. Check if user exists by email
             Optional<User> existingUser = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(oauthUser.email());
@@ -87,16 +90,28 @@ public class SocialAuthService {
                 if (user.getEmailVerifiedAt() == null) {
                     user.setEmailVerifiedAt(Instant.now());
                 }
+                if ("PENDING_VERIFICATION".equalsIgnoreCase(user.getAccountStatus())) {
+                    user.setAccountStatus("ACTIVE");
+                }
                 userRepository.save(user);
 
-                // Auto-link social account to existing user
-                UserSocialAccount newSocial = new UserSocialAccount(
-                        user,
-                        oauthUser.provider().toUpperCase(),
-                        oauthUser.providerUserId(),
-                        oauthUser.email()
-                );
-                socialAccountRepository.save(newSocial);
+                // Auto-link social account to existing user, updating if already linked to this provider
+                Optional<UserSocialAccount> socialForUser = socialAccountRepository
+                        .findByUserIdAndProviderIgnoreCase(user.getId(), oauthUser.provider());
+                if (socialForUser.isPresent()) {
+                    UserSocialAccount existingAccount = socialForUser.get();
+                    existingAccount.setProviderUserId(oauthUser.providerUserId());
+                    existingAccount.setEmail(oauthUser.email());
+                    socialAccountRepository.save(existingAccount);
+                } else {
+                    UserSocialAccount newSocial = new UserSocialAccount(
+                            user,
+                            oauthUser.provider().toUpperCase(),
+                            oauthUser.providerUserId(),
+                            oauthUser.email()
+                    );
+                    socialAccountRepository.save(newSocial);
+                }
             } else {
                 // 3. Auto-provision new customer account
                 String fName = oauthUser.firstName() != null && !oauthUser.firstName().isBlank() ? oauthUser.firstName() : "Usuario";
@@ -137,9 +152,14 @@ public class SocialAuthService {
             userPreferenceRepository.save(new UserPreference(user));
         }
 
-        // Account status & lockout validation
-        if (user.isLocked()) {
-            throw new AccountLockedException(user.getLockedUntil());
+        // Account lockout recovery: Verified identity provider unlocks temporary password lockout
+        if (user.isLocked() || "LOCKED".equalsIgnoreCase(user.getAccountStatus())) {
+            user.resetFailedAttempts();
+            user.setLockedUntil(null);
+            if ("LOCKED".equalsIgnoreCase(user.getAccountStatus()) || "PENDING_VERIFICATION".equalsIgnoreCase(user.getAccountStatus())) {
+                user.setAccountStatus("ACTIVE");
+            }
+            userRepository.save(user);
         }
 
         if ("INACTIVE".equalsIgnoreCase(user.getAccountStatus()) || "SUSPENDED".equalsIgnoreCase(user.getAccountStatus())) {

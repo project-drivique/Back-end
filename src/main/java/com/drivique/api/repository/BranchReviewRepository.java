@@ -11,6 +11,8 @@ public interface BranchReviewRepository extends JpaRepository<BranchReview, UUID
 
     List<BranchReview> findByBranchIdOrderByCreatedAtDesc(UUID branchId);
 
+    java.util.Optional<BranchReview> findFirstByReservationIdOrderByCreatedAtDesc(UUID reservationId);
+
     @Query("SELECT AVG(r.rating) FROM BranchReview r WHERE r.branch.id = :branchId")
     Double averageByBranchId(@Param("branchId") UUID branchId);
 }

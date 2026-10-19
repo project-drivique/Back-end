@@ -126,7 +126,7 @@ public class ContractService {
         Branch returnBranch = resolveReturnBranch(reservation, pickupBranch);
 
         String reservationStatus = reservation.getStatus() == null ? "" : reservation.getStatus().getCode();
-        String initialContractStatus = List.of("CONFIRMED", "IN_PROGRESS", "COMPLETED")
+        String initialContractStatus = List.of("CONFIRMED", "IN_PROGRESS", "COMPLETED", "PENDING_SIGNATURE")
                 .contains(reservationStatus.toUpperCase()) ? "PENDING_SIGNATURE" : "DRAFT";
         ContractStatus draftStatus = contractStatusRepository.findByCodeIgnoreCase(initialContractStatus)
                 .orElseThrow(() -> new IllegalStateException("Estado contractual no encontrado: " + initialContractStatus));

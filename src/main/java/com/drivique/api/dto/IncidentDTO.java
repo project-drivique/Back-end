@@ -22,6 +22,7 @@ public record IncidentDTO(
         UUID reporterId,
         String reporterName,
         String reporterEmail,
+        String reporterPhone,
         boolean internal,
         UUID assignedToId,
         String assignedToName,

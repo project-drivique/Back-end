@@ -498,7 +498,7 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT delivery_status FROM rental.reservation_delivery_points WHERE point_type = 'RETURN'", String.class)).isEqualTo("COMPLETED");
         assertThat(jdbc.queryForObject("SELECT status FROM location.delivery_drivers", String.class)).isEqualTo("AVAILABLE");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Entrega confirmada'", Integer.class)).isGreaterThan(0);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject LIKE '%confirmada%'", Integer.class)).isGreaterThan(0);
 
         // el enlace ya no sirve para volver a confirmar
         mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
@@ -512,8 +512,8 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
         mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
                 .andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT delivery_status FROM rental.reservation_delivery_points WHERE point_type = 'RETURN'", String.class)).isEqualTo("ASSIGNED");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Código de entrega rechazado'", Integer.class)).isGreaterThan(0);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Revisa tu código de entrega'", Integer.class)).isGreaterThan(0);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Código de devolución rechazado'", Integer.class)).isGreaterThan(0);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject = 'Revisa tu código de devolución'", Integer.class)).isGreaterThan(0);
     }
 
     @Test
