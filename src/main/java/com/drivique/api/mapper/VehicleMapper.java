@@ -38,7 +38,7 @@ public final class VehicleMapper {
         );
     }
 
-    /** Fotos del vehículo para el carrusel (hasta 3): la galería ordenada y, si no hay, la foto principal. */
+    /** Fotos del vehículo para el carrusel (hasta 8): la galería ordenada y, si no hay, la foto principal. */
     static java.util.List<String> galleryUrls(Vehicle v) {
         java.util.List<String> urls = v.getImages().stream()
                 .sorted(java.util.Comparator.comparing(com.drivique.api.model.VehicleImage::isPrimary).reversed()
@@ -46,7 +46,7 @@ public final class VehicleMapper {
                 .map(com.drivique.api.model.VehicleImage::getUrl)
                 .filter(u -> u != null && !u.isBlank())
                 .distinct()
-                .limit(3)
+                .limit(8)
                 .toList();
         if (urls.isEmpty() && v.getMainImageUrl() != null && !v.getMainImageUrl().isBlank()) {
             return java.util.List.of(v.getMainImageUrl());

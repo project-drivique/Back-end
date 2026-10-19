@@ -47,7 +47,7 @@ public class AdminVehicleService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.drivique.api.repository.VehicleImageRepository imageRepository;
 
-    /** Reemplaza la galería (hasta 3 URLs, la primera es la principal) cuando el cliente la envía. */
+    /** Reemplaza la galería (hasta 8 URLs, la primera es la principal) cuando el cliente la envía. */
     private void syncGallery(Vehicle vehicle, java.util.List<String> urls) {
         if (urls == null) return;
         java.util.List<String> clean = urls.stream()
@@ -55,7 +55,7 @@ public class AdminVehicleService {
                 .map(String::strip)
                 .filter(u -> !u.isBlank())
                 .distinct()
-                .limit(3)
+                .limit(8)
                 .toList();
         imageRepository.deleteByVehicleId(vehicle.getId());
         imageRepository.flush();
