@@ -50,7 +50,7 @@ public class ReservationController {
     @Operation(summary = "Confirmar reserva tras pago", description = "Convierte una retención técnica en una reserva oficial, generando su código.")
     @ApiResponse(responseCode = "200", description = "Reserva confirmada exitosamente")
     public ReservationResponseDTO confirmPayment(
-            @PathVariable UUID holdId,
+            @PathVariable String holdId,
             Authentication authentication
     ) {
         return reservationService.confirmReservationPayment(holdId, authentication.getName());
@@ -60,7 +60,7 @@ public class ReservationController {
     @ResponseStatus(HttpStatus.OK)
     @Operation(summary = "Notificar pago fallido", description = "Emite notificación de fallo de pago para la reserva.")
     public void reportPaymentFailed(
-            @PathVariable UUID holdId,
+            @PathVariable String holdId,
             Authentication authentication
     ) {
         reservationService.reportPaymentFailed(holdId, authentication.getName());

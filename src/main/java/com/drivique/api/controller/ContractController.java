@@ -73,14 +73,20 @@ public class ContractController {
     public ContractResponseDTO sign(
             @PathVariable UUID id,
             @RequestPart(value = "signature", required = false) MultipartFile signature,
-            @RequestPart("signatureStrokeData") String signatureStrokeData,
-            @RequestPart("signedCityId") String signedCityId,
-            @RequestPart("consentAccepted") String consentAccepted,
-            @RequestPart("documentVersion") String documentVersion,
+            @RequestPart(value = "signatureStrokeData", required = false) String signatureStrokeData,
+            @RequestPart(value = "signedCityId", required = false) String signedCityId,
+            @RequestPart(value = "consentAccepted", required = false) String consentAccepted,
+            @RequestPart(value = "documentVersion", required = false) String documentVersion,
             HttpServletRequest servletRequest,
             Authentication authentication
     ) {
-        return signatureService.sign(id, signature, signatureStrokeData, UUID.fromString(signedCityId),
+        UUID cityUuid = null;
+        if (signedCityId != null && !signedCityId.isBlank() && !"undefined".equalsIgnoreCase(signedCityId.trim())) {
+            try {
+                cityUuid = UUID.fromString(signedCityId.trim());
+            } catch (Exception ignored) {}
+        }
+        return signatureService.sign(id, signature, signatureStrokeData, cityUuid,
                 Boolean.parseBoolean(consentAccepted == null ? null : consentAccepted.trim()), documentVersion, servletRequest.getRemoteAddr(), authentication.getName());
     }
 

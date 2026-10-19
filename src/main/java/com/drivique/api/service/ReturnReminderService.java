@@ -19,8 +19,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Avisos de devolución: el día antes de la fecha de devolución y cuando ya venció. Solo avisa; la reserva
- * se finaliza cuando el encargado registra la devolución.
+ * Avisos de devolución. Solo avisa; la reserva se finaliza cuando el encargado registra la devolución.
+ * <ul>
+ *   <li>El día antes de la fecha de devolución (tarea diaria de las 9:00 am, hora de Colombia).</li>
+ *   <li>En el momento exacto en que la reserva vence (tarea de cada minuto): un único aviso al cliente y a los
+ *       encargados de la sucursal, a la hora y minuto de la devolución programada.</li>
+ *   <li>Cada día a las 9:00 am, mientras siga sin devolverse, un recordatorio de las reservas que vencieron en días
+ *       anteriores (las que vencieron hoy ya recibieron su aviso a la hora exacta).</li>
+ * </ul>
  */
 @Service
 public class ReturnReminderService {
@@ -49,6 +55,42 @@ public class ReturnReminderService {
         }
     }
 
+    /** Avisa en el minuto en que cada reserva en curso llega a su hora de devolución. */
+    @Scheduled(cron = "${app.jobs.return-overdue.cron:0 * * * * *}", zone = "America/Bogota")
+    public void scheduledOverdue() {
+        try {
+            int sent = sendOverdueNotices();
+            if (sent > 0) {
+                LOG.info("Avisos de reservas vencidas enviados: {}", sent);
+            }
+        } catch (Exception e) {
+            LOG.error("Error enviando avisos de reservas vencidas", e);
+        }
+    }
+
+    /**
+     * Aviso de vencimiento a la hora exacta: toda reserva en curso cuya fecha de devolución ya llegó recibe, una sola
+     * vez, el aviso al cliente (app y correo) y a los encargados de la sucursal. Como se ejecuta cada minuto, también
+     * pone al día los avisos que se hayan perdido si el servidor estuvo apagado. Los repetidos no se vuelven a enviar (la llave
+     * de idempotencia los descarta). Devuelve cuántos avisos procesó.
+     */
+    @Transactional
+    public int sendOverdueNotices() {
+        if (notifications == null) {
+            return 0;
+        }
+        int sent = 0;
+        for (Reservation r : reservations.findInProgressOverdue(Instant.now())) {
+            sent += notifyCustomer(r, "ROX-" + r.getId(), "Tu alquiler ya venció",
+                    "Hola " + r.getCustomer().getFirstName() + ", hoy llegó la fecha de devolución de " + vehicle(r) + " (reserva " + r.getCode()
+                            + "), programada para " + WHEN.format(r.getReturnDate().atZone(ZONE)) + ". Devuélvelo lo antes posible a la sucursal para evitar recargos.");
+            sent += notifyBranchStaff(r, "ROXS-" + r.getId(), "Reserva vencida sin devolver",
+                    "La reserva " + r.getCode() + " (" + vehicle(r) + ") debía devolverse el " + WHEN.format(r.getReturnDate().atZone(ZONE))
+                            + " y sigue en curso.");
+        }
+        return sent;
+    }
+
     /** Devuelve cuántos avisos nuevos se generaron (cada uno se envía una sola vez por día y reserva). */
     @Transactional
     public int sendReminders() {
@@ -64,7 +106,9 @@ public class ReturnReminderService {
                     "Hola " + r.getCustomer().getFirstName() + ", mañana vence tu alquiler de " + vehicle(r) + " (reserva " + r.getCode()
                             + "). Devuelve el vehículo en la sucursal antes de " + WHEN.format(r.getReturnDate().atZone(ZONE)) + ".");
         }
-        for (Reservation r : reservations.findInProgressOverdue(Instant.now())) {
+        // Recordatorio diario solo de las que vencieron en días anteriores: las de hoy ya se avisaron a su hora exacta
+        Instant startOfToday = today.atStartOfDay(ZONE).toInstant();
+        for (Reservation r : reservations.findInProgressOverdue(startOfToday)) {
             String day = today.toString().replace("-", "");
             sent += notifyCustomer(r, "RO-" + r.getId() + "-" + day, "Tu alquiler ya venció",
                     "Hola " + r.getCustomer().getFirstName() + ", la fecha de devolución de " + vehicle(r) + " (reserva " + r.getCode()

@@ -44,7 +44,7 @@ class AdminPromotionIntegrationTests extends DatabaseHealthTestSupport {
     }
 
     @Test
-    @WithMockUser(roles = "SUPER_ADMIN")
+    @WithMockUser(roles = "BRANCH_ADMIN")
     void adminCreatesUpdatesTogglesAndDeletesPromotion() throws Exception {
         LocalDate today = LocalDate.now();
         mvc.perform(post("/v1/admin/promotions").contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +75,7 @@ class AdminPromotionIntegrationTests extends DatabaseHealthTestSupport {
     }
 
     @Test
-    @WithMockUser(roles = "SUPER_ADMIN")
+    @WithMockUser(roles = "BRANCH_ADMIN")
     void rejectsInvalidDatesAndPercentage() throws Exception {
         LocalDate today = LocalDate.now();
         mvc.perform(post("/v1/admin/promotions").contentType(MediaType.APPLICATION_JSON)

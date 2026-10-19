@@ -270,6 +270,50 @@ class AdminVehicleIntegrationTests extends DatabaseHealthTestSupport {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN")
+    void savesSeveralPhotoUrlsAndTheFirstOneIsTheMainPhoto() throws Exception {
+        String payload = """
+                {
+                    "plate": "IMG-123",
+                    "vin": "1HGCR2F83HA000888",
+                    "color": "Plata",
+                    "doorsCount": 5,
+                    "trunkCapacityLiters": 440,
+                    "brandId": "%s",
+                    "categoryId": "%s",
+                    "transmissionTypeId": "%s",
+                    "fuelTypeId": "%s",
+                    "currentBranchId": "%s",
+                    "model": "Corolla Cross XEI",
+                    "year": 2024,
+                    "passengerCapacity": 5,
+                    "mileage": 5000,
+                    "dailyRate": 195000.00,
+                    "imageUrls": ["https://x/1.jpg", "https://x/2.jpg", "https://x/3.jpg"]
+                }
+                """.formatted(brand.getId(), category.getId(), transmission.getId(), fuel.getId(), branch.getId());
+
+        String body = mvc.perform(post("/api/v1/admin/vehicles")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.mainImageUrl").value("https://x/1.jpg"))
+                .andExpect(jsonPath("$.imageUrls.length()").value(3))
+                .andReturn().getResponse().getContentAsString();
+        String id = com.jayway.jsonpath.JsonPath.read(body, "$.id");
+
+        mvc.perform(put("/api/v1/admin/vehicles/" + id)
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mileage\": 5000, \"dailyRate\": 195000.00, \"currentBranchId\": \"" + branch.getId() + "\", \"imageUrls\": [\"https://x/new.jpg\", \"https://x/2.jpg\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mainImageUrl").value("https://x/new.jpg"))
+                .andExpect(jsonPath("$.imageUrls.length()").value(2))
+                .andExpect(jsonPath("$.imageUrls[1]").value("https://x/2.jpg"));
+    }
+
+    @Test
     void unauthenticatedAccessReturnsUnauthorized() throws Exception {
         mvc.perform(get("/api/v1/admin/vehicles").contextPath("/api"))
                 .andExpect(status().isUnauthorized());
