@@ -128,7 +128,7 @@ class ReservationDocumentReviewServiceTests {
     }
 
     @Test
-    void validateCanBePaid_WhenPendingDocumentReview_DoesNotThrow() {
+    void validateCanBePaid_WhenPendingDocumentReview_IsRefused() {
         Vehicle vehicle = mock(Vehicle.class);
         InsuranceCoverage insurance = mock(InsuranceCoverage.class);
         MileagePlan plan = mock(MileagePlan.class);
@@ -139,7 +139,7 @@ class ReservationDocumentReviewServiceTests {
                 BigDecimal.valueOf(100), BigDecimal.valueOf(300), null, null, true
         );
 
-        reviewService.validateCanBePaid(reservation);
+        org.junit.jupiter.api.Assertions.assertThrows(com.drivique.api.exception.ConflictException.class, () -> reviewService.validateCanBePaid(reservation));
     }
 
     @Test
@@ -215,5 +215,36 @@ class ReservationDocumentReviewServiceTests {
                 eq(reservation.getId()),
                 any()
         );
+    }
+
+    @Test
+    void onDocumentsReviewed_WithSeveralPendingReservations_SendsOnlyOneNotificationAndOneEmail() {
+        UserDocument licenseDoc = new UserDocument(user, licenseType, approvedStatus, "DL12345", "front.jpg", "back.jpg");
+        UserDocument ccDoc = new UserDocument(user, ccType, approvedStatus, "10203040", "front.jpg", "back.jpg");
+        when(userDocumentRepository.findByUserId(user.getId())).thenReturn(List.of(licenseDoc, ccDoc));
+
+        Instant pickupDate = Instant.now().plus(5, ChronoUnit.DAYS);
+        List<Reservation> reservations = new java.util.ArrayList<>();
+        for (String code : List.of("HLD-AAA", "HLD-BBB", "HLD-CCC")) {
+            Reservation r = new Reservation(
+                    code, user, mock(Vehicle.class), pendingReviewStatus, mock(InsuranceCoverage.class), mock(MileagePlan.class), mock(Branch.class),
+                    pickupDate, pickupDate.plus(3, ChronoUnit.DAYS),
+                    BigDecimal.valueOf(150), BigDecimal.valueOf(450), null, null, true
+            );
+            r.setId(UUID.randomUUID());
+            reservations.add(r);
+        }
+
+        when(reservationRepository.findByCustomerOrderByCreatedAtDesc(user)).thenReturn(reservations);
+        when(reservationStatusRepository.findByCodeIgnoreCase("PENDING_PAYMENT")).thenReturn(Optional.of(pendingPaymentStatus));
+        when(reservationRepository.save(any(Reservation.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        reviewService.onDocumentsReviewed(user);
+
+        // las 3 reservas pasan a pendiente de pago...
+        assertThat(reservations).allSatisfy(r -> assertThat(r.getStatus().getCode()).isEqualTo("PENDING_PAYMENT"));
+        // ...pero la persona recibe un solo aviso en la app y un solo correo
+        verify(notificationService, org.mockito.Mockito.times(1)).sendWithMetadata(eq(user), eq("IN_APP"), eq("RESERVATION"), anyString(), anyString(), any(), any());
+        verify(notificationService, org.mockito.Mockito.times(1)).sendWithMetadata(eq(user), eq("EMAIL"), eq("RESERVATION"), anyString(), anyString(), any(), any());
     }
 }
