@@ -85,6 +85,9 @@ public class ReservationDocumentReviewService {
     public void validateCanBePaid(Reservation reservation) {
         if (reservation != null && reservation.getStatus() != null) {
             String code = reservation.getStatus().getCode();
+            if ("PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(code)) {
+                throw new ConflictException("Tus documentos aún están en revisión por la sucursal. Podrás pagar cuando sean aprobados.");
+            }
             if ("PENDING_SCHEDULE".equalsIgnoreCase(code)) {
                 throw new ConflictException("La reserva fue registrada fuera del horario de atención de la sucursal y se activará automáticamente al inicio de la jornada de atención.");
             }
@@ -101,41 +104,54 @@ public class ReservationDocumentReviewService {
         ReservationStatus pendingPaymentStatus = reservationStatusRepository.findByCodeIgnoreCase("PENDING_PAYMENT")
                 .orElseGet(() -> reservationStatusRepository.save(new ReservationStatus("PENDING_PAYMENT", "Pending payment", true)));
 
+        List<Reservation> validadas = new java.util.ArrayList<>();
         for (Reservation r : userReservations) {
             if (r.getStatus() != null && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(r.getStatus().getCode())) {
                 r.setStatus(pendingPaymentStatus);
 
                 r.setCashPaymentExpiresAt(ReservationExpirationService.paymentDeadline(Instant.now(), r.getPickupDate()));
 
-                Reservation saved = reservationRepository.save(r);
-
-                String path = "/reservas?detalle=" + saved.getId();
-                String base = (frontendUrl != null ? frontendUrl : "http://localhost:5173").replaceAll("/+$", "");
-                String fullUrl = base + path;
-                Map<String, Object> metadata = Map.of(
-                        "actionLabel", "Continuar con mi reserva",
-                        "actionPath", path,
-                        "actionUrl", fullUrl,
-                        "bookingCode", saved.getCode(),
-                        "reservationId", saved.getId().toString()
-                );
-
-                String subject = "¡Documentos validados exitosamente!";
-                String message = "Tus documentos de identidad y licencia han sido aprobados por el encargado de la sucursal. Tu reserva " + saved.getCode()
-                        + " ha sido validada para continuar con tu proceso.";
-
-                try {
-                    notificationService.sendWithMetadata(user, "IN_APP", "RESERVATION", subject, message, saved.getId(), metadata);
-                } catch (Exception e) {
-                    LOG.warn("Error al enviar notificación in-app de documentos aprobados: {}", e.getMessage());
-                }
-
-                try {
-                    notificationService.sendWithMetadata(user, "EMAIL", "RESERVATION", subject, message, saved.getId(), metadata);
-                } catch (Exception e) {
-                    LOG.warn("Error al enviar correo de documentos aprobados: {}", e.getMessage());
-                }
+                validadas.add(reservationRepository.save(r));
             }
+        }
+        if (validadas.isEmpty()) {
+            return;
+        }
+
+        // Una sola notificación y un solo correo aunque la persona tenga varias reservas por validar
+        Reservation primera = validadas.get(0);
+        String path = "/reservas?detalle=" + primera.getId();
+        String base = (frontendUrl != null ? frontendUrl : "http://localhost:5173").replaceAll("/+$", "");
+        String fullUrl = base + path;
+        Map<String, Object> metadata = Map.of(
+                "actionLabel", "Continuar con mi reserva",
+                "actionPath", path,
+                "actionUrl", fullUrl,
+                "bookingCode", primera.getCode(),
+                "reservationId", primera.getId().toString()
+        );
+
+        String subject = "¡Documentos validados exitosamente!";
+        String message;
+        if (validadas.size() == 1) {
+            message = "Tus documentos de identidad y licencia han sido aprobados por el encargado de la sucursal. Tu reserva " + primera.getCode()
+                    + " ha sido validada para continuar con tu proceso.";
+        } else {
+            String codigos = validadas.stream().map(Reservation::getCode).collect(java.util.stream.Collectors.joining(", "));
+            message = "Tus documentos de identidad y licencia han sido aprobados por el encargado de la sucursal. Tus reservas " + codigos
+                    + " han sido validadas para continuar con tu proceso.";
+        }
+
+        try {
+            notificationService.sendWithMetadata(user, "IN_APP", "RESERVATION", subject, message, primera.getId(), metadata);
+        } catch (Exception e) {
+            LOG.warn("Error al enviar notificación in-app de documentos aprobados: {}", e.getMessage());
+        }
+
+        try {
+            notificationService.sendWithMetadata(user, "EMAIL", "RESERVATION", subject, message, primera.getId(), metadata);
+        } catch (Exception e) {
+            LOG.warn("Error al enviar correo de documentos aprobados: {}", e.getMessage());
         }
     }
 }
