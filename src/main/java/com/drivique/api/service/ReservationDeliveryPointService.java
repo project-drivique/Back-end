@@ -163,6 +163,7 @@ public class ReservationDeliveryPointService {
         point.setAddress(address);
         point.setFlightOrBusNumber(flightOrBus);
         point.setReferenceDetails(reference);
+        point.ensurePin();
         point.setUpdatedAt(Instant.now());
 
         ReservationDeliveryPoint savedPoint = deliveryPointRepository.save(point);
@@ -188,12 +189,20 @@ public class ReservationDeliveryPointService {
     }
 
     public DeliveryPointResponseDTO mapToDTO(ReservationDeliveryPoint point) {
-        return DeliveryPointResponseDTO.from(point, isOwnerRequest(point.getReservation()));
+        return DeliveryPointResponseDTO.from(point, true);
     }
 
     private static boolean isOwnerRequest(Reservation reservation) {
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.getName() != null && reservation.getCustomer() != null
-                && auth.getName().equalsIgnoreCase(reservation.getCustomer().getEmail());
+        if (auth == null || auth.getName() == null) {
+            return false;
+        }
+        if (reservation.getCustomer() != null && auth.getName().equalsIgnoreCase(reservation.getCustomer().getEmail())) {
+            return true;
+        }
+        return auth.getAuthorities().stream().anyMatch(a -> {
+            String role = a.getAuthority();
+            return role.contains("ADMIN") || role.contains("EMPLOYEE") || role.contains("BRANCH") || role.contains("rental");
+        });
     }
 }
