@@ -58,7 +58,39 @@ public class ReservationDeliveryPoint {
     @JoinColumn(name = "driver_id")
     private DeliveryDriver driver;
 
-    @Column(name = "delivery_pin", length = 4)
+    private static final String PIN_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+    private static final java.security.SecureRandom SECURE_RANDOM = new java.security.SecureRandom();
+
+    public static String generateRandomPin() {
+        StringBuilder sb = new StringBuilder(6);
+        for (int i = 0; i < 6; i++) {
+            sb.append(PIN_CHARS.charAt(SECURE_RANDOM.nextInt(PIN_CHARS.length())));
+        }
+        return sb.toString();
+    }
+
+    @PrePersist
+    public void prePersist() {
+        if (createdAt == null) createdAt = Instant.now();
+        if (updatedAt == null) updatedAt = Instant.now();
+        ensurePin();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = Instant.now();
+        ensurePin();
+    }
+
+    public void ensurePin() {
+        if ("HOME_DELIVERY".equalsIgnoreCase(this.modality)) {
+            if (this.deliveryPin == null || this.deliveryPin.trim().length() != 6) {
+                this.deliveryPin = generateRandomPin();
+            }
+        }
+    }
+
+    @Column(name = "delivery_pin", length = 10)
     private String deliveryPin;
 
     @Column(name = "delivery_status", nullable = false, length = 12)
@@ -91,6 +123,9 @@ public class ReservationDeliveryPoint {
         this.referenceDetails = referenceDetails;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+        if ("HOME_DELIVERY".equalsIgnoreCase(modality)) {
+            this.deliveryPin = generateRandomPin();
+        }
     }
 
     public UUID getId() { return id; }
@@ -108,7 +143,12 @@ public class ReservationDeliveryPoint {
 
     public void setReservation(Reservation reservation) { this.reservation = reservation; }
     public void setPointType(String pointType) { this.pointType = pointType; }
-    public void setModality(String modality) { this.modality = modality; }
+    public void setModality(String modality) {
+        this.modality = modality;
+        if ("HOME_DELIVERY".equalsIgnoreCase(modality) && (this.deliveryPin == null || this.deliveryPin.trim().length() != 6)) {
+            this.deliveryPin = generateRandomPin();
+        }
+    }
     public void setBranch(Branch branch) { this.branch = branch; }
     public void setCity(City city) { this.city = city; }
     public void setNeighborhood(String neighborhood) { this.neighborhood = neighborhood; }
@@ -118,7 +158,12 @@ public class ReservationDeliveryPoint {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
     public DeliveryDriver getDriver() { return driver; }
-    public String getDeliveryPin() { return deliveryPin; }
+    public String getDeliveryPin() {
+        if ("HOME_DELIVERY".equalsIgnoreCase(this.modality) && (this.deliveryPin == null || this.deliveryPin.trim().length() != 6)) {
+            this.deliveryPin = generateRandomPin();
+        }
+        return deliveryPin;
+    }
     public String getDeliveryStatus() { return deliveryStatus; }
     public Instant getDeliveredAt() { return deliveredAt; }
 

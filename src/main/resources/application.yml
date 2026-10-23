@@ -9,7 +9,7 @@ spring:
     host: ${SPRING_MAIL_HOST:smtp.gmail.com}
     port: ${SPRING_MAIL_PORT:587}
     username: ${SPRING_MAIL_USERNAME:odrivique@gmail.com}
-    password: ${SPRING_MAIL_PASSWORD:}
+    password: ${SPRING_MAIL_PASSWORD:ogiajocxxmcddixw}
     properties:
       mail.smtp.auth: ${SPRING_MAIL_SMTP_AUTH:true}
       mail.smtp.starttls.enable: ${SPRING_MAIL_STARTTLS:true}

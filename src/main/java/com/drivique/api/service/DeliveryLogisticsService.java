@@ -26,6 +26,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class DeliveryLogisticsService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String ALPHANUMERIC_PIN_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+    public static String generateDeliveryPin() {
+        return ReservationDeliveryPoint.generateRandomPin();
+    }
 
     private final DeliveryDriverRepository drivers;
     private final ReservationDeliveryPointRepository points;
@@ -99,7 +104,9 @@ public class DeliveryLogisticsService {
         if ("INACTIVE".equals(driver.getStatus())) {
             throw new ConflictException("El conductor está inactivo");
         }
-        String pin = point.getDeliveryPin() != null ? point.getDeliveryPin() : String.format("%04d", RANDOM.nextInt(10000));
+        String pin = (point.getDeliveryPin() != null && point.getDeliveryPin().length() == 6)
+                ? point.getDeliveryPin()
+                : generateDeliveryPin();
         point.assignDriver(driver, pin);
         driver.setStatus("ON_ROUTE");
         drivers.save(driver);
@@ -107,7 +114,7 @@ public class DeliveryLogisticsService {
         if (notices != null) {
             notices.driverAssigned(saved, driver, pin);
         }
-        return DeliveryPointResponseDTO.from(saved, false);
+        return DeliveryPointResponseDTO.from(saved, true);
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -171,8 +178,8 @@ public class DeliveryLogisticsService {
         if ("COMPLETED".equals(point.getDeliveryStatus())) {
             throw new ConflictException(("RETURN".equals(point.getPointType()) ? "La devolución" : "La entrega") + " ya fue completada");
         }
-        if (pin == null || !pin.equals(point.getDeliveryPin())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El PIN no coincide.");
+        if (pin == null || !pin.strip().equalsIgnoreCase(point.getDeliveryPin())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El PIN o código no coincide.");
         }
         point.completeDelivery();
         DeliveryDriver driver = point.getDriver();
