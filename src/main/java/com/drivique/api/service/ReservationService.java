@@ -904,8 +904,16 @@ public class ReservationService {
 
     private static boolean isOwnerRequest(Reservation r) {
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.getName() != null && r.getCustomer() != null
-                && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail());
+        if (auth == null || auth.getName() == null) {
+            return false;
+        }
+        if (r.getCustomer() != null && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail())) {
+            return true;
+        }
+        return auth.getAuthorities().stream().anyMatch(a -> {
+            String role = a.getAuthority();
+            return role.contains("ADMIN") || role.contains("EMPLOYEE") || role.contains("BRANCH") || role.contains("rental");
+        });
     }
 
     private ReservationResponseDTO mapToDTO(
