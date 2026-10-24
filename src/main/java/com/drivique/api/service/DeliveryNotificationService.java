@@ -41,6 +41,7 @@ public class DeliveryNotificationService {
     private final NotificationService notifications;
     private final String fromAddress;
     private final String backendUrl;
+    private final java.util.Map<String, Long> lastSentMap = new java.util.concurrent.ConcurrentHashMap<>();
 
     public DeliveryNotificationService(ObjectProvider<JavaMailSender> mailSender, DeliveryActionTokens tokens, BranchUserRepository branchUsers,
                                        @Autowired(required = false) NotificationService notifications,
@@ -73,7 +74,24 @@ public class DeliveryNotificationService {
                 }
             }
         }
-        sendDriverEmail(point, driver, pin, type, where);
+
+        // Deduplicación para evitar correos duplicados por clicks rápidos
+        String dedupKey = point.getId() + ":" + driver.getId();
+        long now = System.currentTimeMillis();
+        Long prev = lastSentMap.put(dedupKey, now);
+        if (prev != null && (now - prev) < 15_000) {
+            LOG.info("Omitiendo correo duplicado al conductor {} para entrega {} (enviado hace {} ms)", driver.getEmail(), point.getId(), now - prev);
+            return;
+        }
+
+        // Envío asíncrono para que la API responda inmediatamente a la interfaz sin bloquear al usuario
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                sendDriverEmail(point, driver, pin, type, where);
+            } catch (Exception ex) {
+                LOG.error("Error en envío asíncrono de correo a {}: {}", driver.getEmail(), ex.getMessage());
+            }
+        });
     }
 
     /** Cuando el cliente paga: los puntos a domicilio sin conductor se avisan a la sucursal para que asigne uno. */
@@ -141,29 +159,63 @@ public class DeliveryNotificationService {
         }
         try {
             Reservation reservation = point.getReservation();
-            Instant expires = Instant.now().plus(Duration.ofDays(3));
+            Instant eventDate = "RETURN".equals(point.getPointType()) ? reservation.getReturnDate() : reservation.getPickupDate();
+            if (eventDate == null) {
+                eventDate = Instant.now();
+            }
+            java.time.ZonedDateTime eventZdt = eventDate.atZone(java.time.ZoneId.of("America/Bogota"));
+            java.time.Instant expires = eventZdt.toLocalDate().atTime(23, 59, 59).atZone(java.time.ZoneId.of("America/Bogota")).toInstant();
+            if (expires.isBefore(Instant.now())) {
+                expires = Instant.now().atZone(java.time.ZoneId.of("America/Bogota")).toLocalDate().atTime(23, 59, 59).atZone(java.time.ZoneId.of("America/Bogota")).toInstant().plus(Duration.ofHours(24));
+            }
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(java.time.ZoneId.of("America/Bogota"));
+            String dayStr = fmt.format(eventZdt);
+
             String confirm = link(reservation, point, "CONFIRM", expires);
             String reject = link(reservation, point, "REJECT", expires);
             User customer = reservation.getCustomer();
             String vehicle = reservation.getVehicle() != null ? reservation.getVehicle().getModel() + " (" + reservation.getVehicle().getPlate() + ")" : "";
-            String html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body style=\"font-family:Arial,sans-serif;background:#f8fafc;padding:24px\">"
-                    + "<div style=\"max-width:540px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px\">"
-                    + "<h2 style=\"margin:0 0 12px;color:#0f172a\">Nueva " + type + " a domicilio</h2>"
-                    + "<p style=\"color:#334155\">Hola " + esc(driver.getFullName()) + ", se te asignó la " + type + " de la reserva <b>" + esc(reservation.getCode())
-                    + "</b>.</p><table style=\"width:100%;font-size:14px;color:#334155\">"
-                    + row("Vehículo", vehicle) + row("Dirección", where) + row("Cliente", customer != null ? customer.getFullName() : "")
-                    + row("Teléfono del cliente", customer != null && customer.getPhone() != null ? customer.getPhone() : "—")
-                    + "</table><p style=\"margin:18px 0 6px;color:#334155\">Código de confirmación (el cliente debe dártelo al recibir):</p>"
-                    + "<p style=\"font-size:32px;letter-spacing:8px;font-weight:800;margin:0 0 18px;color:#1e3a8a\">" + esc(pin) + "</p>"
-                    + "<p style=\"color:#334155\">Cuando el cliente te dé el código, compáralo con este y elige:</p>"
-                    + "<p><a href=\"" + confirm + "\" style=\"display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px;margin-right:8px\">Código correcto: confirmar entrega</a>"
-                    + "<a href=\"" + reject + "\" style=\"display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px\">Código incorrecto: rechazar</a></p>"
-                    + "<p style=\"color:#94a3b8;font-size:12px\">Los enlaces vencen en 3 días. Este es un mensaje automático de Drivique.</p></div></body></html>";
+            String mapsUrl = "https://www.google.com/maps/search/?api=1&query=" + java.net.URLEncoder.encode(where, java.nio.charset.StandardCharsets.UTF_8);
+            String html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>"
+                    + "<body style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px;\">"
+                    + "<div style=\"max-width: 520px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);\">"
+                    + "  <div style=\"background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); padding: 28px 32px; text-align: center;\">"
+                    + "    <h1 style=\"color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px;\">DRIVIQUE</h1>"
+                    + "    <p style=\"color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;\">Tu libertad sobre ruedas comienza aquí</p>"
+                    + "  </div>"
+                    + "  <div style=\"padding: 30px 32px 24px;\">"
+                    + "    <h2 style=\"color: #0f172a; margin: 0 0 10px; font-size: 18px; font-weight: 700;\">Nueva " + type + " a domicilio</h2>"
+                    + "    <p style=\"color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 18px;\">"
+                    + "      Hola <strong>" + esc(driver.getFullName()) + "</strong>, se te asignó la " + type + " de la reserva <strong>#" + esc(reservation.getCode()) + "</strong>."
+                    + "    </p>"
+                    + "    <div style=\"background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; margin: 0 0 20px;\">"
+                    + "      <table style=\"width: 100%; border-collapse: collapse; font-size: 13.5px;\">"
+                    + "        <tr><td style=\"padding: 5px 0; color: #64748b; width: 32%;\">Vehículo:</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(vehicle) + "</td></tr>"
+                    + "        <tr><td style=\"padding: 5px 0; color: #64748b;\">Dirección:</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(where) + "</td></tr>"
+                    + "        <tr><td style=\"padding: 5px 0; color: #64748b;\">Cliente:</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(customer != null ? customer.getFullName() : "—") + (customer != null && customer.getPhone() != null ? " (" + esc(customer.getPhone()) + ")" : "") + "</td></tr>"
+                    + "      </table>"
+                    + "    </div>"
+                    + "    <p style=\"color: #475569; font-size: 13.5px; font-weight: 600; margin: 0 0 8px; text-align: center;\">Código de confirmación (el cliente debe dártelo al recibir):</p>"
+                    + "    <div style=\"background-color: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 16px; text-align: center; margin: 0 0 16px;\">"
+                    + "      <span style=\"font-family: 'Courier New', Courier, monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #1e3a8a;\">" + esc(pin) + "</span>"
+                    + "    </div>"
+                    + "    <div style=\"margin: 0 0 12px;\">"
+                    + "      <a href=\"" + confirm + "\" style=\"display: block; box-sizing: border-box; background: #16a34a; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 20px; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(22, 163, 74, 0.28);\">✓ Confirmar " + type + "</a>"
+                    + "    </div>"
+                    + "    <div style=\"text-align: center; margin-bottom: 20px;\">"
+                    + "      <a href=\"" + reject + "\" style=\"color: #dc2626; font-size: 12.5px; text-decoration: none; font-weight: 600;\">¿El código no coincide? Reportar rechazo</a>"
+                    + "    </div>"
+                    + "    <p style=\"color: #64748b; font-size: 12px; line-height: 1.5; margin: 0 0 18px; text-align: center;\">⏱️ Código válido únicamente para el día de la " + type + " (" + dayStr + ") hasta las 23:59. Por seguridad de la flota, no entregues las llaves sin verificar el código.</p>"
+                    + "    <div style=\"border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center;\">"
+                    + "      <p style=\"color: #94a3b8; font-size: 11.5px; margin: 0;\">Este es un mensaje operativo automático de Drivique.</p>"
+                    + "    </div>"
+                    + "  </div>"
+                    + "</div></body></html>";
             MimeMessage message = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setFrom(new InternetAddress(fromAddress, "Drivique"));
             helper.setTo(driver.getEmail());
-            helper.setSubject("Nueva " + type + " a domicilio - reserva " + reservation.getCode());
+            helper.setSubject("Nueva " + type + " a domicilio - reserva #" + reservation.getCode());
             helper.setText("Se te asignó una " + type + " a domicilio. Código: " + pin + ". Confirmar: " + confirm + " Rechazar: " + reject, brand(html));
             sender.send(message);
             LOG.info("Correo de {} enviado al conductor {}", type, driver.getEmail());
