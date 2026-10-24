@@ -69,6 +69,11 @@ public class DeliveryDriverActionController {
             return completedNoticePage(point);
         }
 
+        // Si la entrega está programada para una fecha futura, las acciones están bloqueadas hasta el día del servicio
+        if (isBeforeEventDate(point, a.pointType())) {
+            return lockedFutureDeliveryPage(point, a.pointType());
+        }
+
         boolean isConfirm = "CONFIRM".equalsIgnoreCase(a.action());
         String actionUrl = request.getRequestURI();
         return renderConfirmationCard(isConfirm, token, actionUrl, point, a.pointType());
@@ -85,6 +90,12 @@ public class DeliveryDriverActionController {
 
         DeliveryActionTokens.Action a = action.get();
         ReservationDeliveryPoint point = findPoint(a);
+
+        if (isBeforeEventDate(point, a.pointType())) {
+            return errorPage(400, "Acción aún no disponible",
+                    "Por motivos de seguridad y control operativo, las acciones de confirmación y reporte de código solo se habilitan el día programado del servicio.",
+                    "scheduled");
+        }
 
         try {
             if ("CONFIRM".equalsIgnoreCase(a.action())) {
@@ -262,6 +273,76 @@ public class DeliveryDriverActionController {
             """.formatted(summaryHtml);
 
         return renderFullPage(200, "Entrega ya completada", body);
+    }
+
+    private boolean isBeforeEventDate(ReservationDeliveryPoint point, String pointType) {
+        if (point == null) return false;
+        Reservation res = point.getReservation();
+        if (res == null) return false;
+        java.time.Instant target = "RETURN".equalsIgnoreCase(pointType) ? res.getReturnDate() : res.getPickupDate();
+        if (target == null) return false;
+        ZoneId zone = ZoneId.of("America/Bogota");
+        java.time.LocalDate eventDate = target.atZone(zone).toLocalDate();
+        java.time.LocalDate today = java.time.LocalDate.now(zone);
+        return today.isBefore(eventDate);
+    }
+
+    private ResponseEntity<String> lockedFutureDeliveryPage(ReservationDeliveryPoint point, String pointType) {
+        String serviceLabel = "RETURN".equalsIgnoreCase(pointType) ? "Devolución" : "Entrega";
+        Reservation res = point != null ? point.getReservation() : null;
+        java.time.Instant target = res != null ? ("RETURN".equalsIgnoreCase(pointType) ? res.getReturnDate() : res.getPickupDate()) : null;
+        ZoneId zone = ZoneId.of("America/Bogota");
+        String scheduledDateStr = target != null
+                ? DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(zone).format(target)
+                : "el día programado";
+
+        String badgeText = "Acción bloqueada · " + serviceLabel + " programada";
+        String title = "Disponible el día de la " + serviceLabel.toLowerCase();
+        String subtitle = "Esta entrega está programada para el " + scheduledDateStr + ". Por motivos de seguridad operativa y control de auditoría, las opciones de confirmación y reporte de código solo se habilitarán el día del servicio.";
+
+        String noticeBox = """
+            <div class="notice-box notice-neutral">
+              <div class="notice-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+              </div>
+              <div>
+                <strong>Seguridad y precisión:</strong> El cliente debe suministrarte su PIN verbal de 6 caracteres únicamente en el momento exacto de entregarle el vehículo.
+              </div>
+            </div>
+            """;
+
+        String summaryHtml = buildReservationSummaryHtml(point, serviceLabel + " a domicilio");
+
+        String body = """
+            <div class="status-badge-container">
+              <span class="badge badge-locked">%s</span>
+            </div>
+            <div class="result-icon-wrapper" style="background:#f1f5f9; border:2px solid #cbd5e1;">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <h2 class="card-title text-center">%s</h2>
+            <p class="card-subtitle text-center">%s</p>
+            %s
+            %s
+            <button type="button" disabled class="btn btn-locked">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span>Se desbloquea el %s</span>
+            </button>
+            <div style="text-align: center; margin-top: 18px;">
+              <span class="safe-close-hint">Guarda este enlace; podrás abrirlo y gestionarlo el día del servicio.</span>
+            </div>
+            """.formatted(escape(badgeText), escape(title), escape(subtitle), summaryHtml, noticeBox, escape(scheduledDateStr));
+
+        return renderFullPage(200, "Entrega programada", body);
     }
 
     private ResponseEntity<String> errorPage(int status, String title, String message, String type) {
@@ -499,6 +580,11 @@ public class DeliveryDriverActionController {
                   color: #991b1b;
                   border: 1px solid #fecaca;
                 }
+                .badge-locked {
+                  background: #f1f5f9;
+                  color: #475569;
+                  border: 1px solid #cbd5e1;
+                }
                 .card-title {
                   font-size: 21px;
                   font-weight: 800;
@@ -671,6 +757,15 @@ public class DeliveryDriverActionController {
                 .btn-reject:hover:not(:disabled) {
                   filter: brightness(1.05);
                   box-shadow: 0 14px 24px -3px rgba(239, 68, 68, 0.5);
+                }
+                .btn-locked {
+                  background: #94a3b8;
+                  cursor: not-allowed;
+                  box-shadow: none;
+                }
+                .btn-locked:hover {
+                  filter: none;
+                  box-shadow: none;
                 }
                 .result-icon-wrapper {
                   width: 72px;
