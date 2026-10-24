@@ -48,7 +48,10 @@ public class SecurityConfig {
                         .contentSecurityPolicy(csp -> csp
                                 .policyDirectives("default-src 'self' data: blob:; frame-ancestors *; script-src 'self' 'unsafe-inline'"))
                 )
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/uploads/kyc/**").denyAll()
+                        .anyRequest().permitAll()
+                )
                 .build();
     }
 
