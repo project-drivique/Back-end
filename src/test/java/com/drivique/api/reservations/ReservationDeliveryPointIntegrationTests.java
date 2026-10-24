@@ -480,6 +480,7 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
         mvc.perform(post("/api/v1/admin/deliveries/{id}/RETURN/assign", reservationId).contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"driverId\": \"" + driverId + "\"}"))
                 .andExpect(status().isOk());
+        jdbc.execute("UPDATE rental.reservations SET pickup_date = now() - interval '2 days', return_date = now() WHERE id = '" + reservationId + "'");
         return actionTokens.create(java.util.UUID.fromString(String.valueOf(reservationId)), "RETURN", action, java.time.Instant.now().plusSeconds(3600));
     }
 
