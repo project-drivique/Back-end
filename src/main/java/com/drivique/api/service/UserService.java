@@ -140,6 +140,9 @@ public class UserService {
             user.setPhone(null);
             user.setBirthDate(null);
             user.setNationalityId(null);
+            user.setDocumentTypeId(null);
+            user.setDocumentNumber(null);
+            user.setAddress(null);
             user.setPasswordHash("DELETED_" + UUID.randomUUID());
             user.setAccountStatus("DELETED");
             user.setDeletedAt(Instant.now());
