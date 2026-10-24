@@ -7,11 +7,14 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -75,5 +78,30 @@ public class UserDocumentController {
                 frontFile,
                 backFile
         );
+    }
+
+    @GetMapping("/{id}/file")
+    @Operation(
+            summary = "Descargar o visualizar archivo del documento propio (Desencriptado al vuelo)",
+            description = "Permite al usuario propietario ver su documento (anverso o reverso) descifrado en memoria con sesión activa."
+    )
+    @ApiResponse(responseCode = "200", description = "Stream del documento descifrado")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
+    @ApiResponse(responseCode = "403", ref = "#/components/responses/Error403")
+    @ApiResponse(responseCode = "404", ref = "#/components/responses/Error404")
+    public ResponseEntity<byte[]> getMyDocumentFile(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "side", defaultValue = "front") String side,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        var docFile = userDocumentService.getDocumentFile(id, side, authentication.getName(), request.getRemoteAddr());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(docFile.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + docFile.filename() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.EXPIRES, "0")
+                .body(docFile.content());
     }
 }
