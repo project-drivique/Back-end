@@ -174,6 +174,19 @@ public class ReservationDeliveryPoint {
         this.updatedAt = Instant.now();
     }
 
+    public void setDeliveryStatus(String deliveryStatus) {
+        this.deliveryStatus = deliveryStatus;
+        this.updatedAt = Instant.now();
+    }
+
+    public void cancelDelivery() {
+        this.deliveryStatus = "CANCELLED";
+        if (this.driver != null) {
+            this.driver.setStatus("AVAILABLE");
+        }
+        this.updatedAt = Instant.now();
+    }
+
     public void completeDelivery() {
         this.deliveryStatus = "COMPLETED";
         this.deliveredAt = Instant.now();
