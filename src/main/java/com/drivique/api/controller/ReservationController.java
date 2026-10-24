@@ -51,9 +51,10 @@ public class ReservationController {
     @ApiResponse(responseCode = "200", description = "Reserva confirmada exitosamente")
     public ReservationResponseDTO confirmPayment(
             @PathVariable String holdId,
+            @RequestParam(required = false) String transactionId,
             Authentication authentication
     ) {
-        return reservationService.confirmReservationPayment(holdId, authentication.getName());
+        return reservationService.confirmReservationPayment(holdId, transactionId, authentication.getName());
     }
 
     @PostMapping("/checkout/payment-failed/{holdId}")
