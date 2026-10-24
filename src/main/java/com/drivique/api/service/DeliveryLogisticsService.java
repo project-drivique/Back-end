@@ -26,6 +26,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class DeliveryLogisticsService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String ALPHANUMERIC_PIN_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+    public static String generateDeliveryPin() {
+        return ReservationDeliveryPoint.generateRandomPin();
+    }
 
     private final DeliveryDriverRepository drivers;
     private final ReservationDeliveryPointRepository points;
@@ -99,7 +104,9 @@ public class DeliveryLogisticsService {
         if ("INACTIVE".equals(driver.getStatus())) {
             throw new ConflictException("El conductor está inactivo");
         }
-        String pin = point.getDeliveryPin() != null ? point.getDeliveryPin() : String.format("%04d", RANDOM.nextInt(10000));
+        String pin = (point.getDeliveryPin() != null && !point.getDeliveryPin().isBlank())
+                ? point.getDeliveryPin()
+                : generateDeliveryPin();
         point.assignDriver(driver, pin);
         driver.setStatus("ON_ROUTE");
         drivers.save(driver);
@@ -154,7 +161,12 @@ public class DeliveryLogisticsService {
         if (!"HOME_DELIVERY".equals(point.getModality()) || point.getDriver() == null) {
             throw new ConflictException("La entrega no tiene un conductor asignado");
         }
-        if ("COMPLETED".equals(point.getDeliveryStatus())) {
+        var reservation = point.getReservation();
+        String resStatus = reservation != null && reservation.getStatus() != null ? reservation.getStatus().getCode() : "";
+        if (resStatus.startsWith("CANCEL") || "REJECTED".equalsIgnoreCase(resStatus)) {
+            throw new ConflictException("No se pueden gestionar entregas para una reserva cancelada");
+        }
+        if ("COMPLETED".equalsIgnoreCase(resStatus) || "COMPLETED".equals(point.getDeliveryStatus())) {
             throw new ConflictException(("RETURN".equals(point.getPointType()) ? "La devolución" : "La entrega") + " ya fue completada");
         }
         return point;
@@ -171,14 +183,14 @@ public class DeliveryLogisticsService {
         if ("COMPLETED".equals(point.getDeliveryStatus())) {
             throw new ConflictException(("RETURN".equals(point.getPointType()) ? "La devolución" : "La entrega") + " ya fue completada");
         }
-        if (pin == null || !pin.equals(point.getDeliveryPin())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El PIN no coincide.");
+        if (pin == null || !pin.strip().equalsIgnoreCase(point.getDeliveryPin())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El PIN o código no coincide.");
         }
         point.completeDelivery();
         DeliveryDriver driver = point.getDriver();
         driver.setStatus("AVAILABLE");
         drivers.save(driver);
-        return DeliveryPointResponseDTO.from(points.saveAndFlush(point), false);
+        return DeliveryPointResponseDTO.from(points.saveAndFlush(point), true);
     }
 
     private ReservationDeliveryPoint homePoint(String email, UUID reservationId, String pointType) {
@@ -186,6 +198,14 @@ public class DeliveryLogisticsService {
                 .orElseThrow(() -> new ResourceNotFoundException("Punto de entrega no encontrado"));
         if (!"HOME_DELIVERY".equals(point.getModality())) {
             throw new ConflictException("La reserva no tiene entrega a domicilio en este punto");
+        }
+        var reservation = point.getReservation();
+        String resStatus = reservation != null && reservation.getStatus() != null ? reservation.getStatus().getCode() : "";
+        if (resStatus.startsWith("CANCEL") || "REJECTED".equalsIgnoreCase(resStatus)) {
+            throw new ConflictException("No se pueden gestionar entregas para una reserva cancelada");
+        }
+        if ("COMPLETED".equalsIgnoreCase(resStatus)) {
+            throw new ConflictException("La reserva ya ha finalizado");
         }
         Optional<UUID> staffBranch = scope.forStaff(email);
         UUID pointBranch = branchOf(point);

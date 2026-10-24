@@ -1,11 +1,13 @@
 package com.drivique.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Schema(description = "Respuesta con los datos de un punto de entrega o devolución de reserva")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record DeliveryPointResponseDTO(
         UUID id,
         UUID reservationId,

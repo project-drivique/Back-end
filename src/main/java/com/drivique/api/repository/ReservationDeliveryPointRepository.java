@@ -15,6 +15,16 @@ public interface ReservationDeliveryPointRepository extends JpaRepository<Reserv
 
     Optional<ReservationDeliveryPoint> findByReservationIdAndPointType(UUID reservationId, String pointType);
 
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM ReservationDeliveryPoint p " +
+            "LEFT JOIN FETCH p.reservation r " +
+            "LEFT JOIN FETCH r.vehicle v " +
+            "LEFT JOIN FETCH r.customer c " +
+            "LEFT JOIN FETCH p.city " +
+            "WHERE p.reservation.id = :reservationId AND p.pointType = :pointType")
+    Optional<ReservationDeliveryPoint> findDetailedByReservationIdAndPointType(
+            @org.springframework.data.repository.query.Param("reservationId") UUID reservationId,
+            @org.springframework.data.repository.query.Param("pointType") String pointType);
+
     Optional<ReservationDeliveryPoint> findByReservationAndPointType(Reservation reservation, String pointType);
 
     List<ReservationDeliveryPoint> findByReservationId(UUID reservationId);
