@@ -145,7 +145,7 @@ public class ReservationDeliveryPoint {
     public void setPointType(String pointType) { this.pointType = pointType; }
     public void setModality(String modality) {
         this.modality = modality;
-        if ("HOME_DELIVERY".equalsIgnoreCase(modality) && (this.deliveryPin == null || this.deliveryPin.trim().length() != 6)) {
+        if ("HOME_DELIVERY".equalsIgnoreCase(modality) && (this.deliveryPin == null || this.deliveryPin.trim().isEmpty())) {
             this.deliveryPin = generateRandomPin();
         }
     }
@@ -159,7 +159,7 @@ public class ReservationDeliveryPoint {
 
     public DeliveryDriver getDriver() { return driver; }
     public String getDeliveryPin() {
-        if ("HOME_DELIVERY".equalsIgnoreCase(this.modality) && (this.deliveryPin == null || this.deliveryPin.trim().length() != 6)) {
+        if ("HOME_DELIVERY".equalsIgnoreCase(this.modality) && (this.deliveryPin == null || this.deliveryPin.trim().isEmpty())) {
             this.deliveryPin = generateRandomPin();
         }
         return deliveryPin;
