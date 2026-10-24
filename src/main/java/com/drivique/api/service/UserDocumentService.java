@@ -186,7 +186,11 @@ public class UserDocumentService {
         user.setProfileComplete(false);
         user.setUpdatedAt(Instant.now());
         if (documentNumber != null && !documentNumber.isBlank() && (user.getDocumentNumber() == null || user.getDocumentNumber().isBlank())) {
-            user.setDocumentNumber(documentNumber);
+            String docNum = documentNumber.trim();
+            if (userRepository.existsByDocumentNumberAndIdNot(docNum, user.getId())) {
+                throw new ConflictException("El número de documento " + docNum + " ya se encuentra registrado con otra cuenta de usuario.");
+            }
+            user.setDocumentNumber(docNum);
             user.setDocumentTypeId(docType.getId());
         }
         userRepository.save(user);
