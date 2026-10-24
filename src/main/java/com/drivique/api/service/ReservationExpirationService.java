@@ -103,6 +103,13 @@ public class ReservationExpirationService {
         for (Reservation reservation : expiredReservations) {
             reservation.setStatus(cancelledStatus);
             reservation.setBlocksAvailability(false);
+
+            if (reservation.getDeliveryPoints() != null) {
+                for (var pt : reservation.getDeliveryPoints()) {
+                    pt.cancelDelivery();
+                }
+            }
+
             reservationRepository.save(reservation);
 
             expiredCodes.add(reservation.getCode());
