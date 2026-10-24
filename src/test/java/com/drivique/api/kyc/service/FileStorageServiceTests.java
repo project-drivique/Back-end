@@ -55,6 +55,29 @@ class FileStorageServiceTests {
     }
 
     @Test
+    void storeFileInKycEncryptsOnDiskAndDecryptsOnRead() throws Exception {
+        byte[] originalContent = "%PDF-1.4 confidential citizen national ID".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        MockMultipartFile file = new MockMultipartFile(
+                "frontFile",
+                "cedula.pdf",
+                "application/pdf",
+                originalContent
+        );
+
+        String storedPath = storageService.storeFile(file, "kyc");
+
+        // Verificar que en el disco físico los bytes están cifrados (inician con el header DRV_ENC_GCM_V1)
+        java.nio.file.Path physicalFile = tempDir.resolve("kyc").resolve(java.nio.file.Paths.get(storedPath).getFileName());
+        byte[] rawDiskBytes = java.nio.file.Files.readAllBytes(physicalFile);
+        assertThat(rawDiskBytes).isNotEqualTo(originalContent);
+        assertThat(new String(rawDiskBytes, 0, 14, java.nio.charset.StandardCharsets.US_ASCII)).isEqualTo("DRV_ENC_GCM_V1");
+
+        // Al invocar read(storedPath), el servicio debe descifrarlo en memoria transparentemente
+        byte[] readContent = storageService.read(storedPath);
+        assertThat(readContent).isEqualTo(originalContent);
+    }
+
+    @Test
     void validateFileFailsWhenFileIsEmpty() {
         MockMultipartFile emptyFile = new MockMultipartFile(
                 "frontFile",
