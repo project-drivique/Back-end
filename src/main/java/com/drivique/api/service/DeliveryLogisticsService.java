@@ -104,7 +104,7 @@ public class DeliveryLogisticsService {
         if ("INACTIVE".equals(driver.getStatus())) {
             throw new ConflictException("El conductor está inactivo");
         }
-        String pin = (point.getDeliveryPin() != null && point.getDeliveryPin().length() == 6)
+        String pin = (point.getDeliveryPin() != null && !point.getDeliveryPin().isBlank())
                 ? point.getDeliveryPin()
                 : generateDeliveryPin();
         point.assignDriver(driver, pin);
@@ -114,7 +114,7 @@ public class DeliveryLogisticsService {
         if (notices != null) {
             notices.driverAssigned(saved, driver, pin);
         }
-        return DeliveryPointResponseDTO.from(saved, true);
+        return DeliveryPointResponseDTO.from(saved, false);
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
