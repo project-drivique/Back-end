@@ -638,6 +638,11 @@ public class ReservationService {
                 .orElseThrow(() -> new IllegalStateException("Estado CANCELLED_BY_USER no encontrado"));
 
         r.setStatus(cancelledStatus);
+        if (r.getDeliveryPoints() != null) {
+            for (var pt : r.getDeliveryPoints()) {
+                pt.cancelDelivery();
+            }
+        }
         Reservation saved = reservationRepository.save(r);
 
         auditLogRepository.save(new AuditLog(
