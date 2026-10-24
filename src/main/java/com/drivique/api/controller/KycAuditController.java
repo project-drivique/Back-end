@@ -9,9 +9,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -66,5 +70,58 @@ public class KycAuditController {
             Authentication authentication
     ) {
         return userDocumentService.reviewDocument(id, authentication.getName(), request);
+    }
+
+    @GetMapping("/documents/{id}/file")
+    @PreAuthorize("hasAnyRole('EMPLOYEE', 'BRANCH_ADMIN', 'SUPER_ADMIN') or hasAuthority('kyc:review')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Visualizar archivo KYC desencriptado en memoria para auditoría",
+            description = "Permite a los revisores de sucursal y administradores inspeccionar el documento descifrado. Registra traza de auditoría."
+    )
+    @ApiResponse(responseCode = "200", description = "Stream del documento descifrado")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
+    @ApiResponse(responseCode = "403", ref = "#/components/responses/Error403")
+    @ApiResponse(responseCode = "404", ref = "#/components/responses/Error404")
+    public ResponseEntity<byte[]> getDocumentFile(
+            @PathVariable("id") UUID id,
+            @RequestParam(value = "side", defaultValue = "front") String side,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        var docFile = userDocumentService.getDocumentFile(id, side, authentication.getName(), request.getRemoteAddr());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(docFile.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + docFile.filename() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.EXPIRES, "0")
+                .body(docFile.content());
+    }
+
+    @GetMapping("/documents/file")
+    @PreAuthorize("hasAnyRole('EMPLOYEE', 'BRANCH_ADMIN', 'SUPER_ADMIN') or hasAuthority('kyc:review')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+            summary = "Visualizar archivo KYC por ruta interna protegida",
+            description = "Resuelve la ruta interna cifrada del documento, descifra los bytes en memoria y audita la consulta."
+    )
+    @ApiResponse(responseCode = "200", description = "Stream del documento descifrado")
+    @ApiResponse(responseCode = "401", ref = "#/components/responses/Error401")
+    @ApiResponse(responseCode = "403", ref = "#/components/responses/Error403")
+    @ApiResponse(responseCode = "404", ref = "#/components/responses/Error404")
+    public ResponseEntity<byte[]> getDocumentFileByPath(
+            @RequestParam("path") String path,
+            Authentication authentication,
+            HttpServletRequest request
+    ) {
+        var docFile = userDocumentService.getDocumentFileByPath(path, authentication.getName(), request.getRemoteAddr());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(docFile.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + docFile.filename() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-store, must-revalidate")
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .header(HttpHeaders.EXPIRES, "0")
+                .body(docFile.content());
     }
 }

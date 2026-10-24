@@ -22,7 +22,7 @@ public record ApiProblem(
             case UNAUTHORIZED -> "Se requiere autenticación válida.";
             case FORBIDDEN -> "No tiene permiso para realizar esta operación.";
             case NOT_FOUND -> "El recurso solicitado no existe.";
-            case CONFLICT -> "La operación entra en conflicto con el estado actual del recurso.";
+            case CONFLICT -> "La operación no se pudo completar debido a un conflicto con el estado actual.";
             case LOCKED -> "La cuenta se encuentra temporalmente bloqueada.";
             case METHOD_NOT_ALLOWED -> "El método HTTP no está permitido para este recurso.";
             case UNSUPPORTED_MEDIA_TYPE -> "El tipo de contenido no es compatible.";

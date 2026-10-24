@@ -14,4 +14,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmailIgnoreCaseAndDeletedAtIsNull(String email);
     boolean existsByEmailIgnoreCase(String email);
     boolean existsByDocumentNumber(String documentNumber);
+    boolean existsByDocumentNumberAndIdNot(String documentNumber, UUID id);
 }
