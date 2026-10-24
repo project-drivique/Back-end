@@ -47,13 +47,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     ResponseEntity<Object> notFound(ResourceNotFoundException ex, HttpServletRequest request) {
         LOG.warn("404 {} -> {}", request.getRequestURI(), ex.getMessage());
-        return response(HttpStatus.NOT_FOUND, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
+        String detail = resolveNotFoundMessage(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(HttpStatus.NOT_FOUND, request.getRequestURI(), detail, List.of()));
     }
 
     @ExceptionHandler(ConflictException.class)
     ResponseEntity<Object> conflict(ConflictException ex, HttpServletRequest request) {
         LOG.warn("409 {} -> {}", request.getRequestURI(), ex.getMessage());
-        return response(HttpStatus.CONFLICT, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
+        String detail = resolveConflictMessage(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(HttpStatus.CONFLICT, request.getRequestURI(), detail, List.of()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -88,7 +94,42 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<Object> dataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
-        return response(HttpStatus.CONFLICT, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
+        LOG.warn("409 DB Integrity {} -> {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(HttpStatus.CONFLICT, request.getRequestURI(),
+                        "La operación no se pudo completar porque ya existe un registro con información en conflicto.", List.of()));
+    }
+
+    private static String resolveConflictMessage(String rawMessage) {
+        if (rawMessage == null || rawMessage.isBlank() || rawMessage.contains("sensitive-internal")) {
+            return "No se pudo procesar la solicitud debido a un conflicto con el estado actual.";
+        }
+        return switch (rawMessage.trim()) {
+            case "Promotion already used by this user" -> "Ya has utilizado este cupón en una reserva anterior.";
+            case "Promotion is not active" -> "El cupón no se encuentra activo o ha finalizado su periodo de vigencia.";
+            case "Promotion use limit reached" -> "Este cupón ha alcanzado el límite máximo de usos disponibles.";
+            case "Promotion conditions are not met" -> "La reserva no cumple las condiciones mínimas requeridas para este cupón.";
+            case "Promotion not found" -> "El cupón ingresado no existe o no se encuentra disponible.";
+            case "Vehicle does not match category" -> "El vehículo seleccionado no corresponde a la categoría de la promoción.";
+            default -> rawMessage;
+        };
+    }
+
+    private static String resolveNotFoundMessage(String rawMessage) {
+        if (rawMessage == null || rawMessage.isBlank() || rawMessage.contains("sensitive-internal")) {
+            return "El recurso solicitado no fue encontrado.";
+        }
+        return switch (rawMessage.trim()) {
+            case "Promotion not found" -> "El cupón ingresado no existe o no se encuentra disponible.";
+            case "Vehicle not found" -> "El vehículo seleccionado no fue encontrado.";
+            case "Active vehicle not found" -> "El vehículo seleccionado no está disponible actualmente.";
+            case "User not found" -> "Usuario no encontrado.";
+            case "Active insurance coverage not found" -> "La cobertura de seguro seleccionada no está disponible.";
+            case "Active mileage plan not found" -> "El plan de kilometraje seleccionado no está disponible.";
+            case "Active additional service not found" -> "Uno de los servicios adicionales seleccionados no está disponible.";
+            default -> rawMessage;
+        };
     }
 
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
