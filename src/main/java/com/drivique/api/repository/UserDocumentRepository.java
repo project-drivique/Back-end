@@ -20,6 +20,7 @@ public interface UserDocumentRepository extends JpaRepository<UserDocument, UUID
     List<UserDocument> findByBranch_IdAndStatus_CodeOrderByCreatedAtDesc(UUID branchId, String statusCode);
     List<UserDocument> findByBranch_IdOrderByCreatedAtDesc(UUID branchId);
     List<UserDocument> findAllByOrderByCreatedAtDesc();
+    Optional<UserDocument> findFirstByFrontUrlOrBackUrl(String frontUrl, String backUrl);
 
     @Modifying
     @Query("DELETE FROM UserDocument d WHERE d.user.id = :userId")
