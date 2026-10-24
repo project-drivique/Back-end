@@ -95,15 +95,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<Object> dataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
         LOG.warn("409 DB Integrity {} -> {}", request.getRequestURI(), ex.getMessage());
+        String msg = "La operación no se pudo completar porque ya existe un registro con información en conflicto.";
+        String exMsg = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        if (exMsg.contains("uq_users_document_number") || exMsg.contains("document_number")) {
+            msg = "El número de documento ingresado ya se encuentra registrado con otra cuenta de usuario.";
+        }
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(ApiProblem.of(HttpStatus.CONFLICT, request.getRequestURI(),
-                        "La operación no se pudo completar porque ya existe un registro con información en conflicto.", List.of()));
+                .body(ApiProblem.of(HttpStatus.CONFLICT, request.getRequestURI(), msg, List.of()));
     }
 
     private static String resolveConflictMessage(String rawMessage) {
         if (rawMessage == null || rawMessage.isBlank() || rawMessage.contains("sensitive-internal")) {
             return "No se pudo procesar la solicitud debido a un conflicto con el estado actual.";
+        }
+        if (rawMessage.contains("ya se encuentra registrado con otra cuenta")) {
+            return rawMessage;
         }
         return switch (rawMessage.trim()) {
             case "Promotion already used by this user" -> "Ya has utilizado este cupón en una reserva anterior.";
