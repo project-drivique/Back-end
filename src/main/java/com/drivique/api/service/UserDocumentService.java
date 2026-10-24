@@ -7,6 +7,7 @@ import com.drivique.api.repository.BranchRepository;
 import com.drivique.api.repository.BranchUserRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.exception.ResourceNotFoundException;
+import com.drivique.api.exception.ConflictException;
 import com.drivique.api.dto.DocumentTypeResponseDTO;
 import com.drivique.api.dto.ReviewDocumentRequestDTO;
 import com.drivique.api.dto.UserDocumentResponseDTO;
@@ -95,6 +96,11 @@ public class UserDocumentService {
         this.reservationRepository = reservationRepository;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AuditService auditService;
+
+    public record DecryptedDocumentFile(byte[] content, String contentType, String filename) {}
+
     private UserDocumentResponseDTO mapWithReservation(UserDocument doc) {
         String resCode = null;
         String vehName = null;
@@ -181,7 +187,11 @@ public class UserDocumentService {
         user.setProfileComplete(false);
         user.setUpdatedAt(Instant.now());
         if (documentNumber != null && !documentNumber.isBlank() && (user.getDocumentNumber() == null || user.getDocumentNumber().isBlank())) {
-            user.setDocumentNumber(documentNumber);
+            String docNum = documentNumber.trim();
+            if (userRepository.existsByDocumentNumberAndIdNot(docNum, user.getId())) {
+                throw new ConflictException("El número de documento " + docNum + " ya se encuentra registrado con otra cuenta de usuario.");
+            }
+            user.setDocumentNumber(docNum);
             user.setDocumentTypeId(docType.getId());
         }
         userRepository.save(user);
@@ -296,5 +306,115 @@ public class UserDocumentService {
             user.setUpdatedAt(Instant.now());
             userRepository.save(user);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public DecryptedDocumentFile getDocumentFile(UUID documentId, String side, String requesterEmail, String clientIp) {
+        UserDocument doc = userDocumentRepository.findById(documentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Documento no encontrado con id: " + documentId));
+
+        User requester = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(requesterEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario solicitante no encontrado con email: " + requesterEmail));
+
+        boolean isOwner = doc.getUser() != null && doc.getUser().getId().equals(requester.getId());
+
+        if (!isOwner) {
+            boolean isStaff = requester.getRoles() != null && requester.getRoles().stream()
+                    .anyMatch(r -> Set.of("SUPER_ADMIN", "ADMIN", "BRANCH_ADMIN", "EMPLOYEE")
+                            .contains(r.getCode().toUpperCase()));
+
+            if (!isStaff && requester.getRoles() != null) {
+                isStaff = requester.getRoles().stream()
+                        .flatMap(r -> r.getPermissions().stream())
+                        .anyMatch(p -> "kyc:review".equalsIgnoreCase(p.getCode()));
+            }
+
+            if (!isStaff) {
+                throw new org.springframework.security.access.AccessDeniedException("No tienes permisos para visualizar este documento confidencial.");
+            }
+
+            if (branchUserRepository != null) {
+                branchUserRepository.findByUserId(requester.getId()).ifPresent(assignment -> {
+                    if (doc.getBranch() != null && !assignment.getBranchId().equals(doc.getBranch().getId())) {
+                        throw new org.springframework.security.access.AccessDeniedException("No tienes permisos para consultar documentos de otra sucursal.");
+                    }
+                });
+            }
+
+            if (auditService != null) {
+                String docTypeName = doc.getDocumentType() != null ? doc.getDocumentType().getName() : "Documento";
+                String customerEmail = doc.getUser() != null ? doc.getUser().getEmail() : "N/A";
+                auditService.recordAudit(
+                        "KYC",
+                        "UserDocument",
+                        doc.getId(),
+                        "VIEW_DOCUMENT",
+                        "SUCCESS",
+                        requesterEmail,
+                        doc.getBranch() != null ? doc.getBranch().getId() : null,
+                        clientIp,
+                        "Acceso y desencriptación en memoria de documento confidencial KYC (" + docTypeName + ", lado: " + (side != null ? side : "front") + ") del usuario " + customerEmail,
+                        null,
+                        null
+                );
+            }
+        }
+
+        String targetPath = ("back".equalsIgnoreCase(side) && doc.getBackUrl() != null && !doc.getBackUrl().isBlank())
+                ? doc.getBackUrl()
+                : doc.getFrontUrl();
+
+        if (targetPath == null || targetPath.isBlank()) {
+            throw new ResourceNotFoundException("El documento no contiene el archivo solicitado (" + side + ").");
+        }
+
+        byte[] decryptedBytes = fileStorageService.read(targetPath);
+        String contentType = detectContentType(targetPath);
+        String docTypeName = (doc.getDocumentType() != null ? doc.getDocumentType().getName() : "documento")
+                .toLowerCase().replaceAll("[^a-z0-9_-]", "_");
+        String extension = targetPath.toLowerCase().endsWith(".pdf") ? ".pdf"
+                : targetPath.toLowerCase().endsWith(".png") ? ".png" : ".jpg";
+        String filename = docTypeName + "-" + (side != null ? side : "front") + extension;
+
+        return new DecryptedDocumentFile(decryptedBytes, contentType, filename);
+    }
+
+    @Transactional(readOnly = true)
+    public DecryptedDocumentFile getDocumentFileByPath(String storedPath, String requesterEmail, String clientIp) {
+        if (storedPath == null || storedPath.isBlank()) {
+            throw new IllegalArgumentException("Ruta de archivo no especificada.");
+        }
+
+        Optional<UserDocument> docOpt = userDocumentRepository.findFirstByFrontUrlOrBackUrl(storedPath, storedPath);
+        if (docOpt.isPresent()) {
+            UserDocument doc = docOpt.get();
+            String side = storedPath.equals(doc.getBackUrl()) ? "back" : "front";
+            return getDocumentFile(doc.getId(), side, requesterEmail, clientIp);
+        }
+
+        User requester = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(requesterEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Usuario solicitante no encontrado con email: " + requesterEmail));
+
+        boolean isStaff = requester.getRoles() != null && requester.getRoles().stream()
+                .anyMatch(r -> Set.of("SUPER_ADMIN", "ADMIN", "BRANCH_ADMIN", "EMPLOYEE")
+                        .contains(r.getCode().toUpperCase()));
+
+        if (!isStaff) {
+            throw new org.springframework.security.access.AccessDeniedException("No tienes permisos para visualizar este archivo confidencial.");
+        }
+
+        byte[] decryptedBytes = fileStorageService.read(storedPath);
+        String contentType = detectContentType(storedPath);
+        String filename = "documento-kyc" + (storedPath.toLowerCase().endsWith(".pdf") ? ".pdf" : ".jpg");
+        return new DecryptedDocumentFile(decryptedBytes, contentType, filename);
+    }
+
+    private String detectContentType(String path) {
+        if (path == null) return "application/octet-stream";
+        String lower = path.toLowerCase();
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        return "application/octet-stream";
     }
 }
