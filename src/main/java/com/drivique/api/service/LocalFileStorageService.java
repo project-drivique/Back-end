@@ -33,9 +33,25 @@ public class LocalFileStorageService implements FileStorageService {
     );
 
     private final Path rootLocation;
+    private final DocumentCryptoService documentCryptoService;
 
     public LocalFileStorageService(@Value("${app.upload.dir:uploads}") String uploadDir) {
+        this(uploadDir, new DocumentCryptoService());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public LocalFileStorageService(
+            @Value("${app.upload.dir:uploads}") String uploadDir,
+            DocumentCryptoService documentCryptoService
+    ) {
         this.rootLocation = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.documentCryptoService = documentCryptoService != null ? documentCryptoService : new DocumentCryptoService();
+    }
+
+    private boolean isKycDirectory(String subDirectory) {
+        if (subDirectory == null) return false;
+        String normalized = subDirectory.toLowerCase(Locale.ROOT).replace('\\', '/');
+        return normalized.equals("kyc") || normalized.startsWith("kyc/") || normalized.contains("/kyc/");
     }
 
     @Override
@@ -79,8 +95,14 @@ public class LocalFileStorageService implements FileStorageService {
                 throw new IllegalArgumentException("No se permite almacenar archivos fuera del directorio designado.");
             }
 
-            try (InputStream inputStream = file.getInputStream()) {
-                Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
+            if (isKycDirectory(subDirectory)) {
+                byte[] plainBytes = file.getBytes();
+                byte[] encryptedBytes = documentCryptoService.encrypt(plainBytes);
+                Files.write(destinationFile, encryptedBytes);
+            } else {
+                try (InputStream inputStream = file.getInputStream()) {
+                    Files.copy(inputStream, destinationFile, StandardCopyOption.REPLACE_EXISTING);
+                }
             }
 
             return "/uploads/" + subDirectory + "/" + uniqueFilename;
@@ -101,7 +123,8 @@ public class LocalFileStorageService implements FileStorageService {
             if (!destination.toAbsolutePath().startsWith(rootLocation.toAbsolutePath())) {
                 throw new IllegalArgumentException("No se permite almacenar archivos fuera del directorio designado.");
             }
-            Files.write(destination, content);
+            byte[] bytesToWrite = isKycDirectory(subDirectory) ? documentCryptoService.encrypt(content) : content;
+            Files.write(destination, bytesToWrite);
             return "/uploads/" + subDirectory + "/" + destination.getFileName();
         } catch (IOException e) {
             throw new IllegalStateException("Error al almacenar el PDF generado.", e);
@@ -121,7 +144,8 @@ public class LocalFileStorageService implements FileStorageService {
             if (!destination.toAbsolutePath().startsWith(rootLocation.toAbsolutePath())) {
                 throw new IllegalArgumentException("No se permite almacenar archivos fuera del directorio designado.");
             }
-            Files.write(destination, content);
+            byte[] bytesToWrite = isKycDirectory(subDirectory) ? documentCryptoService.encrypt(content) : content;
+            Files.write(destination, bytesToWrite);
             return "/uploads/" + subDirectory + "/" + destination.getFileName();
         } catch (IOException e) {
             throw new IllegalStateException("Error al almacenar el archivo generado.", e);
@@ -133,8 +157,15 @@ public class LocalFileStorageService implements FileStorageService {
         if (storedPath == null || !storedPath.startsWith("/uploads/")) throw new IllegalArgumentException("Ruta de archivo inválida.");
         Path file = rootLocation.resolve(storedPath.substring("/uploads/".length())).normalize();
         if (!file.startsWith(rootLocation) || !Files.isRegularFile(file)) throw new IllegalArgumentException("Archivo no encontrado.");
-        try { return Files.readAllBytes(file); }
-        catch (IOException ex) { throw new IllegalStateException("No fue posible leer el archivo.", ex); }
+        try {
+            byte[] rawBytes = Files.readAllBytes(file);
+            if (isKycDirectory(storedPath) || documentCryptoService.isEncrypted(rawBytes)) {
+                return documentCryptoService.decrypt(rawBytes);
+            }
+            return rawBytes;
+        } catch (IOException ex) {
+            throw new IllegalStateException("No fue posible leer el archivo.", ex);
+        }
     }
 
     private String getFileExtension(String filename) {
