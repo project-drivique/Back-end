@@ -1,11 +1,13 @@
 package com.drivique.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Schema(description = "Respuesta con los datos de un punto de entrega o devolución de reserva")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record DeliveryPointResponseDTO(
         UUID id,
         UUID reservationId,
@@ -35,6 +37,7 @@ public record DeliveryPointResponseDTO(
                 flightOrBusNumber, referenceDetails, createdAt, updatedAt, null, null, null, "PENDING", null);
     }
 
+    /** El PIN de entrega solo lo ve el cliente de la reserva. */
     public static DeliveryPointResponseDTO from(com.drivique.api.model.ReservationDeliveryPoint pt, boolean includePin) {
         var driver = pt.getDriver();
         return new DeliveryPointResponseDTO(pt.getId(), pt.getReservation().getId(), pt.getPointType(), pt.getModality(),
@@ -43,6 +46,6 @@ public record DeliveryPointResponseDTO(
                 pt.getNeighborhood(), pt.getAddress(), pt.getFlightOrBusNumber(), pt.getReferenceDetails(),
                 pt.getCreatedAt(), pt.getUpdatedAt(), driver == null ? null : driver.getId(),
                 driver == null ? null : driver.getFullName(), driver == null ? null : driver.getPhone(),
-                pt.getDeliveryStatus(), pt.getDeliveryPin());
+                pt.getDeliveryStatus(), includePin ? pt.getDeliveryPin() : null);
     }
 }
