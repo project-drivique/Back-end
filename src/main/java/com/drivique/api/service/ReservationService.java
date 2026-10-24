@@ -33,6 +33,8 @@ public class ReservationService {
     }
 
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReservationService.class);
+
     private final ReservationRepository reservationRepository;
     private final ReservationStatusRepository reservationStatusRepository;
     private final ReservationAdditionalServiceRepository additionalServiceRepository;
@@ -73,6 +75,9 @@ public class ReservationService {
 
     @Autowired(required = false)
     private ContractService contractService;
+
+    @Autowired(required = false)
+    private WompiPaymentService wompiPaymentService;
 
     public ReservationService(
             ReservationRepository reservationRepository,
@@ -439,11 +444,16 @@ public class ReservationService {
 
     @Transactional
     public ReservationResponseDTO confirmReservationPayment(UUID holdId, String userEmail) {
-        return confirmReservationPayment(holdId != null ? holdId.toString() : null, userEmail);
+        return confirmReservationPayment(holdId != null ? holdId.toString() : null, null, userEmail);
     }
 
     @Transactional
     public ReservationResponseDTO confirmReservationPayment(String holdIdentifier, String userEmail) {
+        return confirmReservationPayment(holdIdentifier, null, userEmail);
+    }
+
+    @Transactional
+    public ReservationResponseDTO confirmReservationPayment(String holdIdentifier, String transactionId, String userEmail) {
         Reservation r = findReservationByIdOrCode(holdIdentifier);
         
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
@@ -487,16 +497,17 @@ public class ReservationService {
                     contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE")
                             .ifPresent(contract::setStatus);
                 }
-                if (paymentRepository != null && !paymentRepository.existsByContractIdAndStatusCodeIgnoreCase(contract.getId(), "APPROVED")) {
-                    PaymentMethod method = paymentMethodRepository != null ? paymentMethodRepository.findByCodeIgnoreCaseAndActiveTrue("CARD").or(() -> paymentMethodRepository.findAll().stream().findFirst()).orElse(null) : null;
-                    PaymentStatus approved = paymentStatusRepository != null ? paymentStatusRepository.findByCodeIgnoreCase("APPROVED").orElse(null) : null;
-                    com.drivique.api.model.Currency currency = currencyRepository != null ? currencyRepository.findByCodeIgnoreCaseAndActiveTrue("COP").or(() -> currencyRepository.findAll().stream().findFirst()).orElse(null) : null;
-                    if (method != null && approved != null && currency != null) {
-                        Payment p = new Payment(contract, method, approved, "WOMPI", "CONF-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10), contract.getBaseAmount() != null ? contract.getBaseAmount() : java.math.BigDecimal.valueOf(398000), currency, null);
-                        p.setPaidAt(Instant.now());
-                        paymentRepository.saveAndFlush(p);
+                
+                // Si viene un transactionId de Wompi, verificarlo fidedignamente con la API de Wompi
+                if (transactionId != null && !transactionId.isBlank() && wompiPaymentService != null) {
+                    try {
+                        wompiPaymentService.verifyAndRecordApprovedPayment(transactionId, contract, userEmail);
+                    } catch (Exception ex) {
+                        log.warn("Verificación de transacción Wompi: {}", ex.getMessage());
                     }
                 }
+
+                // SEGURIDAD CRÍTICA: No se fabrica ningún pago artificial en estado APPROVED sin respaldo real de Wompi.
                 rentalContractRepository.saveAndFlush(contract);
             }
         }
@@ -510,7 +521,7 @@ public class ReservationService {
                 user,
                 null,
                 null,
-                "Reservation confirmed after payment",
+                "Reservation confirmed after payment verification",
                 null,
                 null
         ));
@@ -532,24 +543,31 @@ public class ReservationService {
             // No bloquear
         }
 
-        try {
-            notificationService.emitDomainEvent(
-                    saved.getCustomer(),
-                    "PAYMENT",
-                    "HIGH",
-                    saved.getId(),
-                    java.util.Map.of(
-                            "bookingCode", saved.getCode(),
-                            "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "398000",
-                            "currency", "COP",
-                            "status", "APPROVED",
-                            "actionPath", "/reservas",
-                            "actionLabel", "Continuar y Firmar Contrato"
-                    ),
-                    "PAY-CONF-" + saved.getId()
-            );
-        } catch (Throwable e) {
-            // No bloquear
+        boolean hasApprovedPayment = paymentRepository != null && rentalContractRepository != null &&
+                rentalContractRepository.findByReservationId(saved.getId())
+                        .map(c -> paymentRepository.existsByContractIdAndStatusCodeIgnoreCase(c.getId(), "APPROVED"))
+                        .orElse(false);
+
+        if (hasApprovedPayment) {
+            try {
+                notificationService.emitDomainEvent(
+                        saved.getCustomer(),
+                        "PAYMENT",
+                        "HIGH",
+                        saved.getId(),
+                        java.util.Map.of(
+                                "bookingCode", saved.getCode(),
+                                "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "0",
+                                "currency", "COP",
+                                "status", "APPROVED",
+                                "actionPath", "/contrato/" + saved.getId(),
+                                "actionLabel", "Continuar y Firmar mi Contrato"
+                        ),
+                        "PAY-" + saved.getId()
+                );
+            } catch (Throwable e) {
+                // No bloquear
+            }
         }
         
         return mapFromEntity(saved);

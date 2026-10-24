@@ -96,6 +96,12 @@ payments:
     integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
     event-secret: ${WOMPI_EVENT_SECRET:}
     checkout-url: ${WOMPI_CHECKOUT_URL:https://checkout.wompi.co/p/}
+    api-url: ${WOMPI_API_URL:https://sandbox.wompi.co/v1}
+
+jwt:
+  secret: ${JWT_SECRET:driviqueSecureMasterAuthSigningSecretKeyHMAC512Sha2026GeneratedProductionSafe!}
+  access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:900}
+  refresh-token-expiration-days: ${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:7}
 
 drivique:
   oauth:
