@@ -18,23 +18,34 @@ import java.util.*;
 @Service
 public class JwtService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtService.class);
+    public static final String INSECURE_DEFAULT_SECRET = "driviqueSuperSecretKeyForJwtAuthenticationMustBeAtLeast256BitsLong2026!";
+
     private final SecretKey key;
     private final long accessTokenExpirationSeconds;
     private final long refreshTokenExpirationDays;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public JwtService(
-            @Value("${jwt.secret:driviqueSuperSecretKeyForJwtAuthenticationMustBeAtLeast256BitsLong2026!}") String secret,
+            @Value("${jwt.secret:}") String secret,
             @Value("${jwt.access-token-expiration-seconds:900}") long accessTokenExpirationSeconds,
             @Value("${jwt.refresh-token-expiration-days:7}") long refreshTokenExpirationDays
     ) {
-        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
-        if (keyBytes.length < 32) {
-            byte[] padded = new byte[32];
-            System.arraycopy(keyBytes, 0, padded, 0, Math.min(keyBytes.length, 32));
-            this.key = Keys.hmacShaKeyFor(padded);
+        String effectiveSecret = secret;
+        if (effectiveSecret == null || effectiveSecret.trim().isEmpty() || INSECURE_DEFAULT_SECRET.equals(effectiveSecret.trim())) {
+            log.warn("[SEGURIDAD CRÍTICA] JWT_SECRET no está configurado en las variables de entorno o coincide con el valor público por defecto. Sobrescribiendo con clave criptográfica aleatoria segura para proteger este nodo.");
+            byte[] dynamicKey = new byte[64];
+            new SecureRandom().nextBytes(dynamicKey);
+            this.key = Keys.hmacShaKeyFor(dynamicKey);
         } else {
-            this.key = Keys.hmacShaKeyFor(keyBytes);
+            byte[] keyBytes = effectiveSecret.getBytes(StandardCharsets.UTF_8);
+            if (keyBytes.length < 32) {
+                byte[] padded = new byte[32];
+                System.arraycopy(keyBytes, 0, padded, 0, Math.min(keyBytes.length, 32));
+                this.key = Keys.hmacShaKeyFor(padded);
+            } else {
+                this.key = Keys.hmacShaKeyFor(keyBytes);
+            }
         }
         this.accessTokenExpirationSeconds = accessTokenExpirationSeconds;
         this.refreshTokenExpirationDays = refreshTokenExpirationDays;
