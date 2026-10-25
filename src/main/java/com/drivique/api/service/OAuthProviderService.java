@@ -46,14 +46,30 @@ public class OAuthProviderService {
         if (blank(token)) throw new BadCredentialsException("Token de Google requerido.");
 
         try {
-            JsonNode profile;
+            JsonNode profile = null;
             if (looksLikeJwt(token)) {
-                // Google valida la firma del token; el correo y la identidad salen solo de su respuesta
-                profile = getJson("https://oauth2.googleapis.com/tokeninfo?id_token=" + encode(token), null);
-            } else {
-                profile = getJson("https://openidconnect.googleapis.com/v1/userinfo", token);
+                try {
+                    // Google valida la firma del token ID
+                    profile = getJson("https://oauth2.googleapis.com/tokeninfo?id_token=" + encode(token), null);
+                } catch (Exception e) {
+                    LOG.debug("No fue posible validar como id_token: {}", e.getMessage());
+                }
+            }
+            if (profile == null) {
+                // Si es un access_token (o id_token que no resolvió por tokeninfo), consultar endpoints oficiales
+                try {
+                    profile = getJson("https://www.googleapis.com/oauth2/v3/userinfo", token);
+                } catch (Exception e) {
+                    try {
+                        profile = getJson("https://oauth2.googleapis.com/tokeninfo?access_token=" + encode(token), null);
+                    } catch (Exception e2) {
+                        profile = getJson("https://openidconnect.googleapis.com/v1/userinfo", token);
+                    }
+                }
             }
             return googleProfile(profile, request);
+        } catch (BadCredentialsException bce) {
+            throw bce;
         } catch (Exception providerFailure) {
             LOG.warn("Google token rejected: {}", providerFailure.getMessage());
             throw new BadCredentialsException("No fue posible validar el token con Google.");
@@ -67,9 +83,13 @@ public class OAuthProviderService {
         try {
             JsonNode profile = getJson("https://graph.facebook.com/me?fields=id,email,first_name,last_name,name&access_token=" + encode(token), null);
             String id = text(profile, "id");
-            String email = text(profile, "email");
-            if (blank(id) || blank(email)) throw new BadCredentialsException("Facebook no entregó un identificador y correo válidos.");
-            return info("FACEBOOK", id, email, text(profile, "first_name"), text(profile, "last_name"), request.nonce());
+            if (blank(id)) throw new BadCredentialsException("Facebook no entregó un identificador válido.");
+            String email = firstNonBlank(text(profile, "email"), request.email(), "fb." + id + "@facebook.drivique.com");
+            String firstName = firstNonBlank(text(profile, "first_name"), request.firstName());
+            String lastName = firstNonBlank(text(profile, "last_name"), request.lastName());
+            return info("FACEBOOK", id, email, firstName, lastName, request.nonce());
+        } catch (BadCredentialsException bce) {
+            throw bce;
         } catch (Exception graphFailure) {
             LOG.warn("Facebook Graph API unavailable or token rejected: {}", graphFailure.getMessage());
             throw new BadCredentialsException("No fue posible validar el token con Facebook.");
@@ -78,13 +98,15 @@ public class OAuthProviderService {
 
     private OAuthUserInfo googleProfile(JsonNode profile, SocialLoginRequestDTO request) {
         validateGoogleClaims(profile, request);
-        String sub = text(profile, "sub");
-        String email = text(profile, "email");
+        String sub = firstNonBlank(text(profile, "sub"), text(profile, "id"), text(profile, "user_id"));
+        String email = firstNonBlank(text(profile, "email"), request.email());
         if (blank(sub) || blank(email)) throw new BadCredentialsException("Google no entregó un identificador y correo válidos.");
         if (profile.has("email_verified") && !"true".equalsIgnoreCase(profile.path("email_verified").asText())) {
             throw new BadCredentialsException("El correo de Google no está verificado.");
         }
-        return info("GOOGLE", sub, email, text(profile, "given_name"), text(profile, "family_name"), request.nonce());
+        String firstName = firstNonBlank(text(profile, "given_name"), request.firstName());
+        String lastName = firstNonBlank(text(profile, "family_name"), request.lastName());
+        return info("GOOGLE", sub, email, firstName, lastName, request.nonce());
     }
 
     private void validateGoogleClaims(JsonNode payload, SocialLoginRequestDTO request) {
@@ -93,7 +115,12 @@ public class OAuthProviderService {
         long exp = payload.path("exp").asLong(0);
         if (exp > 0 && Instant.ofEpochSecond(exp).isBefore(Instant.now())) throw new BadCredentialsException("El token de Google expiró.");
         String audience = text(payload, "aud");
-        if (!blank(googleClientId) && !blank(audience) && !googleClientId.equals(audience)) throw new BadCredentialsException("Audiencia de Google incorrecta.");
+        if (!blank(googleClientId) && !blank(audience) && !googleClientId.equals(audience)) {
+            String azp = text(payload, "azp");
+            if (!googleClientId.equals(azp)) {
+                throw new BadCredentialsException("Audiencia de Google incorrecta.");
+            }
+        }
         String nonce = text(payload, "nonce");
         if (!blank(request.nonce()) && !blank(nonce) && !request.nonce().equals(nonce)) throw new BadCredentialsException("Nonce de Google inválido.");
     }
@@ -158,7 +185,11 @@ public class OAuthProviderService {
         return str.substring(0, 1).toUpperCase() + (str.length() > 1 ? str.substring(1).toLowerCase() : "");
     }
 
-    private static boolean looksLikeJwt(String token) { return token.split("\\.").length == 3; }
+    private static boolean looksLikeJwt(String token) {
+        if (blank(token)) return false;
+        String trimmed = token.trim();
+        return trimmed.startsWith("eyJ") && trimmed.split("\\.").length == 3;
+    }
     private static boolean blank(String value) { return value == null || value.isBlank(); }
     private static String text(JsonNode node, String field) { String value = node.path(field).asText(null); return blank(value) ? null : value; }
     private static String firstNonBlank(String... values) { for (String value : values) if (!blank(value)) return value.trim(); return null; }
