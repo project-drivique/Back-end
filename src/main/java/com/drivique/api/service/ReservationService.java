@@ -153,6 +153,44 @@ public class ReservationService {
         this.reservationDocumentReviewService = reservationDocumentReviewService;
     }
 
+    /** Reserva abierta de la misma persona con exactamente la misma selección (vehículo, fechas, planes, servicios, cupón y sede de pago). */
+    private Reservation findIdenticalOpenRequest(User customer, Vehicle vehicle, CreateReservationRequestDTO request) {
+        for (Reservation open : reservationRepository.findOpenRequestsForSameTrip(
+                customer.getId(), vehicle.getId(), request.pickupDate(), request.returnDate())) {
+            if (!Objects.equals(idOf(open.getInsuranceCoverage()), request.insuranceCoverageId()) && request.insuranceCoverageId() != null) {
+                continue;
+            }
+            if (!Objects.equals(idOf(open.getMileagePlan()), request.mileagePlanId()) && request.mileagePlanId() != null) {
+                continue;
+            }
+            if (!Objects.equals(idOf(open.getCashPaymentBranch()), request.cashPaymentBranchId())) {
+                continue;
+            }
+            Set<UUID> wantedServices = request.additionalServiceIds() == null ? Set.of()
+                    : request.additionalServiceIds().stream().filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+            Set<UUID> savedServices = additionalServiceRepository.findByReservationId(open.getId()).stream()
+                    .map(ras -> ras.getAdditionalService().getId()).collect(java.util.stream.Collectors.toSet());
+            if (!wantedServices.equals(savedServices)) {
+                continue;
+            }
+            String wantedCoupon = request.couponCode() == null ? "" : request.couponCode().strip();
+            String savedCoupon = promotionRepository.findByReservationId(open.getId()).stream()
+                    .map(rp -> rp.getPromotion().getCode()).findFirst().orElse("");
+            if (!wantedCoupon.equalsIgnoreCase(savedCoupon)) {
+                continue;
+            }
+            return open;
+        }
+        return null;
+    }
+
+    private static UUID idOf(Object entity) {
+        if (entity instanceof InsuranceCoverage i) return i.getId();
+        if (entity instanceof MileagePlan m) return m.getId();
+        if (entity instanceof Branch b) return b.getId();
+        return null;
+    }
+
     @Transactional
     public ReservationResponseDTO createReservation(CreateReservationRequestDTO request, String userEmail) {
         User customer = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
@@ -178,6 +216,14 @@ public class ReservationService {
 
         if (!vehicle.isActive() || vehicle.getStatus() == null || !vehicle.getStatus().allowsReservation()) {
             throw new ConflictException("El vehículo no está habilitado para reservas");
+        }
+
+        // Idempotencia: doble clic, reintento de red o dos peticiones a la vez con la MISMA solicitud devuelven la
+        // reserva ya creada en lugar de chocar con ella (409). El bloqueo del vehículo serializa las peticiones.
+        Reservation duplicate = findIdenticalOpenRequest(customer, vehicle, request);
+        if (duplicate != null) {
+            log.info("Solicitud de reserva repetida del usuario {}: se devuelve la reserva abierta {}", userEmail, duplicate.getCode());
+            return mapFromEntity(duplicate);
         }
 
         boolean hasOverlap = reservationRepository.existsOverlappingReservation(
@@ -467,13 +513,44 @@ public class ReservationService {
             reservationDocumentReviewService.validateCanBePaid(r);
         }
 
+        // SEGURIDAD CRÍTICA: la reserva solo avanza con una transacción de Wompi realmente aprobada.
+        // Sin transactionId, o si Wompi no la aprueba, se rechaza y no se cambia nada.
+        String cleanTransactionId = transactionId == null ? "" : transactionId.trim();
+        if (cleanTransactionId.isEmpty()) {
+            throw new ConflictException("Para confirmar la reserva se requiere una transacción de pago aprobada.");
+        }
+        if (wompiPaymentService == null || rentalContractRepository == null) {
+            throw new IllegalStateException("La verificación de pagos no está disponible.");
+        }
+
+        RentalContract contract = rentalContractRepository.findByReservationId(r.getId()).orElse(null);
+        if (contract == null && contractService != null) {
+            contractService.generateContract(new com.drivique.api.dto.GenerateContractRequestDTO(r.getId()), userEmail);
+            contract = rentalContractRepository.findByReservationId(r.getId()).orElse(null);
+        }
+        if (contract == null) {
+            throw new ConflictException("No se pudo preparar el contrato de la reserva para verificar el pago.");
+        }
+
+        // Idempotencia: repetir la confirmación (doble clic, reintento de red, polling de la app) no repite efectos.
+        String currentStatus = r.getStatus() != null ? r.getStatus().getCode() : "";
+        boolean alreadyPaid = !r.getCode().startsWith("HLD-")
+                && List.of("PENDING_SIGNATURE", "CONFIRMED", "ACTIVE", "COMPLETED").contains(currentStatus.toUpperCase())
+                && paymentRepository != null
+                && paymentRepository.existsByContractIdAndStatusCodeIgnoreCase(contract.getId(), "APPROVED");
+        if (alreadyPaid) {
+            return mapFromEntity(r);
+        }
+
+        // Lanza ConflictException si la transacción no existe, no está aprobada, es de otra reserva o no cubre el total.
+        wompiPaymentService.verifyAndRecordApprovedPayment(cleanTransactionId, contract, userEmail);
+
         if (r.getCode().startsWith("HLD-")) {
             String realCode = generateUniqueReservationCode();
             r.setCode(realCode);
         }
 
-        RentalContract existingContract = rentalContractRepository != null ? rentalContractRepository.findByReservationId(r.getId()).orElse(null) : null;
-        boolean isContractSigned = existingContract != null && existingContract.getStatus() != null && "ACTIVE".equalsIgnoreCase(existingContract.getStatus().getCode());
+        boolean isContractSigned = contract.getStatus() != null && "ACTIVE".equalsIgnoreCase(contract.getStatus().getCode());
         String targetStatusCode = isContractSigned ? "CONFIRMED" : "PENDING_SIGNATURE";
         ReservationStatus targetStatus = reservationStatusRepository.findByCodeIgnoreCase(targetStatusCode)
                 .or(() -> reservationStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE"))
@@ -484,34 +561,11 @@ public class ReservationService {
         Reservation saved = reservationRepository.save(r);
         avisarDomicilioPagado(saved);
 
-        if (rentalContractRepository != null) {
-            RentalContract contract = rentalContractRepository.findByReservationId(saved.getId()).orElse(null);
-            if (contract == null && contractService != null) {
-                try {
-                    contractService.generateContract(new com.drivique.api.dto.GenerateContractRequestDTO(saved.getId()), userEmail);
-                    contract = rentalContractRepository.findByReservationId(saved.getId()).orElse(null);
-                } catch (Exception ignored) {}
-            }
-            if (contract != null) {
-                if (contractStatusRepository != null && contract.getStatus() != null && "DRAFT".equalsIgnoreCase(contract.getStatus().getCode())) {
-                    contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE")
-                            .ifPresent(contract::setStatus);
-                }
-                
-                // Si viene un transactionId de Wompi, verificarlo fidedignamente con la API de Wompi
-                if (transactionId != null && !transactionId.isBlank() && wompiPaymentService != null) {
-                    try {
-                        wompiPaymentService.verifyAndRecordApprovedPayment(transactionId, contract, userEmail);
-                    } catch (Exception ex) {
-                        log.warn("Verificación de transacción Wompi: {}", ex.getMessage());
-                    }
-                }
-
-                // SEGURIDAD CRÍTICA: No se fabrica ningún pago artificial en estado APPROVED sin respaldo real de Wompi.
-                rentalContractRepository.saveAndFlush(contract);
-            }
+        if (contractStatusRepository != null && contract.getStatus() != null && "DRAFT".equalsIgnoreCase(contract.getStatus().getCode())) {
+            contractStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE").ifPresent(contract::setStatus);
         }
-        
+        rentalContractRepository.saveAndFlush(contract);
+
         auditLogRepository.save(new AuditLog(
                 "RESERVATIONS",
                 "Reservation",
