@@ -108,6 +108,7 @@ public class SecurityConfig {
                                 "/v1/exchange-rates/latest",
                                 "/v1/brand-configurations/active",
                                 "/v1/security-configurations",
+                                "/v1/captcha/config",
                                 "/v1/kyc/document-types",
                                 "/v1/departments",
                                 "/v1/departments/*/cities",
