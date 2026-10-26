@@ -172,8 +172,13 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
                         .content("{\"password\":\"SecurePass123!\"}"))
                 .andExpect(status().isNoContent());
 
-        assertThat(userRepository.findById(testUser.getId())).isEmpty();
+        // La cuenta queda anonimizada y bloqueada (la fila se conserva por auditoría, pagos y reseñas) y el correo queda libre
+        User deleted = userRepository.findById(testUser.getId()).orElseThrow();
+        assertThat(deleted.getAccountStatus()).isEqualTo("DELETED");
+        assertThat(deleted.getDeletedAt()).isNotNull();
+        assertThat(deleted.getFirstName()).isEqualTo("Usuario");
         assertThat(userRepository.findByEmailIgnoreCase("ana.martinez@drivique.com")).isEmpty();
+        assertThat(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(deleted.getEmail())).isEmpty();
     }
 
     @Test
@@ -183,9 +188,13 @@ class UserIntegrationTests extends DatabaseHealthTestSupport {
                         .header("Authorization", "Bearer " + jwtToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"password\":\"WrongPass123!\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID_PASSWORD"))
+                .andExpect(jsonPath("$.meta.remainingAttempts").value(4));
 
-        assertThat(userRepository.findById(testUser.getId())).isPresent();
+        User kept = userRepository.findById(testUser.getId()).orElseThrow();
+        assertThat(kept.getAccountStatus()).isNotEqualTo("DELETED");
+        assertThat(kept.getFailedLoginAttempts()).isEqualTo((short) 1);
     }
 
     @Test
