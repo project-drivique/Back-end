@@ -187,7 +187,7 @@ class IncidentIntegrationTests extends DatabaseHealthTestSupport {
     void responsesAndPrivateAttachmentsRespectAccessAndFileRules() throws Exception {
         String id = createIncident("Consulta general", "Necesito información");
 
-        MockMultipartFile photo = new MockMultipartFile("files", "foto.png", "image/png", new byte[] {1, 2, 3, 4});
+        MockMultipartFile photo = new MockMultipartFile("files", "foto.png", "image/png", com.drivique.api.TestFiles.PNG);
         mvc.perform(multipart(HttpMethod.POST, "/api/v1/incidents/" + id + "/attachments").file(photo).contextPath("/api")
                         .header("Authorization", "Bearer " + customerToken))
                 .andExpect(status().isCreated())

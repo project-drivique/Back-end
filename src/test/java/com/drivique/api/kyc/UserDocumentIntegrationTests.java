@@ -152,7 +152,7 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     void uploadDocumentWithoutAuthReturns401() throws Exception {
-        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", "front-data".getBytes());
+        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
 
         mvc.perform(multipart(HttpMethod.POST, "/api/v1/users/me/documents")
                         .file(front)
@@ -163,8 +163,8 @@ class UserDocumentIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     void uploadDocumentWithCustomerTokenSucceedsAndCreatesPendingDoc() throws Exception {
-        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", "front-data".getBytes());
-        MockMultipartFile back = new MockMultipartFile("backFile", "back.jpg", "image/jpeg", "back-data".getBytes());
+        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
+        MockMultipartFile back = new MockMultipartFile("backFile", "back.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
 
         mvc.perform(multipart(HttpMethod.POST, "/api/v1/users/me/documents")
                         .file(front)
