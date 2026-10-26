@@ -98,6 +98,21 @@ public class AuthController {
         return authService.resetPassword(request);
     }
 
+    @PostMapping("/verify-password")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    @Operation(summary = "Verificar contraseña actual", description = "Confirma la contraseña de la persona autenticada antes de una acción sensible. Cuenta como intento fallido si es incorrecta.")
+    public void verifyPassword(@Valid @RequestBody VerifyPasswordRequestDTO request, org.springframework.security.core.Authentication authentication) {
+        authService.verifyPassword(authentication.getName(), request.password());
+    }
+
+    @PostMapping("/change-password")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Cambiar contraseña", description = "Valida la contraseña actual y la política de la nueva, actualiza el hash e invalida todas las sesiones.")
+    public MessageResponseDTO changePassword(@Valid @RequestBody ChangePasswordRequestDTO request, org.springframework.security.core.Authentication authentication) {
+        return authService.changePassword(authentication.getName(), request);
+    }
+
     private String extractIp(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isBlank()) {
