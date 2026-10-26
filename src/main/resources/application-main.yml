@@ -1,3 +1,8 @@
 logging:
   level:
     "[com.drivique]": WARN
+
+app:
+  security:
+    # En ambientes desplegados los secretos (JWT_SECRET, APP_DOCUMENT_ENCRYPTION_KEY) son obligatorios
+    require-secrets: true
