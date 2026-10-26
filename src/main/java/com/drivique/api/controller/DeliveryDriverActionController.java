@@ -91,6 +91,11 @@ public class DeliveryDriverActionController {
         DeliveryActionTokens.Action a = action.get();
         ReservationDeliveryPoint point = findPoint(a);
 
+        // Idempotencia: un doble clic o un reintento sobre una entrega ya completada no es un error
+        if (point != null && "COMPLETED".equals(point.getDeliveryStatus())) {
+            return completedNoticePage(point);
+        }
+
         if (isBeforeEventDate(point, a.pointType())) {
             return errorPage(400, "Acción aún no disponible",
                     "Por motivos de seguridad y control operativo, las acciones de confirmación y reporte de código solo se habilitan el día programado del servicio.",
