@@ -501,9 +501,12 @@ class ReservationDeliveryPointIntegrationTests extends DatabaseHealthTestSupport
         assertThat(jdbc.queryForObject("SELECT status FROM location.delivery_drivers", String.class)).isEqualTo("AVAILABLE");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications WHERE subject LIKE '%confirmada%'", Integer.class)).isGreaterThan(0);
 
-        // el enlace ya no sirve para volver a confirmar
+        // un segundo clic (o un reintento) es idempotente: informa que ya está completada y no repite ningún efecto
+        int notificationsBefore = jdbc.queryForObject("SELECT count(*) FROM support.notifications", Integer.class);
         mvc.perform(post("/api/v1/public/deliveries/action").contextPath("/api").contentType(MediaType.APPLICATION_FORM_URLENCODED).param("token", token))
-                .andExpect(status().isConflict());
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Entrega ya completada")));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM support.notifications", Integer.class)).isEqualTo(notificationsBefore);
     }
 
     @Test
