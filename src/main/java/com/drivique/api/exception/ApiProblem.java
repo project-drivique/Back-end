@@ -8,7 +8,8 @@ import org.springframework.http.HttpStatus;
 @Schema(name = "ApiProblem", description = "RFC 7807 error with safe validation details")
 public record ApiProblem(
         String type, String title, int status, String detail, String instance,
-        @Schema(format = "date-time") String timestamp, List<ValidationError> errors) {
+        @Schema(format = "date-time") String timestamp, List<ValidationError> errors,
+        @Schema(description = "Datos extra para mostrar el error (por ejemplo intentos restantes)") java.util.Map<String, Object> meta) {
 
     public record ValidationError(String field, String code, String message) {}
 
@@ -35,7 +36,12 @@ public record ApiProblem(
     }
 
     public static ApiProblem of(HttpStatus status, String instance, String detail, List<ValidationError> errors) {
+        return of(status, instance, detail, errors, java.util.Map.of());
+    }
+
+    public static ApiProblem of(HttpStatus status, String instance, String detail, List<ValidationError> errors,
+                                java.util.Map<String, Object> meta) {
         return new ApiProblem("about:blank", status.getReasonPhrase(), status.value(), detail,
-                instance, Instant.now().toString(), List.copyOf(errors));
+                instance, Instant.now().toString(), List.copyOf(errors), java.util.Map.copyOf(meta));
     }
 }

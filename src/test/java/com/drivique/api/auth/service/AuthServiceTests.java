@@ -179,7 +179,9 @@ class AuthServiceTests {
         when(passwordEncoder.matches("WrongPassword", "$2a$12$hashedPassword")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(request, "127.0.0.1", "UserAgent"))
-                .isInstanceOf(BadCredentialsException.class);
+                .isInstanceOf(com.drivique.api.exception.LoginFailedException.class)
+                .hasMessageContaining("Contraseña incorrecta")
+                .hasMessageContaining("4");
 
         assertThat(testUser.getFailedLoginAttempts()).isEqualTo((short) 1);
         verify(userRepository, times(1)).save(testUser);
@@ -315,7 +317,7 @@ class AuthServiceTests {
                 .thenReturn(Optional.empty());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> authService.forgotPassword(request))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .isInstanceOf(com.drivique.api.exception.LoginFailedException.class)
                 .hasMessageContaining("No existe una cuenta registrada con ese correo.");
         verify(verificationCodeService, never()).createVerificationCode(any(), any(), anyInt());
     }

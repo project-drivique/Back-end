@@ -81,7 +81,7 @@ class VehicleInspectionServiceTests {
         when(storage.storeFile(any(), anyString())).thenReturn("/uploads/evidence.jpg");
         when(inspections.saveAndFlush(any(VehicleInspection.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(users.findActiveByRoleCode("SUPER_ADMIN")).thenReturn(List.of(superAdmin)); when(superAdmin.getId()).thenReturn(UUID.randomUUID());
-        org.springframework.mock.web.MockMultipartFile photo = new org.springframework.mock.web.MockMultipartFile("evidencePhotos", "llanta.jpg", "image/jpeg", new byte[] {1, 2, 3});
+        org.springframework.mock.web.MockMultipartFile photo = new org.springframework.mock.web.MockMultipartFile("evidencePhotos", "llanta.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
         VehicleInspectionRequestDTO request = new VehicleInspectionRequestDTO("CHECK_IN", 10, new BigDecimal("90.00"), null, List.of(new InspectionChecklistAnswerRequestDTO(itemId, false, "Rayón visible", 0)));
 
         withNotices.register(contractId, request, List.of(photo), "staff@drivique.com");
