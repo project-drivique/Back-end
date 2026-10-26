@@ -21,8 +21,8 @@ public class CaptchaService {
 
     private static final Logger LOG = LoggerFactory.getLogger(CaptchaService.class);
 
-    /** Claves de prueba publicadas por Cloudflare: no protegen nada, solo permiten desarrollar sin cuenta. */
-    static final String TEST_SITE_KEY = "1x00000000000000000000AA";
+    /** Claves de prueba publicadas por Cloudflare: no protegen nada. La clave del sitio fuerza el desafío visible; la secreta siempre aprueba. */
+    static final String TEST_SITE_KEY = "3x00000000000000000000FF";
     static final String TEST_SECRET_KEY = "1x0000000000000000000000000000000AA";
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
