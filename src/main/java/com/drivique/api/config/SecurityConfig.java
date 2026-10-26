@@ -67,7 +67,14 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers
-                        .frameOptions(frame -> frame.deny())
+                        // DENY en toda la API salvo los archivos KYC, que el panel de encargados muestra en un visor
+                        // (KycFramingHeaderFilter les pone SAMEORIGIN y frame-ancestors del frontend)
+                        .frameOptions(frame -> frame.disable())
+                        .addHeaderWriter(new org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter(
+                                new org.springframework.security.web.util.matcher.NegatedRequestMatcher(
+                                        request -> request.getRequestURI().matches("^.*/kyc/documents/(file|[^/]+/file)/?$")),
+                                new org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter(
+                                        org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter.XFrameOptionsMode.DENY)))
                         .contentTypeOptions(contentType -> {})
                         .xssProtection(xss -> xss.headerValue(
                                 org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
