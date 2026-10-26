@@ -46,6 +46,22 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID>,
     @Query("SELECT r FROM Reservation r WHERE r.vehicle.id = :vehicleId AND r.blocksAvailability = true AND r.returnDate > :now ORDER BY r.pickupDate")
     List<Reservation> findUpcomingBlockingByVehicle(@Param("vehicleId") UUID vehicleId, @Param("now") java.time.Instant now);
 
+    /** Solicitudes aún abiertas (sin pagar) de la misma persona para el mismo vehículo y fechas: sirven para la idempotencia del checkout. */
+    @Query("SELECT r FROM Reservation r " +
+           "WHERE r.customer.id = :customerId " +
+           "AND r.vehicle.id = :vehicleId " +
+           "AND r.pickupDate = :pickupDate " +
+           "AND r.returnDate = :returnDate " +
+           "AND r.blocksAvailability = true " +
+           "AND r.status.code IN ('PENDING_PAYMENT', 'PENDING_DOCUMENT_REVIEW', 'PENDING_SCHEDULE') " +
+           "ORDER BY r.createdAt DESC")
+    List<Reservation> findOpenRequestsForSameTrip(
+            @Param("customerId") UUID customerId,
+            @Param("vehicleId") UUID vehicleId,
+            @Param("pickupDate") Instant pickupDate,
+            @Param("returnDate") Instant returnDate
+    );
+
     @Query("SELECT COUNT(r) > 0 FROM Reservation r " +
            "WHERE r.vehicle.id = :vehicleId " +
            "AND r.blocksAvailability = true " +

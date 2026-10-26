@@ -149,9 +149,40 @@ public class WompiPaymentService {
         if (!"APPROVED".equals(status)) {
             throw new ConflictException("La transacción en Wompi no se encuentra aprobada (estado: " + status + ").");
         }
+        if (!"COP".equalsIgnoreCase(data.path("currency").asText(""))) {
+            throw new ConflictException("La transacción de Wompi no está en pesos colombianos (COP).");
+        }
 
         Payment payment = payments.findByGatewayProviderAndGatewayReference("WOMPI", reference)
                 .orElse(null);
+
+        // La transacción debe pertenecer a ESTA reserva: no se acepta el pago aprobado de otra persona o de otra reserva.
+        Reservation reservation = contract.getReservation();
+        if (payment != null) {
+            if (payment.getContract() == null || !payment.getContract().getId().equals(contract.getId())) {
+                throw new ConflictException("La transacción de Wompi pertenece a otro contrato.");
+            }
+            if (payment.getAmount() != null && amountInCents != toCents(payment.getAmount())) {
+                throw new ConflictException("El monto de la transacción no coincide con el pago registrado.");
+            }
+        } else {
+            String base = reference.contains("_") ? reference.substring(0, reference.indexOf('_')) : reference;
+            boolean sameReservation = reservation != null && !base.isBlank()
+                    && (base.equalsIgnoreCase(String.valueOf(reservation.getId()))
+                    || base.equalsIgnoreCase(reservation.getCode()));
+            if (!sameReservation) {
+                throw new ConflictException("La transacción de Wompi no corresponde a esta reserva.");
+            }
+            if (reservation.getTotalEstimated() == null || amountInCents < toCents(reservation.getTotalEstimated())) {
+                throw new ConflictException("El monto pagado en Wompi no cubre el total de la reserva.");
+            }
+        }
+
+        // Idempotencia: si este pago ya quedó aprobado no se vuelve a registrar ni a generar otro recibo.
+        if (payment != null && payment.getStatus() != null && "APPROVED".equalsIgnoreCase(payment.getStatus().getCode())
+                && payment.getPaidAt() != null) {
+            return payment;
+        }
 
         PaymentStatus approvedStatus = statuses.findByCodeIgnoreCase("APPROVED")
                 .orElseThrow(() -> new ResourceNotFoundException("Estado de pago APPROVED no encontrado"));
@@ -180,6 +211,10 @@ public class WompiPaymentService {
 
         receipts.generateFor(payment);
         return payment;
+    }
+
+    private static long toCents(BigDecimal value) {
+        return value.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValue();
     }
 
     @Transactional
