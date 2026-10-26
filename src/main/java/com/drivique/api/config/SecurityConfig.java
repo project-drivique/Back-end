@@ -156,7 +156,7 @@ public class SecurityConfig {
         configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization", "Content-Type", "Location", "X-Total-Count"));
+        configuration.setExposedHeaders(List.of("Authorization", "Content-Type", "Location", "X-Total-Count", "Idempotency-Key", "Idempotent-Replayed"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
