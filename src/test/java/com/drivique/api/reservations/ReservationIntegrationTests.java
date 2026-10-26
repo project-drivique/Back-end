@@ -327,11 +327,10 @@ class ReservationIntegrationTests extends DatabaseHealthTestSupport {
 
         String reservationId = objectMapper.readTree(responseBody).get("id").asText();
 
-        // Confirm it to see it in /me
-        responseBody = mvc.perform(post("/api/v1/reservations/checkout/confirm/{id}", reservationId).contextPath("/api"))
-                .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        
+        // Confirmar sin una transacción aprobada de Wompi ya no es posible: la reserva abierta se ve igual en /me
+        mvc.perform(post("/api/v1/reservations/checkout/confirm/{id}", reservationId).contextPath("/api"))
+                .andExpect(status().isConflict());
+
         String code = objectMapper.readTree(responseBody).get("code").asText();
 
         // 1. Get my reservations

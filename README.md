@@ -92,40 +92,40 @@ Luego crear `HU-BE-01-main` desde `main`, integrar la hija `-qa` y abrir PR haci
 
 ## Contrato de API y errores
 
-Consultar [HU-BE-02](docs/HU-BE-02.md) para Swagger, OpenAPI y el contrato Problem Details.
+Consultar HU-BE-02 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-02.md`) para Swagger, OpenAPI y el contrato Problem Details.
 
 ## Catálogos del sistema
 
-Consultar [HU-BE-03](docs/HU-BE-03.md) para idiomas, monedas, tasas, caché y pendientes de integración.
+Consultar HU-BE-03 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-03.md`) para idiomas, monedas, tasas, caché y pendientes de integración.
 
-Consultar [HU-BE-04](docs/HU-BE-04.md) para configuración de marca, tema y parámetros públicos.
+Consultar HU-BE-04 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-04.md`) para configuración de marca, tema y parámetros públicos.
 
-Consultar [HU-BE-11](docs/HU-BE-11.md) para consentimientos legales, trazabilidad de Habeas Data y la configuración de las versiones vigentes.
+Consultar HU-BE-11 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-11.md`) para consentimientos legales, trazabilidad de Habeas Data y la configuración de las versiones vigentes.
 
-Consultar [HU-BE-12](docs/HU-BE-12.md) para departamentos, ciudades y sus puntos de aeropuerto o terminal.
+Consultar HU-BE-12 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-12.md`) para departamentos, ciudades y sus puntos de aeropuerto o terminal.
 
-Consultar [HU-BE-13](docs/HU-BE-13.md) para sedes físicas, horarios y pagos en efectivo.
+Consultar HU-BE-13 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-13.md`) para sedes físicas, horarios y pagos en efectivo.
 
-Consultar [HU-BE-15](docs/HU-BE-15.md) para los catálogos técnicos de flota:
+Consultar HU-BE-15 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-15.md`) para los catálogos técnicos de flota:
 marcas, transmisiones, combustibles y estados habilitados para reserva.
 
-Consultar [HU-BE-21](docs/HU-BE-21.md) para la programación, finalización e historial
+Consultar HU-BE-21 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-21.md`) para la programación, finalización e historial
 de mantenimientos de vehículos.
 
-Consultar [HU-BE-22](docs/HU-BE-22.md) para servicios adicionales y coberturas de seguro.
+Consultar HU-BE-22 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-22.md`) para servicios adicionales y coberturas de seguro.
 
-Consultar [HU-BE-23](docs/HU-BE-23.md) para planes de kilometraje.
+Consultar HU-BE-23 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-23.md`) para planes de kilometraje.
 
-Consultar [HU-BE-24](docs/HU-BE-24.md) para validación de promociones y cupones.
+Consultar HU-BE-24 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-24.md`) para validación de promociones y cupones.
 
-Consultar [HU-BE-25](docs/HU-BE-25.md) para el cotizador de alquiler.
+Consultar HU-BE-25 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-25.md`) para el cotizador de alquiler.
 
-Consultar [HU-BE-31](docs/HU-BE-31.md) para firma biométrica y PDF contractual.
+Consultar HU-BE-31 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-31.md`) para firma biométrica y PDF contractual.
 
-Consultar [HU-BE-16](docs/HU-BE-16.md) para categorías de vehículos, tarifas base
+Consultar HU-BE-16 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-16.md`) para categorías de vehículos, tarifas base
 y depósitos de garantía.
 
-Consultar [HU-BE-17](docs/HU-BE-17.md) para catálogo y búsqueda pública de flota
+Consultar HU-BE-17 (repositorio **Documentation**, `docs/07-backend/user-stories/HU-BE-17.md`) para catálogo y búsqueda pública de flota
 con filtros dinámicos y destacados.
 
 Consultar [la arquitectura del código](docs/architecture.md) para la organización por módulos y responsabilidades.

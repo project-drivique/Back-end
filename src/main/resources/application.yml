@@ -9,7 +9,7 @@ spring:
     host: ${SPRING_MAIL_HOST:smtp.gmail.com}
     port: ${SPRING_MAIL_PORT:587}
     username: ${SPRING_MAIL_USERNAME:odrivique@gmail.com}
-    password: ${SPRING_MAIL_PASSWORD:ogiajocxxmcddixw}
+    password: ${SPRING_MAIL_PASSWORD:}
     properties:
       mail.smtp.auth: ${SPRING_MAIL_SMTP_AUTH:true}
       mail.smtp.starttls.enable: ${SPRING_MAIL_STARTTLS:true}
@@ -41,8 +41,15 @@ app:
   backend-url: ${APP_BACKEND_URL:http://192.168.1.41:8080}
   auth:
     mail-from: ${APP_AUTH_MAIL_FROM:no-reply@drivique.com}
+  captcha:
+    # Cloudflare Turnstile. Sin claves en desarrollo se usan las de prueba; en main/qa son obligatorias.
+    enabled: ${CAPTCHA_ENABLED:true}
+    site-key: ${TURNSTILE_SITE_KEY:}
+    secret-key: ${TURNSTILE_SECRET_KEY:}
   security:
-    document-encryption-key: ${APP_DOCUMENT_ENCRYPTION_KEY:drivique-kyc-aes-256-gcm-master-key-secret-2026!}
+    # true = el arranque falla si falta un secreto; en main/qa se fuerza en su perfil
+    require-secrets: ${APP_REQUIRE_SECRETS:false}
+    document-encryption-key: ${APP_DOCUMENT_ENCRYPTION_KEY:}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5175,http://localhost:8081,http://localhost:8082,http://192.168.1.41:5173,http://192.168.1.41:8080,http://192.168.1.41:8081}
 
@@ -99,7 +106,7 @@ payments:
     api-url: ${WOMPI_API_URL:https://sandbox.wompi.co/v1}
 
 jwt:
-  secret: ${JWT_SECRET:driviqueSecureMasterAuthSigningSecretKeyHMAC512Sha2026GeneratedProductionSafe!}
+  secret: ${JWT_SECRET:}
   access-token-expiration-seconds: ${JWT_ACCESS_TOKEN_EXPIRATION_SECONDS:900}
   refresh-token-expiration-days: ${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:7}
 

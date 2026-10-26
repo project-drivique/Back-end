@@ -30,7 +30,7 @@ class FileStorageServiceTests {
                 "frontFile",
                 "document_front.jpg",
                 "image/jpeg",
-                "sample-image-content".getBytes()
+                com.drivique.api.TestFiles.JPEG
         );
 
         String storedPath = storageService.storeFile(file, "kyc");
@@ -108,6 +108,7 @@ class FileStorageServiceTests {
     @Test
     void validateFileFailsWhenSizeExceeds5Mb() {
         byte[] oversized = new byte[(int) (LocalFileStorageService.MAX_FILE_SIZE + 1024)];
+        System.arraycopy(com.drivique.api.TestFiles.PNG, 0, oversized, 0, com.drivique.api.TestFiles.PNG.length);
         MockMultipartFile largeFile = new MockMultipartFile(
                 "frontFile",
                 "large.png",
@@ -118,5 +119,30 @@ class FileStorageServiceTests {
         assertThatThrownBy(() -> storageService.validateFile(largeFile))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("5MB");
+    }
+
+    @Test
+    void validateFileRejectsAnExecutableRenamedAsAnImage() {
+        MockMultipartFile fake = new MockMultipartFile("frontFile", "cedula.jpg", "image/jpeg", "MZ-ejecutable-disfrazado".getBytes());
+
+        assertThatThrownBy(() -> storageService.validateFile(fake))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no corresponde");
+    }
+
+    @Test
+    void validateFileRejectsAFormatThatDoesNotMatchItsExtension() {
+        MockMultipartFile pngAsPdf = new MockMultipartFile("frontFile", "licencia.pdf", "application/pdf", com.drivique.api.TestFiles.PNG);
+
+        assertThatThrownBy(() -> storageService.validateFile(pngAsPdf))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no corresponde");
+    }
+
+    @Test
+    void validateFileAcceptsRealJpegPngAndPdfSignatures() {
+        storageService.validateFile(new MockMultipartFile("f", "a.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG));
+        storageService.validateFile(new MockMultipartFile("f", "a.png", "image/png", com.drivique.api.TestFiles.PNG));
+        storageService.validateFile(new MockMultipartFile("f", "a.pdf", "application/pdf", "%PDF-1.7 contenido".getBytes()));
     }
 }
