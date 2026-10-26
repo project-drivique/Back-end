@@ -115,7 +115,12 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(badLoginBody))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                // El mensaje dice qué falló y cuántos intentos quedan, con un código estable para web y app
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID_PASSWORD"))
+                .andExpect(jsonPath("$.errors[0].field").value("password"))
+                .andExpect(jsonPath("$.meta.remainingAttempts").value(4))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Contraseña incorrecta")));
 
         User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
         assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo((short) 1);
