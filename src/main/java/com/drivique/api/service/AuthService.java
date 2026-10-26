@@ -133,12 +133,14 @@ public class AuthService {
     }
 
     /** Correo sin cuenta: se avisa con un mensaje claro y nunca se envía un código. */
-    private static org.springframework.web.server.ResponseStatusException accountNotFound() {
-        return new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND,
-                "No existe una cuenta registrada con ese correo.");
+    private static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
+
+    private static com.drivique.api.exception.LoginFailedException accountNotFound() {
+        return new com.drivique.api.exception.LoginFailedException(org.springframework.http.HttpStatus.NOT_FOUND,
+                "ACCOUNT_NOT_FOUND", "email", "No existe una cuenta registrada con ese correo.", null);
     }
 
-    @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class})
+    @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class, com.drivique.api.exception.LoginFailedException.class})
     public AuthResponseDTO login(LoginRequestDTO request, String ipAddress, String userAgent) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email())
                 .orElseThrow(() -> accountNotFound());
@@ -149,7 +151,7 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            user.incrementFailedAttempts(5, 30);
+            user.incrementFailedAttempts(MAX_FAILED_LOGIN_ATTEMPTS, 30);
             userRepository.save(user);
 
             if (user.isLocked()) {
@@ -157,23 +159,27 @@ public class AuthService {
                 throw new AccountLockedException(user.getLockedUntil());
             }
             auditAccess(user.getEmail(), "FAILURE", "Inicio de sesión fallido: contraseña incorrecta", ipAddress);
-            throw new BadCredentialsException("Credenciales inválidas.");
+            int remaining = Math.max(0, MAX_FAILED_LOGIN_ATTEMPTS - user.getFailedLoginAttempts());
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "INVALID_PASSWORD", "password",
+                    "Contraseña incorrecta. Intentos restantes antes de bloquear la cuenta: " + remaining + ".",
+                    java.util.Map.of("remainingAttempts", remaining));
         }
 
         user.resetFailedAttempts();
         userRepository.save(user);
 
         if ("PENDING_VERIFICATION".equalsIgnoreCase(user.getAccountStatus())) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.FORBIDDEN,
-                    "Debes verificar tu correo electrónico antes de iniciar sesión.");
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "EMAIL_NOT_VERIFIED", "email",
+                    "Debes verificar tu correo electrónico antes de iniciar sesión.", null);
         }
 
         if ("INACTIVE".equalsIgnoreCase(user.getAccountStatus()) || "SUSPENDED".equalsIgnoreCase(user.getAccountStatus())) {
             auditAccess(user.getEmail(), "FAILURE", "Inicio de sesión rechazado: la cuenta no está activa", ipAddress);
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.FORBIDDEN,
-                    "La cuenta no está autorizada para iniciar sesión.");
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "ACCOUNT_DISABLED", "email",
+                    "Tu cuenta está desactivada. Contacta a soporte.", null);
         }
 
         List<String> roleCodes = user.getRoles().stream().map(Role::getCode).toList();
@@ -397,6 +403,71 @@ public class AuthService {
                         org.springframework.http.HttpStatus.BAD_REQUEST, "Código de verificación inválido o expirado."));
         verificationCodeService.validate(user, "PASSWORD_RESET", request.code());
         return MessageResponseDTO.of("Código verificado.");
+    }
+
+    /**
+     * Comprueba la contraseña actual de la persona autenticada (por ejemplo antes de cambiar su correo).
+     * Cuenta como intento fallido igual que el inicio de sesión, para que no sirva para adivinar la clave.
+     */
+    @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class, com.drivique.api.exception.LoginFailedException.class})
+    public void verifyPassword(String email, String password) {
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email)
+                .orElseThrow(() -> accountNotFound());
+        if (user.isLocked()) {
+            throw new AccountLockedException(user.getLockedUntil());
+        }
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            user.incrementFailedAttempts(MAX_FAILED_LOGIN_ATTEMPTS, 30);
+            userRepository.save(user);
+            if (user.isLocked()) {
+                throw new AccountLockedException(user.getLockedUntil());
+            }
+            int remaining = Math.max(0, MAX_FAILED_LOGIN_ATTEMPTS - user.getFailedLoginAttempts());
+            // 400 y no 401: una contraseña equivocada aquí no significa que la sesión haya vencido
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_PASSWORD", "password",
+                    "La contraseña actual es incorrecta. Intentos restantes antes de bloquear la cuenta: " + remaining + ".",
+                    java.util.Map.of("remainingAttempts", remaining));
+        }
+        user.resetFailedAttempts();
+        userRepository.save(user);
+    }
+
+    @Transactional(noRollbackFor = {BadCredentialsException.class, AccountLockedException.class, com.drivique.api.exception.LoginFailedException.class})
+    public MessageResponseDTO changePassword(String email, ChangePasswordRequestDTO request) {
+        verifyPassword(email, request.currentPassword());
+        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(email)
+                .orElseThrow(() -> accountNotFound());
+        if (request.currentPassword().equals(request.newPassword())) {
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "SAME_PASSWORD", "newPassword",
+                    "La nueva contraseña debe ser diferente a la actual.", null);
+        }
+        try {
+            passwordValidatorService.validate(request.newPassword());
+        } catch (org.springframework.web.server.ResponseStatusException ex) {
+            if (ex.getStatusCode().value() != 400) {
+                throw ex;
+            }
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "WEAK_PASSWORD", "newPassword",
+                    "La nueva contraseña no cumple los requisitos de seguridad.", null);
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+        // Por seguridad se cierran todas las sesiones: hay que volver a iniciar con la nueva contraseña
+        sessionRepository.revokeAllActiveSessionsForUser(user, Instant.now());
+        // La auditoría usa otra transacción: se registra cuando esta ya terminó; si se hiciera antes esperaría la fila
+        // del usuario que esta transacción tiene bloqueada y ambas quedarían colgadas (deadlock)
+        String auditedEmail = user.getEmail();
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        auditAccess(auditedEmail, "SUCCESS", "Contraseña cambiada por la propia persona", null);
+                    }
+                });
+        return MessageResponseDTO.of("Contraseña actualizada. Inicia sesión de nuevo con tu nueva contraseña.");
     }
 
     @Transactional

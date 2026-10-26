@@ -102,6 +102,73 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(jsonPath("$.userProfile.roles[0]").value("CUSTOMER"));
     }
 
+    private org.springframework.test.web.servlet.ResultActions changePassword(String current, String next) throws Exception {
+        return mvc.perform(post("/api/v1/auth/change-password")
+                .contextPath("/api")
+                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("juan.perez@drivique.com").roles("CUSTOMER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"currentPassword\":\"" + current + "\",\"newPassword\":\"" + next + "\"}"));
+    }
+
+    private int loginStatus(String password) throws Exception {
+        return mvc.perform(post("/api/v1/auth/login")
+                        .contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"juan.perez@drivique.com\",\"password\":\"" + password + "\"}"))
+                .andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void changePasswordWorksAndTheOldOneStopsWorking() throws Exception {
+        changePassword("SecureP@ssw0rd123", "NuevaClave#2026x")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Inicia sesión de nuevo")));
+
+        assertThat(loginStatus("SecureP@ssw0rd123")).isEqualTo(401);
+        assertThat(loginStatus("NuevaClave#2026x")).isEqualTo(200);
+    }
+
+    @Test
+    void changePasswordWithAWrongCurrentPasswordIsRefusedAndCounted() throws Exception {
+        changePassword("claveEquivocada1!", "NuevaClave#2026x")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID_PASSWORD"))
+                .andExpect(jsonPath("$.meta.remainingAttempts").value(4));
+
+        assertThat(userRepository.findById(testUser.getId()).orElseThrow().getFailedLoginAttempts()).isEqualTo((short) 1);
+        assertThat(loginStatus("SecureP@ssw0rd123")).isEqualTo(200);
+    }
+
+    @Test
+    void changePasswordRejectsWeakAndRepeatedPasswords() throws Exception {
+        changePassword("SecureP@ssw0rd123", "corta")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value("WEAK_PASSWORD"));
+        changePassword("SecureP@ssw0rd123", "SecureP@ssw0rd123")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value("SAME_PASSWORD"));
+    }
+
+    @Test
+    void changePasswordRequiresASession() throws Exception {
+        mvc.perform(post("/api/v1/auth/change-password").contextPath("/api")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"currentPassword\":\"a\",\"newPassword\":\"b\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void verifyPasswordAnswersNoContentOrAClearError() throws Exception {
+        var user = org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("juan.perez@drivique.com").roles("CUSTOMER");
+        mvc.perform(post("/api/v1/auth/verify-password").contextPath("/api").with(user)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"SecureP@ssw0rd123\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/auth/verify-password").contextPath("/api").with(user)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"mala\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID_PASSWORD"));
+    }
+
     @Test
     void loginWithBadCredentialsFailsAndIncrementsAttempts() throws Exception {
         String badLoginBody = """
@@ -115,7 +182,12 @@ class AuthIntegrationTests extends DatabaseHealthTestSupport {
                         .contextPath("/api")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(badLoginBody))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                // El mensaje dice qué falló y cuántos intentos quedan, con un código estable para web y app
+                .andExpect(jsonPath("$.errors[0].code").value("INVALID_PASSWORD"))
+                .andExpect(jsonPath("$.errors[0].field").value("password"))
+                .andExpect(jsonPath("$.meta.remainingAttempts").value(4))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Contraseña incorrecta")));
 
         User updatedUser = userRepository.findById(testUser.getId()).orElseThrow();
         assertThat(updatedUser.getFailedLoginAttempts()).isEqualTo((short) 1);
