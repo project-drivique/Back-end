@@ -105,7 +105,7 @@ class UserDocumentServiceTests {
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(user.getEmail())).thenReturn(Optional.of(user));
         when(documentTypeRepository.findById(docType.getId())).thenReturn(Optional.of(docType));
 
-        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", "content".getBytes());
+        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
 
         assertThatThrownBy(() -> userDocumentService.uploadDocument(user.getEmail(), docType.getId(), "123456", branch.getId(), front, null))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -121,8 +121,8 @@ class UserDocumentServiceTests {
         when(userDocumentRepository.findByUserIdAndDocumentType_Id(user.getId(), docType.getId())).thenReturn(Optional.empty());
         when(userDocumentRepository.save(any(UserDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", "content".getBytes());
-        MockMultipartFile back = new MockMultipartFile("backFile", "back.jpg", "image/jpeg", "content".getBytes());
+        MockMultipartFile front = new MockMultipartFile("frontFile", "front.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
+        MockMultipartFile back = new MockMultipartFile("backFile", "back.jpg", "image/jpeg", com.drivique.api.TestFiles.JPEG);
 
         UserDocumentResponseDTO response = userDocumentService.uploadDocument(user.getEmail(), docType.getId(), "10203040", branch.getId(), front, back);
 

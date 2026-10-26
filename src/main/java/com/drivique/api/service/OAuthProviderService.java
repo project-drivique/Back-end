@@ -28,8 +28,11 @@ public class OAuthProviderService {
     private final ObjectMapper mapper;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
+    /** Uno o varios client id de Google separados por coma (web, Android, iOS). */
     @Value("${drivique.oauth.google.client-id:}") private String googleClientId;
     @Value("${drivique.oauth.facebook.app-id:}") private String facebookAppId;
+    @Value("${drivique.oauth.facebook.app-secret:}") private String facebookAppSecret;
+    @Value("${app.security.require-secrets:false}") private boolean requireSecrets;
 
     public OAuthProviderService(ObjectMapper mapper) { this.mapper = mapper; }
 
@@ -46,25 +49,17 @@ public class OAuthProviderService {
         if (blank(token)) throw new BadCredentialsException("Token de Google requerido.");
 
         try {
-            JsonNode profile = null;
+            JsonNode profile;
             if (looksLikeJwt(token)) {
-                try {
-                    // Google valida la firma del token ID
-                    profile = getJson("https://oauth2.googleapis.com/tokeninfo?id_token=" + encode(token), null);
-                } catch (Exception e) {
-                    LOG.debug("No fue posible validar como id_token: {}", e.getMessage());
-                }
-            }
-            if (profile == null) {
-                // Si es un access_token (o id_token que no resolvió por tokeninfo), consultar endpoints oficiales
-                try {
-                    profile = getJson("https://www.googleapis.com/oauth2/v3/userinfo", token);
-                } catch (Exception e) {
-                    try {
-                        profile = getJson("https://oauth2.googleapis.com/tokeninfo?access_token=" + encode(token), null);
-                    } catch (Exception e2) {
-                        profile = getJson("https://openidconnect.googleapis.com/v1/userinfo", token);
-                    }
+                // Google valida la firma, el emisor y la vigencia del ID token
+                profile = getJson("https://oauth2.googleapis.com/tokeninfo?id_token=" + encode(token), null);
+            } else {
+                // Access token: primero se comprueba a qué aplicación fue emitido (evita aceptar tokens de otra app)
+                JsonNode info = getJson("https://oauth2.googleapis.com/tokeninfo?access_token=" + encode(token), null);
+                assertGoogleAudience(info);
+                profile = getJson("https://www.googleapis.com/oauth2/v3/userinfo", token);
+                if (!blank(text(info, "sub")) && !blank(text(profile, "sub")) && !text(info, "sub").equals(text(profile, "sub"))) {
+                    throw new BadCredentialsException("El token de Google no corresponde al perfil recibido.");
                 }
             }
             return googleProfile(profile, request);
@@ -76,15 +71,42 @@ public class OAuthProviderService {
         }
     }
 
+    private Set<String> allowedGoogleClients() {
+        Set<String> ids = new java.util.LinkedHashSet<>();
+        if (googleClientId != null) {
+            for (String id : googleClientId.split(",")) {
+                if (!id.isBlank()) ids.add(id.trim());
+            }
+        }
+        return ids;
+    }
+
+    /** El token debe haber sido emitido para ESTA aplicación; sin client id configurado solo se tolera en desarrollo. */
+    private void assertGoogleAudience(JsonNode payload) {
+        Set<String> allowed = allowedGoogleClients();
+        if (allowed.isEmpty()) {
+            if (requireSecrets) throw new BadCredentialsException("Inicio de sesión con Google no configurado en el servidor.");
+            LOG.warn("[SEGURIDAD] GOOGLE_CLIENT_ID no está configurado: no se valida la audiencia del token (solo desarrollo).");
+            return;
+        }
+        String audience = text(payload, "aud");
+        String azp = text(payload, "azp");
+        if (!allowed.contains(audience) && !allowed.contains(azp)) {
+            throw new BadCredentialsException("Audiencia de Google incorrecta.");
+        }
+    }
+
     private OAuthUserInfo verifyFacebook(SocialLoginRequestDTO request) {
         String token = firstNonBlank(request.accessToken(), request.idToken(), request.authCode());
         if (blank(token)) throw new BadCredentialsException("Access Token de Facebook requerido.");
 
         try {
+            assertFacebookTokenBelongsToThisApp(token);
             JsonNode profile = getJson("https://graph.facebook.com/me?fields=id,email,first_name,last_name,name&access_token=" + encode(token), null);
             String id = text(profile, "id");
             if (blank(id)) throw new BadCredentialsException("Facebook no entregó un identificador válido.");
-            String email = firstNonBlank(text(profile, "email"), request.email(), "fb." + id + "@facebook.drivique.com");
+            // El correo SOLO sale del perfil verificado por Facebook: jamás del cuerpo de la petición
+            String email = firstNonBlank(text(profile, "email"), "fb." + id + "@facebook.drivique.com");
             String firstName = firstNonBlank(text(profile, "first_name"), request.firstName());
             String lastName = firstNonBlank(text(profile, "last_name"), request.lastName());
             return info("FACEBOOK", id, email, firstName, lastName, request.nonce());
@@ -96,10 +118,24 @@ public class OAuthProviderService {
         }
     }
 
+    /** debug_token confirma que el token es válido y fue emitido para nuestra app de Facebook. */
+    private void assertFacebookTokenBelongsToThisApp(String token) throws Exception {
+        if (blank(facebookAppId) || blank(facebookAppSecret)) {
+            if (requireSecrets) throw new BadCredentialsException("Inicio de sesión con Facebook no configurado en el servidor.");
+            LOG.warn("[SEGURIDAD] FACEBOOK_APP_SECRET no está configurado: no se valida a qué app pertenece el token (solo desarrollo).");
+            return;
+        }
+        JsonNode debug = getJson("https://graph.facebook.com/debug_token?input_token=" + encode(token)
+                + "&access_token=" + encode(facebookAppId + "|" + facebookAppSecret), null).path("data");
+        if (!debug.path("is_valid").asBoolean(false)) throw new BadCredentialsException("El token de Facebook no es válido.");
+        if (!facebookAppId.equals(debug.path("app_id").asText(""))) throw new BadCredentialsException("El token de Facebook pertenece a otra aplicación.");
+    }
+
     private OAuthUserInfo googleProfile(JsonNode profile, SocialLoginRequestDTO request) {
         validateGoogleClaims(profile, request);
         String sub = firstNonBlank(text(profile, "sub"), text(profile, "id"), text(profile, "user_id"));
-        String email = firstNonBlank(text(profile, "email"), request.email());
+        // El correo SOLO sale del perfil verificado por Google: jamás del cuerpo de la petición
+        String email = text(profile, "email");
         if (blank(sub) || blank(email)) throw new BadCredentialsException("Google no entregó un identificador y correo válidos.");
         if (profile.has("email_verified") && !"true".equalsIgnoreCase(profile.path("email_verified").asText())) {
             throw new BadCredentialsException("El correo de Google no está verificado.");
@@ -114,18 +150,12 @@ public class OAuthProviderService {
         if (!blank(issuer) && !GOOGLE_ISSUERS.contains(issuer)) throw new BadCredentialsException("Issuer de Google inválido.");
         long exp = payload.path("exp").asLong(0);
         if (exp > 0 && Instant.ofEpochSecond(exp).isBefore(Instant.now())) throw new BadCredentialsException("El token de Google expiró.");
-        String audience = text(payload, "aud");
-        if (!blank(googleClientId) && !blank(audience) && !googleClientId.equals(audience)) {
-            String azp = text(payload, "azp");
-            if (!googleClientId.equals(azp)) {
-                throw new BadCredentialsException("Audiencia de Google incorrecta.");
-            }
-        }
+        if (payload.has("aud")) assertGoogleAudience(payload);
         String nonce = text(payload, "nonce");
         if (!blank(request.nonce()) && !blank(nonce) && !request.nonce().equals(nonce)) throw new BadCredentialsException("Nonce de Google inválido.");
     }
 
-    private JsonNode getJson(String url, String bearer) throws Exception {
+    JsonNode getJson(String url, String bearer) throws Exception {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(8)).GET();
         if (!blank(bearer)) builder.header("Authorization", "Bearer " + bearer);
         HttpResponse<String> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofString());

@@ -13,7 +13,8 @@ public class PasswordValidatorService {
     private final PasswordPolicyRepository policies;
     public PasswordValidatorService(PasswordPolicyRepository policies) { this.policies = policies; }
 
-    @Transactional(readOnly = true)
+    // Solo lee: un rechazo por contraseña débil no debe marcar como fallida la transacción de quien la llama
+    @Transactional(readOnly = true, noRollbackFor = ResponseStatusException.class)
     public void validate(String password) {
         var active = policies.findByActiveTrue();
         if (active.size() != 1 || active.get(0).getMinLength() < 8
