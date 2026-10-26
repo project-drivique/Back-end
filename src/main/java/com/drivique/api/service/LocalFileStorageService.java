@@ -54,6 +54,39 @@ public class LocalFileStorageService implements FileStorageService {
         return normalized.equals("kyc") || normalized.startsWith("kyc/") || normalized.contains("/kyc/");
     }
 
+    /**
+     * Cifra en el lugar los documentos KYC que se guardaron antes de existir el cifrado en reposo.
+     * Es idempotente: los archivos que ya están cifrados no se tocan. Devuelve cuántos cifró.
+     */
+    public int encryptLegacyKycFiles() {
+        Path kycDir = rootLocation.resolve("kyc").normalize();
+        if (!Files.isDirectory(kycDir)) {
+            return 0;
+        }
+        int encrypted = 0;
+        try (java.util.stream.Stream<Path> walk = Files.walk(kycDir)) {
+            for (Path file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+                try {
+                    byte[] raw = Files.readAllBytes(file);
+                    if (raw.length == 0 || documentCryptoService.isEncrypted(raw)) {
+                        continue;
+                    }
+                    Path temp = file.resolveSibling(file.getFileName() + ".enc-tmp");
+                    Files.write(temp, documentCryptoService.encrypt(raw));
+                    Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    encrypted++;
+                } catch (IOException | RuntimeException ex) {
+                    // Un archivo problemático no debe impedir que se cifren los demás
+                    org.slf4j.LoggerFactory.getLogger(LocalFileStorageService.class)
+                            .warn("No se pudo cifrar el documento legado {}: {}", file.getFileName(), ex.getMessage());
+                }
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("No fue posible recorrer los documentos KYC.", ex);
+        }
+        return encrypted;
+    }
+
     @Override
     public void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
@@ -74,6 +107,30 @@ public class LocalFileStorageService implements FileStorageService {
         if (!ALLOWED_EXTENSIONS.contains(extension.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("Extensión de archivo no permitida. Solo se aceptan extensiones .jpg, .jpeg, .png y .pdf.");
         }
+
+        // El tipo y la extensión los declara quien sube el archivo: se comprueba también el contenido real (firma del formato),
+        // para que un ejecutable o un script renombrado a .jpg no pase.
+        if (!hasValidSignature(readHead(file), extension.toLowerCase(Locale.ROOT))) {
+            throw new IllegalArgumentException("El contenido del archivo no corresponde a un JPG, PNG o PDF válido.");
+        }
+    }
+
+    private static byte[] readHead(MultipartFile file) {
+        try (InputStream in = file.getInputStream()) {
+            return in.readNBytes(8);
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("No fue posible leer el archivo.");
+        }
+    }
+
+    static boolean hasValidSignature(byte[] head, String extension) {
+        return switch (extension) {
+            case ".jpg", ".jpeg" -> head.length >= 3 && (head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xD8 && (head[2] & 0xFF) == 0xFF;
+            case ".png" -> head.length >= 8 && (head[0] & 0xFF) == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G'
+                    && head[4] == 0x0D && head[5] == 0x0A && head[6] == 0x1A && head[7] == 0x0A;
+            case ".pdf" -> head.length >= 5 && head[0] == '%' && head[1] == 'P' && head[2] == 'D' && head[3] == 'F' && head[4] == '-';
+            default -> false;
+        };
     }
 
     @Override

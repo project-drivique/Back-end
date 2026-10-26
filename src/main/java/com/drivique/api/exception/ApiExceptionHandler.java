@@ -73,6 +73,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return response(HttpStatus.UNAUTHORIZED, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
+    @ExceptionHandler(LoginFailedException.class)
+    ResponseEntity<Object> loginFailed(LoginFailedException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getStatus())
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(ApiProblem.of(ex.getStatus(), request.getRequestURI(), ex.getMessage(),
+                        List.of(new ApiProblem.ValidationError(ex.getField(), ex.getCode(), ex.getMessage())), ex.getMeta()));
+    }
+
     @ExceptionHandler(AccountLockedException.class)
     ResponseEntity<Object> locked(AccountLockedException ex, HttpServletRequest request) {
         long minutes = ex.getRemainingMinutes();
@@ -81,7 +89,9 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 : "Cuenta temporalmente bloqueada por seguridad.";
         return ResponseEntity.status(HttpStatus.LOCKED)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(ApiProblem.of(HttpStatus.LOCKED, request.getRequestURI(), message, List.of()));
+                .body(ApiProblem.of(HttpStatus.LOCKED, request.getRequestURI(), message,
+                        List.of(new ApiProblem.ValidationError("email", "ACCOUNT_LOCKED", message)),
+                        java.util.Map.of("lockedMinutes", minutes)));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

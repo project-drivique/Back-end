@@ -19,8 +19,14 @@ public class DeliveryActionTokens {
 
     private final byte[] key;
 
-    public DeliveryActionTokens(@Value("${jwt.secret:driviqueSuperSecretKeyForJwtAuthenticationMustBeAtLeast256BitsLong2026!}") String secret) {
-        this.key = ("delivery-action:" + secret).getBytes(StandardCharsets.UTF_8);
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeliveryActionTokens.class);
+
+    public DeliveryActionTokens(
+            @Value("${jwt.secret:}") String secret,
+            @Value("${app.security.require-secrets:false}") boolean requireSecrets
+    ) {
+        String effective = SecuritySecrets.resolveOrEphemeral("JWT_SECRET", secret, requireSecrets, log);
+        this.key = ("delivery-action:" + effective).getBytes(StandardCharsets.UTF_8);
     }
 
     public String create(UUID reservationId, String pointType, String action, Instant expiresAt) {
