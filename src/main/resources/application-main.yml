@@ -6,3 +6,10 @@ app:
   security:
     # En ambientes desplegados los secretos (JWT_SECRET, APP_DOCUMENT_ENCRYPTION_KEY) son obligatorios
     require-secrets: true
+
+# La documentación interactiva de la API no se publica en producción
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
