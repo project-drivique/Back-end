@@ -54,6 +54,39 @@ public class LocalFileStorageService implements FileStorageService {
         return normalized.equals("kyc") || normalized.startsWith("kyc/") || normalized.contains("/kyc/");
     }
 
+    /**
+     * Cifra en el lugar los documentos KYC que se guardaron antes de existir el cifrado en reposo.
+     * Es idempotente: los archivos que ya están cifrados no se tocan. Devuelve cuántos cifró.
+     */
+    public int encryptLegacyKycFiles() {
+        Path kycDir = rootLocation.resolve("kyc").normalize();
+        if (!Files.isDirectory(kycDir)) {
+            return 0;
+        }
+        int encrypted = 0;
+        try (java.util.stream.Stream<Path> walk = Files.walk(kycDir)) {
+            for (Path file : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+                try {
+                    byte[] raw = Files.readAllBytes(file);
+                    if (raw.length == 0 || documentCryptoService.isEncrypted(raw)) {
+                        continue;
+                    }
+                    Path temp = file.resolveSibling(file.getFileName() + ".enc-tmp");
+                    Files.write(temp, documentCryptoService.encrypt(raw));
+                    Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    encrypted++;
+                } catch (IOException | RuntimeException ex) {
+                    // Un archivo problemático no debe impedir que se cifren los demás
+                    org.slf4j.LoggerFactory.getLogger(LocalFileStorageService.class)
+                            .warn("No se pudo cifrar el documento legado {}: {}", file.getFileName(), ex.getMessage());
+                }
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("No fue posible recorrer los documentos KYC.", ex);
+        }
+        return encrypted;
+    }
+
     @Override
     public void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {

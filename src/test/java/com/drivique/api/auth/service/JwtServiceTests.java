@@ -18,7 +18,7 @@ class JwtServiceTests {
     @BeforeEach
     void setUp() {
         jwtService = new JwtService(
-                "driviqueSuperSecretKeyForJwtAuthenticationMustBeAtLeast256BitsLong2026!",
+                "unit-test-signing-secret-with-more-than-32-chars-0123456789",
                 900,
                 7
         );
