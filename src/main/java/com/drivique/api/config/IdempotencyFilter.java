@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -57,8 +58,9 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private final IdempotencyService idempotency;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public IdempotencyFilter(IdempotencyService idempotency) {
-        this.idempotency = idempotency;
+    /** El servicio es opcional: en pruebas de capa web (sin base de datos) el filtro simplemente deja pasar. */
+    public IdempotencyFilter(ObjectProvider<IdempotencyService> idempotency) {
+        this.idempotency = idempotency.getIfAvailable();
     }
 
     private static String pathOf(HttpServletRequest request) {
@@ -81,6 +83,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String key = request.getHeader(HEADER);
+        if (idempotency == null) {
+            chain.doFilter(request, response);
+            return;
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (key == null || key.isBlank() || auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
             chain.doFilter(request, response);
