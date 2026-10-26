@@ -41,7 +41,8 @@ public class CaptchaService {
             @Value("${app.captcha.verify-url:https://challenges.cloudflare.com/turnstile/v0/siteverify}") String verifyUrl,
             @Value("${app.security.require-secrets:false}") boolean requireSecrets
     ) {
-        this(enabled, siteKey, secretKey, verifyUrl, requireSecrets, RestClient.create());
+        this(enabled, siteKey, secretKey, verifyUrl, requireSecrets, RestClient.builder()
+                .requestFactory(timeouts()).build());
     }
 
     CaptchaService(boolean enabled, String siteKey, String secretKey, String verifyUrl, boolean requireSecrets, RestClient http) {
@@ -61,6 +62,14 @@ public class CaptchaService {
             this.siteKey = siteKey == null ? "" : siteKey.trim();
             this.secretKey = secretKey == null ? "" : secretKey.trim();
         }
+    }
+
+    /** Sin tiempo máximo una lentitud de Cloudflare dejaría la petición colgada. */
+    private static org.springframework.http.client.SimpleClientHttpRequestFactory timeouts() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(java.time.Duration.ofSeconds(4));
+        factory.setReadTimeout(java.time.Duration.ofSeconds(6));
+        return factory;
     }
 
     public boolean isEnabled() {
@@ -85,17 +94,24 @@ public class CaptchaService {
         if (clientIp != null && !clientIp.isBlank()) {
             form.add("remoteip", clientIp);
         }
-        JsonNode result;
-        try {
-            String body = http.post().uri(verifyUrl)
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body(String.class);
-            result = body == null ? null : MAPPER.readTree(body);
-        } catch (Exception ex) {
+        JsonNode result = null;
+        RuntimeException failure = null;
+        // Un reintento ante un fallo de red: así una lentitud puntual del proveedor no rechaza a una persona real
+        for (int attempt = 1; attempt <= 2 && result == null; attempt++) {
+            try {
+                String body = http.post().uri(verifyUrl)
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .body(form)
+                        .retrieve()
+                        .body(String.class);
+                result = body == null ? null : MAPPER.readTree(body);
+            } catch (Exception ex) {
+                failure = new IllegalStateException(ex.getMessage(), ex);
+            }
+        }
+        if (result == null) {
             // Si el proveedor no responde, la acción se rechaza (nunca se deja pasar sin verificar)
-            LOG.warn("No fue posible validar el captcha con el proveedor: {}", ex.getMessage());
+            LOG.warn("No fue posible validar el captcha con el proveedor: {}", failure != null ? failure.getMessage() : "sin respuesta");
             throw new IllegalArgumentException("No fue posible validar la verificación de seguridad. Inténtalo de nuevo.");
         }
         if (result == null || !result.path("success").asBoolean(false)) {

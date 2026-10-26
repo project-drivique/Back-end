@@ -58,9 +58,19 @@ class CaptchaServiceTests {
 
     @Test
     void providerOutageNeverLetsTheRequestThrough() {
-        server.expect(requestTo(URL)).andRespond(withServerError());
+        server.expect(org.springframework.test.web.client.ExpectedCount.times(2), requestTo(URL)).andRespond(withServerError());
 
         assertThatThrownBy(() -> captcha.verify("any", null)).isInstanceOf(IllegalArgumentException.class);
+        server.verify();
+    }
+
+    @Test
+    void aMomentaryProviderFailureIsRetriedOnceAndStillPasses() {
+        server.expect(requestTo(URL)).andRespond(withServerError());
+        server.expect(requestTo(URL)).andRespond(withSuccess("{\"success\":true}", MediaType.APPLICATION_JSON));
+
+        assertThatCode(() -> captcha.verify("good-token", null)).doesNotThrowAnyException();
+        server.verify();
     }
 
     @Test
