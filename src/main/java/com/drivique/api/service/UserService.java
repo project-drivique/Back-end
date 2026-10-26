@@ -110,48 +110,61 @@ public class UserService {
         return mapToDetailDTO(saved);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {com.drivique.api.exception.LoginFailedException.class,
+            com.drivique.api.exception.AccountLockedException.class, BadCredentialsException.class})
     public void deleteAccount(String email, String password) {
         User user = findUserByEmail(email);
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BadCredentialsException("Credenciales inválidas.");
+        if (user.isLocked()) {
+            throw new com.drivique.api.exception.AccountLockedException(user.getLockedUntil());
         }
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            // Cuenta como intento fallido (igual que el inicio de sesión) para que no sirva para adivinar la clave
+            user.incrementFailedAttempts(5, 30);
+            userRepository.save(user);
+            if (user.isLocked()) {
+                throw new com.drivique.api.exception.AccountLockedException(user.getLockedUntil());
+            }
+            int remaining = Math.max(0, 5 - user.getFailedLoginAttempts());
+            throw new com.drivique.api.exception.LoginFailedException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_PASSWORD", "password",
+                    "La contraseña es incorrecta. Intentos restantes antes de bloquear la cuenta: " + remaining + ".",
+                    java.util.Map.of("remainingAttempts", remaining));
+        }
+        user.resetFailedAttempts();
 
         userSessionRepository.revokeAllActiveSessionsForUser(user, Instant.now());
 
         boolean hasOperations = reservationRepository.existsByCustomerId(user.getId())
                 || rentalContractRepository.existsByCustomerId(user.getId());
 
+        // Datos personales y volátiles: siempre se borran
+        deleteNonOperationalUserData(user);
         if (!hasOperations) {
-            // Usuario sin operaciones: borrado físico completo de cuenta y datos asociados
-            deleteNonOperationalUserData(user);
+            // Sin contratos ni reservas no hay motivo legal para conservar los documentos ni los consentimientos
             userConsentRepository.deleteByUserId(user.getId());
             userDocumentRepository.deleteByUserId(user.getId());
             branchUserRepository.deleteByUserId(user.getId());
-            clearUserRoles(user);
-            userRepository.delete(user);
-        } else {
-            // Usuario con contratos/operaciones: se borran datos personales y volátiles no requeridos
-            deleteNonOperationalUserData(user);
-
-            // Anonimización del perfil y bloqueo permanente manteniendo la referencia para conservación legal
-            user.setFirstName("Usuario");
-            user.setLastName("Eliminado");
-            user.setPhone(null);
-            user.setBirthDate(null);
-            user.setNationalityId(null);
-            user.setDocumentTypeId(null);
-            user.setDocumentNumber(null);
-            user.setAddress(null);
-            user.setPasswordHash("DELETED_" + UUID.randomUUID());
-            user.setAccountStatus("DELETED");
-            user.setDeletedAt(Instant.now());
-            user.setProfileComplete(false);
-            user.setLockedUntil(Instant.now().plusSeconds(36500L * 86400L));
-            clearUserRoles(user);
-            user.setUpdatedAt(Instant.now());
-            userRepository.save(user);
         }
+
+        // La fila del usuario NO se borra: auditoría, pagos, reseñas e incidentes la referencian y la base lo impide.
+        // Se anonimiza y se bloquea de forma permanente; el correo queda libre para registrarse de nuevo.
+        user.setFirstName("Usuario");
+        user.setLastName("Eliminado");
+        user.setEmail("eliminado+" + user.getId() + "@eliminado.drivique.invalid");
+        user.setPhone(null);
+        user.setBirthDate(null);
+        user.setNationalityId(null);
+        user.setDocumentTypeId(null);
+        user.setDocumentNumber(null);
+        user.setAddress(null);
+        user.setPasswordHash("DELETED_" + UUID.randomUUID());
+        user.setAccountStatus("DELETED");
+        user.setDeletedAt(Instant.now());
+        user.setProfileComplete(false);
+        user.setLockedUntil(Instant.now().plusSeconds(36500L * 86400L));
+        clearUserRoles(user);
+        user.setUpdatedAt(Instant.now());
+        userRepository.save(user);
     }
 
     private void clearUserRoles(User user) {

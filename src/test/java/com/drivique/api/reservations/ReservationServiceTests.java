@@ -208,6 +208,51 @@ class ReservationServiceTests {
                 .hasMessageContaining("no se encuentra disponible");
     }
 
+    private Reservation openRequestOfTheSameTrip(Instant pickup, Instant returnDate) {
+        Reservation open = new Reservation(
+                "HLD-OPEN-0001", user, vehicle, pendingStatus, insurance, mileagePlan, branch,
+                pickup, returnDate, new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        open.setId(UUID.randomUUID());
+        when(reservationRepository.findOpenRequestsForSameTrip(any(), eq(vehicleId), eq(pickup), eq(returnDate)))
+                .thenReturn(List.of(open));
+        when(additionalServiceRepository.findByReservationId(open.getId())).thenReturn(List.of());
+        when(promotionRepository.findByReservationId(open.getId())).thenReturn(List.of());
+        return open;
+    }
+
+    @Test
+    void repeatedIdenticalRequest_ReturnsTheOpenReservationInsteadOfFailingWithConflict() {
+        Instant pickup = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant returnDate = pickup.plus(3, ChronoUnit.DAYS);
+        Reservation open = openRequestOfTheSameTrip(pickup, returnDate);
+        // El primer intento ya bloquea el vehículo: sin idempotencia el segundo recibiría 409
+        when(reservationRepository.existsOverlappingReservation(eq(vehicleId), eq(pickup), eq(returnDate))).thenReturn(true);
+
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(
+                vehicleId, pickup, returnDate, insuranceId, mileagePlanId, List.of(), null, branchId);
+
+        ReservationResponseDTO response = service.createReservation(request, userEmail);
+
+        assertThat(response.code()).isEqualTo(open.getCode());
+        verify(reservationRepository, never()).save(any(Reservation.class));
+    }
+
+    @Test
+    void requestWithDifferentServices_IsNotTreatedAsRepeated() {
+        Instant pickup = Instant.now().plus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant returnDate = pickup.plus(3, ChronoUnit.DAYS);
+        openRequestOfTheSameTrip(pickup, returnDate);
+        when(reservationRepository.existsOverlappingReservation(eq(vehicleId), eq(pickup), eq(returnDate))).thenReturn(true);
+
+        CreateReservationRequestDTO request = new CreateReservationRequestDTO(
+                vehicleId, pickup, returnDate, insuranceId, mileagePlanId, List.of(additionalServiceId), null, branchId);
+
+        assertThatThrownBy(() -> service.createReservation(request, userEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("no se encuentra disponible");
+    }
+
     @Test
     void rejectsReservationWhenReturnDatePrecedesPickupDate() {
         Instant pickup = Instant.now().plus(5, ChronoUnit.DAYS);
@@ -560,66 +605,101 @@ class ReservationServiceTests {
         assertThat(list.get(0).code()).isEqualTo("RES-2026-0001");
     }
 
+    private com.drivique.api.model.RentalContract stubPaymentCollaborators() {
+        com.drivique.api.model.RentalContract contract = mock(com.drivique.api.model.RentalContract.class);
+        when(contract.getId()).thenReturn(UUID.randomUUID());
+        com.drivique.api.repository.RentalContractRepository contracts = mock(com.drivique.api.repository.RentalContractRepository.class);
+        when(contracts.findByReservationId(any())).thenReturn(Optional.of(contract));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "rentalContractRepository", contracts);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "wompiPaymentService", wompiPaymentService);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "paymentRepository", paymentRepository);
+        return contract;
+    }
+
+    private final com.drivique.api.service.WompiPaymentService wompiPaymentService = mock(com.drivique.api.service.WompiPaymentService.class);
+    private final com.drivique.api.repository.PaymentRepository paymentRepository = mock(com.drivique.api.repository.PaymentRepository.class);
+
     @Test
-    void confirmReservationPayment_Success_WhenHold() {
+    void confirmReservationPayment_Success_WhenHoldAndWompiApproves() {
         Reservation r = new Reservation(
-                "HLD-2026-0001",
-                user,
-                vehicle,
-                pendingStatus,
-                insurance,
-                mileagePlan,
-                branch,
-                Instant.now().plus(1, ChronoUnit.DAYS),
-                Instant.now().plus(4, ChronoUnit.DAYS),
-                new BigDecimal("220000"),
-                new BigDecimal("800000"),
-                null,
-                null,
-                true
+                "HLD-2026-0001", user, vehicle, pendingStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
         );
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        stubPaymentCollaborators();
         when(reservationRepository.countByCodeStartingWith(any())).thenReturn(0L);
         when(reservationStatusRepository.findByCodeIgnoreCase("CONFIRMED"))
                 .thenReturn(Optional.of(new ReservationStatus("CONFIRMED", "Confirmed", true)));
         when(reservationRepository.save(any(Reservation.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        ReservationResponseDTO response = service.confirmReservationPayment(reservationId, userEmail);
+        ReservationResponseDTO response = service.confirmReservationPayment(reservationId.toString(), "tx-approved", userEmail);
 
         assertThat(response).isNotNull();
         assertThat(response.code()).startsWith("RES-");
         assertThat(response.status()).isEqualTo("CONFIRMED");
+        verify(wompiPaymentService).verifyAndRecordApprovedPayment(eq("tx-approved"), any(), eq(userEmail));
     }
 
     @Test
-    void confirmReservationPayment_ReturnsImmediately_WhenAlreadyConfirmed() {
+    void confirmReservationPayment_WithoutTransactionId_IsRefusedAndKeepsStatus() {
         Reservation r = new Reservation(
-                "RES-2026-0001",
-                user,
-                vehicle,
-                pendingStatus,
-                insurance,
-                mileagePlan,
-                branch,
-                Instant.now().plus(1, ChronoUnit.DAYS),
-                Instant.now().plus(4, ChronoUnit.DAYS),
-                new BigDecimal("220000"),
-                new BigDecimal("800000"),
-                null,
-                null,
-                true
+                "HLD-2026-0002", user, vehicle, pendingStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
         );
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
-        // La confirmación ya no regresa antes de tiempo: una reserva sin contrato firmado pasa a PENDING_SIGNATURE
-        when(reservationStatusRepository.findByCodeIgnoreCase("PENDING_SIGNATURE"))
-                .thenReturn(Optional.of(new ReservationStatus("PENDING_SIGNATURE", "Pending signature", true)));
-        when(reservationRepository.save(any(Reservation.class))).thenAnswer(inv -> inv.getArgument(0));
+        stubPaymentCollaborators();
+        ReservationStatus before = r.getStatus();
 
-        ReservationResponseDTO response = service.confirmReservationPayment(reservationId, userEmail);
+        assertThatThrownBy(() -> service.confirmReservationPayment(reservationId.toString(), null, userEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("transacción de pago aprobada");
 
-        assertThat(response).isNotNull();
+        assertThat(r.getStatus()).isSameAs(before);
+        assertThat(r.getCode()).startsWith("HLD-");
+        verify(reservationRepository, never()).save(any(Reservation.class));
+    }
+
+    @Test
+    void confirmReservationPayment_WhenWompiRejects_KeepsReservationUnpaid() {
+        Reservation r = new Reservation(
+                "HLD-2026-0003", user, vehicle, pendingStatus, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        com.drivique.api.model.RentalContract contract = stubPaymentCollaborators();
+        when(wompiPaymentService.verifyAndRecordApprovedPayment("tx-declined", contract, userEmail))
+                .thenThrow(new ConflictException("La transacción en Wompi no se encuentra aprobada (estado: DECLINED)."));
+        ReservationStatus before = r.getStatus();
+
+        assertThatThrownBy(() -> service.confirmReservationPayment(reservationId.toString(), "tx-declined", userEmail))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("no se encuentra aprobada");
+
+        assertThat(r.getStatus()).isSameAs(before);
+        verify(reservationRepository, never()).save(any(Reservation.class));
+    }
+
+    @Test
+    void confirmReservationPayment_WhenAlreadyPaid_ReturnsWithoutVerifyingAgain() {
+        ReservationStatus signature = new ReservationStatus("PENDING_SIGNATURE", "Pending signature", true);
+        Reservation r = new Reservation(
+                "RES-2026-0001", user, vehicle, signature, insurance, mileagePlan, branch,
+                Instant.now().plus(1, ChronoUnit.DAYS), Instant.now().plus(4, ChronoUnit.DAYS),
+                new BigDecimal("220000"), new BigDecimal("800000"), null, null, true
+        );
+        when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(r));
+        com.drivique.api.model.RentalContract contract = stubPaymentCollaborators();
+        when(paymentRepository.existsByContractIdAndStatusCodeIgnoreCase(contract.getId(), "APPROVED")).thenReturn(true);
+
+        ReservationResponseDTO response = service.confirmReservationPayment(reservationId.toString(), "tx-approved", userEmail);
+
         assertThat(response.code()).isEqualTo("RES-2026-0001");
         assertThat(response.status()).isEqualTo("PENDING_SIGNATURE");
+        verify(wompiPaymentService, never()).verifyAndRecordApprovedPayment(any(), any(), any());
+        verify(reservationRepository, never()).save(any(Reservation.class));
     }
 
     @Test
