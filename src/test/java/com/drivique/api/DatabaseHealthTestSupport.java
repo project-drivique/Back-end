@@ -32,6 +32,11 @@ public abstract class DatabaseHealthTestSupport {
         registry.add("spring.jpa.properties.hibernate.hbm2ddl.create_namespaces", () -> "true");
         // SMTP availability belongs to deployment monitoring, not database integration tests.
         registry.add("management.health.mail.enabled", () -> "false");
+        // Secretos de prueba: en main/qa son obligatorios y nunca se usan valores publicados
+        registry.add("jwt.secret", () -> "integration-test-signing-secret-0123456789-abcdefghij");
+        registry.add("app.security.document-encryption-key", () -> "integration-test-documents-key-0123456789-abcdefghij");
+        // El captcha real se prueba aparte; aqui no se llama a Cloudflare
+        registry.add("app.captcha.enabled", () -> "false");
         registry.add("DB_URL", POSTGRES::getJdbcUrl);
         registry.add("DB_USERNAME", POSTGRES::getUsername);
         registry.add("DB_PASSWORD", POSTGRES::getPassword);

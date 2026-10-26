@@ -2,6 +2,10 @@ package com.drivique.api.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import com.drivique.api.service.CaptchaService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -12,6 +16,30 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
+
+    @Autowired(required = false)
+    private CaptchaService captchaService;
+
+    /** El captcha se valida en el servidor antes de crear la retención de una reserva. */
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        if (captchaService == null) {
+            return;
+        }
+        HandlerInterceptor captcha = new HandlerInterceptor() {
+            @Override
+            public boolean preHandle(jakarta.servlet.http.HttpServletRequest request,
+                                     jakarta.servlet.http.HttpServletResponse response, Object handler) {
+                if ("POST".equalsIgnoreCase(request.getMethod())) {
+                    String forwarded = request.getHeader("X-Forwarded-For");
+                    String ip = forwarded != null && !forwarded.isBlank() ? forwarded.split(",")[0].trim() : request.getRemoteAddr();
+                    captchaService.verify(request.getHeader("X-Captcha-Token"), ip);
+                }
+                return true;
+            }
+        };
+        registry.addInterceptor(captcha).addPathPatterns("/v1/reservations/checkout/initiate");
+    }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {

@@ -32,25 +32,47 @@ public class DocumentCryptoService {
     private static final byte[] MAGIC_HEADER = "DRV_ENC_GCM_V1".getBytes(StandardCharsets.US_ASCII);
     private static final int IV_LENGTH_BYTE = 12; // 96 bits recomendado para GCM
     private static final int TAG_LENGTH_BIT = 128; // 16 bytes de tag de autenticación
-    private static final String DEFAULT_SECRET = "drivique-kyc-aes-256-gcm-master-key-secret-2026!";
+    /** Clave que estuvo versionada en el repositorio. Solo sirve para leer documentos guardados antes y para desarrollo local. */
+    private static final String LEGACY_PUBLISHED_SECRET = "drivique-kyc-aes-256-gcm-master-key-secret-2026!";
 
     private final SecretKeySpec keySpec;
+    private final SecretKeySpec legacyKeySpec;
     private final SecureRandom secureRandom;
 
     public DocumentCryptoService() {
-        this(DEFAULT_SECRET);
+        this("", false);
     }
 
+    public DocumentCryptoService(String secretKey) {
+        this(secretKey, false);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
     public DocumentCryptoService(
-            @Value("${app.security.document-encryption-key:" + DEFAULT_SECRET + "}") String secretKey
+            @Value("${app.security.document-encryption-key:}") String secretKey,
+            @Value("${app.security.require-secrets:false}") boolean requireSecrets
     ) {
         this.secureRandom = new SecureRandom();
-        String effectiveKey = (secretKey != null && !secretKey.isBlank()) ? secretKey : DEFAULT_SECRET;
+        String effectiveKey;
+        if (SecuritySecrets.isUsable(secretKey)) {
+            effectiveKey = secretKey.trim();
+        } else if (requireSecrets) {
+            throw new IllegalStateException("[SEGURIDAD] APP_DOCUMENT_ENCRYPTION_KEY no está configurada o es insegura. "
+                    + "Defínela como variable de entorno (mínimo " + SecuritySecrets.MIN_LENGTH + " caracteres aleatorios). Ej.: openssl rand -base64 48");
+        } else {
+            // Solo desarrollo local: así los documentos de prueba siguen legibles entre reinicios
+            LOG.warn("[SEGURIDAD] APP_DOCUMENT_ENCRYPTION_KEY no está configurada: se usa una clave de desarrollo. No uses esto con datos reales.");
+            effectiveKey = LEGACY_PUBLISHED_SECRET;
+        }
+        this.keySpec = deriveKey(effectiveKey);
+        this.legacyKeySpec = LEGACY_PUBLISHED_SECRET.equals(effectiveKey) ? null : deriveKey(LEGACY_PUBLISHED_SECRET);
+        LOG.info("DocumentCryptoService inicializado exitosamente con algoritmo AES-256-GCM.");
+    }
+
+    private static SecretKeySpec deriveKey(String secret) {
         try {
-            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-            byte[] derivedKey = sha256.digest(effectiveKey.getBytes(StandardCharsets.UTF_8));
-            this.keySpec = new SecretKeySpec(derivedKey, "AES");
-            LOG.info("DocumentCryptoService inicializado exitosamente con algoritmo AES-256-GCM.");
+            byte[] derived = MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
+            return new SecretKeySpec(derived, "AES");
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("Error al derivar clave criptográfica AES-256", e);
         }
@@ -122,14 +144,24 @@ public class DocumentCryptoService {
             byte[] iv = Arrays.copyOfRange(data, ivStart, cipherStart);
             byte[] cipherBytes = Arrays.copyOfRange(data, cipherStart, data.length);
 
-            Cipher cipher = Cipher.getInstance(ALGORITHM);
-            GCMParameterSpec parameterSpec = new GCMParameterSpec(TAG_LENGTH_BIT, iv);
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, parameterSpec);
-
-            return cipher.doFinal(cipherBytes);
+            try {
+                return decryptWith(keySpec, iv, cipherBytes);
+            } catch (javax.crypto.AEADBadTagException wrongKey) {
+                // Documentos guardados antes de rotar la clave: se leen con la clave anterior
+                if (legacyKeySpec == null) {
+                    throw wrongKey;
+                }
+                return decryptWith(legacyKeySpec, iv, cipherBytes);
+            }
         } catch (Exception e) {
             LOG.error("Error al descifrar documento seguro con AES-256-GCM: {}", e.getMessage(), e);
             throw new IllegalStateException("No fue posible descifrar el documento confidencial: " + e.getMessage(), e);
         }
+    }
+
+    private byte[] decryptWith(SecretKeySpec key, byte[] iv, byte[] cipherBytes) throws Exception {
+        Cipher cipher = Cipher.getInstance(ALGORITHM);
+        cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_LENGTH_BIT, iv));
+        return cipher.doFinal(cipherBytes);
     }
 }
