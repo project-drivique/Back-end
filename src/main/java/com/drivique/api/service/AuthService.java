@@ -457,7 +457,16 @@ public class AuthService {
         userRepository.save(user);
         // Por seguridad se cierran todas las sesiones: hay que volver a iniciar con la nueva contraseña
         sessionRepository.revokeAllActiveSessionsForUser(user, Instant.now());
-        auditAccess(user.getEmail(), "SUCCESS", "Contraseña cambiada por la propia persona", null);
+        // La auditoría usa otra transacción: se registra cuando esta ya terminó; si se hiciera antes esperaría la fila
+        // del usuario que esta transacción tiene bloqueada y ambas quedarían colgadas (deadlock)
+        String auditedEmail = user.getEmail();
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        auditAccess(auditedEmail, "SUCCESS", "Contraseña cambiada por la propia persona", null);
+                    }
+                });
         return MessageResponseDTO.of("Contraseña actualizada. Inicia sesión de nuevo con tu nueva contraseña.");
     }
 

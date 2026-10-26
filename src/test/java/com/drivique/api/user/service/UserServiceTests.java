@@ -154,7 +154,7 @@ class UserServiceTests {
     }
 
     @Test
-    void deleteAccountWithoutOperationsPerformsFullPhysicalDeletion() {
+    void deleteAccountWithoutOperationsRemovesPersonalDataAndAnonymizesTheAccount() {
         when(userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull("carlos@drivique.com"))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches("ValidPassword123", "$2a$12$hashedPassword")).thenReturn(true);
@@ -176,8 +176,14 @@ class UserServiceTests {
         verify(userDocumentRepository, times(1)).deleteByUserId(testUser.getId());
         verify(branchUserRepository, times(1)).deleteByUserId(testUser.getId());
 
-        verify(userRepository, times(1)).delete(testUser);
-        verify(userRepository, never()).save(any());
+        // El usuario no se borra (auditoría, pagos y reseñas lo referencian): se anonimiza y libera el correo
+        verify(userRepository, never()).delete(any());
+        verify(userRepository, times(1)).save(testUser);
+        assertThat(testUser.getAccountStatus()).isEqualTo("DELETED");
+        assertThat(testUser.getDeletedAt()).isNotNull();
+        assertThat(testUser.getEmail()).startsWith("eliminado+").endsWith("@eliminado.drivique.invalid");
+        assertThat(testUser.getEmail()).isNotEqualTo("carlos@drivique.com");
+        assertThat(testUser.getPasswordHash()).startsWith("DELETED_");
         assertThat(testUser.getRoles()).isEmpty();
     }
 
@@ -200,6 +206,9 @@ class UserServiceTests {
 
         verify(userRepository, never()).delete(any());
         verify(userRepository, times(1)).save(testUser);
+        // Con operaciones se conservan documentos y consentimientos por obligación legal
+        verify(userDocumentRepository, never()).deleteByUserId(any());
+        verify(userConsentRepository, never()).deleteByUserId(any());
 
         assertThat(testUser.getAccountStatus()).isEqualTo("DELETED");
         assertThat(testUser.getDeletedAt()).isNotNull();
@@ -220,10 +229,13 @@ class UserServiceTests {
         when(passwordEncoder.matches("WrongPassword", "$2a$12$hashedPassword")).thenReturn(false);
 
         assertThatThrownBy(() -> userService.deleteAccount("carlos@drivique.com", "WrongPassword"))
-                .isInstanceOf(BadCredentialsException.class);
+                .isInstanceOf(com.drivique.api.exception.LoginFailedException.class)
+                .hasMessageContaining("incorrecta");
 
         verify(userSessionRepository, never()).revokeAllActiveSessionsForUser(any(), any());
         verify(userRepository, never()).delete(any());
-        verify(userRepository, never()).save(any());
+        // Solo se guarda el intento fallido; la cuenta sigue activa
+        assertThat(testUser.getFailedLoginAttempts()).isEqualTo((short) 1);
+        assertThat(testUser.getAccountStatus()).isNotEqualTo("DELETED");
     }
 }
