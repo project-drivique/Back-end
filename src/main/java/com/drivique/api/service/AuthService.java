@@ -93,7 +93,7 @@ public class AuthService {
                 }
                 userRepository.save(existingUser);
                 String code = verificationCodeService.createVerificationCode(existingUser, "ACCOUNT_VERIFICATION", 15);
-                authEmailService.sendOtp(email, "verificar tu cuenta", code);
+                authEmailService.sendOtp(email, AuthEmailService.Purpose.ACCOUNT_VERIFICATION, code);
                 return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
             }
             throw new ConflictException("El correo ya se encuentra registrado. Inicia sesión o recupera tu contraseña.");
@@ -105,7 +105,7 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalStateException("Rol CUSTOMER no configurado."))));
         userRepository.save(user);
         String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
-        authEmailService.sendOtp(email, "verificar tu cuenta", code);
+        authEmailService.sendOtp(email, AuthEmailService.Purpose.ACCOUNT_VERIFICATION, code);
         return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
     }
 
@@ -113,7 +113,7 @@ public class AuthService {
     public MessageResponseDTO resendVerificationCode(ForgotPasswordRequestDTO request) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).orElseThrow(() -> accountNotFound());
         String code = verificationCodeService.createVerificationCode(user, "ACCOUNT_VERIFICATION", 15);
-        authEmailService.sendOtp(user.getEmail(), "verificar tu cuenta", code);
+        authEmailService.sendOtp(user.getEmail(), AuthEmailService.Purpose.ACCOUNT_VERIFICATION, code);
         return MessageResponseDTO.of("Si el correo es válido, se envió un código de verificación.");
     }
 
@@ -392,7 +392,7 @@ public class AuthService {
     public MessageResponseDTO forgotPassword(ForgotPasswordRequestDTO request) {
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(request.email()).orElseThrow(() -> accountNotFound());
         String code = verificationCodeService.createVerificationCode(user, "PASSWORD_RESET", 15);
-        authEmailService.sendOtp(user.getEmail(), "restablecer tu contraseña", code);
+        authEmailService.sendOtp(user.getEmail(), AuthEmailService.Purpose.PASSWORD_RESET, code);
         return MessageResponseDTO.of("Si el correo está registrado, se ha enviado un código de verificación.");
     }
 

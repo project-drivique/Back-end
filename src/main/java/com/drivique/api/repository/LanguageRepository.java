@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 public interface LanguageRepository extends JpaRepository<Language, UUID> {
     List<Language> findByActiveTrueOrderByCodeAsc();
     boolean existsByCodeOrName(String code, String name);
+
+    java.util.Optional<Language> findByCodeIgnoreCase(String code);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select l from Language l where l.id = :id")
     Optional<Language> findForUpdate(@Param("id") UUID id);
