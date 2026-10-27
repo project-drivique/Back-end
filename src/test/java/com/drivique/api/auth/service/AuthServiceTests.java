@@ -112,7 +112,7 @@ class AuthServiceTests {
                         && user.getLastName().equals("Gomez")
                         && user.getAccountStatus().equals("PENDING_VERIFICATION")
                         && user.getRoles().contains(customerRole)));
-        verify(authEmailService).sendOtp("carlos@drivique.com", "verificar tu cuenta", "246810");
+        verify(authEmailService).sendOtp("carlos@drivique.com", AuthEmailService.Purpose.ACCOUNT_VERIFICATION, "246810");
     }
 
     @Test
@@ -126,7 +126,7 @@ class AuthServiceTests {
         var response = authService.resendVerificationCode(request);
 
         assertThat(response.message()).contains("código de verificación");
-        verify(authEmailService).sendOtp("carlos@drivique.com", "verificar tu cuenta", "135790");
+        verify(authEmailService).sendOtp("carlos@drivique.com", AuthEmailService.Purpose.ACCOUNT_VERIFICATION, "135790");
     }
 
     @Test
