@@ -70,6 +70,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
     ResponseEntity<Object> unauthorized(BadCredentialsException ex, HttpServletRequest request) {
+        // El cliente solo recibe el mensaje genérico; el motivo real queda en el registro para poder diagnosticar
+        LOG.warn("401 {} -> {}", request.getRequestURI(), ex.getMessage());
         return response(HttpStatus.UNAUTHORIZED, request.getRequestURI(), HttpHeaders.EMPTY, List.of());
     }
 
