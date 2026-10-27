@@ -2,8 +2,11 @@ package com.drivique.api.service;
 
 import com.drivique.api.model.RentalContract;
 import com.drivique.api.model.User;
+import com.drivique.api.service.email.EmailLanguage;
+import com.drivique.api.service.email.EmailTexts;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -17,6 +20,14 @@ import org.springframework.stereotype.Service;
 public class ContractEmailService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailLanguage emailLanguage;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailTexts emailTexts;
+
+    private static final EmailTexts DEFAULT_TEXTS = new EmailTexts();
 
     private String brand(String html) {
         return brandTheme == null ? html : brandTheme.apply(html);
@@ -58,36 +69,43 @@ public class ContractEmailService {
         }
         try {
             byte[] protectedPdf = protect(delivery.pdf(), password);
+            EmailTexts texts = emailTexts != null ? emailTexts : DEFAULT_TEXTS;
+            Locale locale = emailLanguage != null ? emailLanguage.forEmail(delivery.email()) : EmailLanguage.DEFAULT;
             MimeMessage message = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(new InternetAddress(fromAddress, "Drivique"));
+            helper.setFrom(new InternetAddress(fromAddress, texts.brandName()));
             helper.setTo(delivery.email());
             String number = delivery.contractNumber();
             String reservationCode = delivery.reservationCode();
-            helper.setSubject("Tu contrato de alquiler " + number + " - Drivique");
+            helper.setSubject(texts.get(locale, "contract.subject", "number", number));
             String base = frontendUrl.replaceAll("/+$", "");
             String html = """
                     <!DOCTYPE html>
-                    <html><head><meta charset="UTF-8"></head>
+                    <html lang="{{LANG}}"><head><meta charset="UTF-8"></head>
                     <body style="font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px;">
                       <div style="max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden;">
                         <div style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); padding: 28px 32px; text-align: center;">
                           <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px;">DRIVIQUE</h1>
-                          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Tu libertad sobre ruedas comienza aquí</p>
+                          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">{{TAGLINE}}</p>
                         </div>
                         <div style="padding: 28px 30px 24px;">
-                          <h2 style="color: #0f172a; margin: 0 0 14px; font-size: 17px;">Tu contrato quedó firmado</h2>
-                          <p style="color: #334155; font-size: 14px; line-height: 1.6;">Hola {{NAME}}, adjuntamos en PDF el contrato <strong>{{NUMBER}}</strong> de tu reserva <strong>{{RESERVATION}}</strong>. Por seguridad, el PDF está protegido: para abrirlo escribe tu número de cédula o identificación registrada, sin puntos ni espacios. También puedes descargarlo cuando quieras desde tus reservas.</p>
+                          <h2 style="color: #0f172a; margin: 0 0 14px; font-size: 17px;">{{TITLE}}</h2>
+                          <p style="color: #334155; font-size: 14px; line-height: 1.6;">{{BODY}}</p>
                           <div style="text-align: center; margin: 26px 0 20px;">
-                            <a href="{{BASE}}/reservas" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 26px; border-radius: 10px;">Ver mis reservas</a>
+                            <a href="{{BASE}}/reservas" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 26px; border-radius: 10px;">{{BUTTON}}</a>
                           </div>
-                          <p style="color: #94a3b8; font-size: 12px; margin: 0;">Este es un mensaje automático del sistema de notificaciones de Drivique.</p>
+                          <p style="color: #94a3b8; font-size: 12px; margin: 0;">{{NOTICE}}</p>
                         </div>
                       </div>
                     </body></html>
-                    """.replace("{{NAME}}", escape(delivery.firstName())).replace("{{NUMBER}}", escape(number))
-                    .replace("{{RESERVATION}}", escape(reservationCode)).replace("{{BASE}}", base);
-            helper.setText("Hola " + delivery.firstName() + ", adjuntamos tu contrato " + number + " de la reserva " + reservationCode + ".", brand(html));
+                    """.replace("{{LANG}}", locale.toLanguageTag())
+                    .replace("{{TAGLINE}}", texts.get(locale, "common.tagline"))
+                    .replace("{{TITLE}}", texts.get(locale, "contract.title"))
+                    .replace("{{BODY}}", texts.get(locale, "contract.body", "name", escape(delivery.firstName()), "number", escape(number), "reservation", escape(reservationCode)))
+                    .replace("{{BUTTON}}", texts.get(locale, "contract.button"))
+                    .replace("{{NOTICE}}", texts.get(locale, "common.autoNoticeShort"))
+                    .replace("{{BASE}}", base);
+            helper.setText(texts.get(locale, "contract.text", "name", delivery.firstName(), "number", number, "reservation", reservationCode), brand(html));
             helper.addAttachment(number + ".pdf", new org.springframework.core.io.ByteArrayResource(protectedPdf), "application/pdf");
             sender.send(message);
             LOG.info("Contrato {} enviado por correo a {}", number, delivery.email());
