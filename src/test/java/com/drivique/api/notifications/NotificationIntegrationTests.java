@@ -41,7 +41,8 @@ class NotificationIntegrationTests extends DatabaseHealthTestSupport {
 
     @BeforeEach
     void setup() {
-        notificationRepository.deleteAll();
+        // resetIamTables ya vacía las notificaciones, pero antes vacía la bandeja de salida y sus intentos (con reintentos):
+        // borrar notificaciones primero chocaba con la llave foránea de notification_outbox
         resetIamTables();
 
         testUser = userRepository.saveAndFlush(new User("Carlos", "Gomez", "customer@drivique.com", "hashedpassword"));
