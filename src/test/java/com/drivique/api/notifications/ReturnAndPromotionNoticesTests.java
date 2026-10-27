@@ -130,6 +130,16 @@ class ReturnAndPromotionNoticesTests extends DatabaseHealthTestSupport {
     }
 
     @Test
+    void theScheduledEntryPointsRunInsideATransactionSoLazyCustomersCanBeRead() {
+        reservation("RES-SCHEDULED", Instant.now().minus(5, ChronoUnit.DAYS), Instant.now().minusSeconds(30));
+
+        // Es el método que invoca el programador: antes fallaba con LazyInitializationException en producción
+        reminders.scheduledOverdue();
+        assertThat(count("subject = 'Tu alquiler ya venció'")).isEqualTo(2);
+        assertThat(count("subject = 'Reserva vencida sin devolver'")).isEqualTo(1);
+    }
+
+    @Test
     void reservationNotYetExpiredIsNotNotifiedByTheExactTimeJob() {
         reservation("RES-STILL-OPEN", Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.HOURS));
 
