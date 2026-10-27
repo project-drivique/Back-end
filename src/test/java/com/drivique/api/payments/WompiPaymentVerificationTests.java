@@ -13,8 +13,6 @@ import com.drivique.api.exception.ConflictException;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
 import com.drivique.api.service.*;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
@@ -26,7 +24,6 @@ import org.springframework.web.client.RestTemplate;
 
 class WompiPaymentVerificationTests {
 
-    private final ObjectMapper mapper = new ObjectMapper();
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final PaymentStatusRepository statuses = mock(PaymentStatusRepository.class);
     private final PaymentMethodRepository methods = mock(PaymentMethodRepository.class);
@@ -74,9 +71,28 @@ class WompiPaymentVerificationTests {
     }
 
     private void wompiReturns(String status, String reference, long cents, String currency) throws Exception {
-        JsonNode body = mapper.readTree("{\"data\":{\"status\":\"" + status + "\",\"reference\":\"" + reference
-                + "\",\"amount_in_cents\":" + cents + ",\"currency\":\"" + currency + "\",\"payment_method_type\":\"CARD\"}}");
-        when(restTemplate.getForObject(anyString(), org.mockito.ArgumentMatchers.eq(JsonNode.class))).thenReturn(body);
+        when(restTemplate.getForObject(anyString(), org.mockito.ArgumentMatchers.eq(String.class))).thenReturn(wompiBody(status, reference, cents, currency));
+    }
+
+    private String wompiBody(String status, String reference, long cents, String currency) {
+        return "{\"data\":{\"status\":\"" + status + "\",\"reference\":\"" + reference
+                + "\",\"amount_in_cents\":" + cents + ",\"currency\":\"" + currency + "\",\"payment_method_type\":\"CARD\"}}";
+    }
+
+    @Test
+    void theRealHttpClientCanReadWompisAnswer() {
+        // Regresión: pedir la respuesta como JsonNode fallaba en producción ("Type definition error") y toda confirmación daba 409
+        RestTemplate real = new RestTemplate();
+        org.springframework.test.web.client.MockRestServiceServer wompi = org.springframework.test.web.client.MockRestServiceServer.bindTo(real).build();
+        wompi.expect(org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo("https://sandbox.wompi.co/v1/transactions/tx-real"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess(
+                        wompiBody("APPROVED", "HLD-2026-0001_TX1730000000", 80000000, "COP"), org.springframework.http.MediaType.APPLICATION_JSON));
+        ReflectionTestUtils.setField(service, "restTemplate", real);
+
+        Payment recorded = service.verifyAndRecordApprovedPayment("tx-real", contract, "ana@drivique.com");
+
+        assertThat(recorded).isNotNull();
+        wompi.verify();
     }
 
     @Test
