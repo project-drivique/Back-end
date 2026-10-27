@@ -12,6 +12,7 @@ import com.drivique.api.model.Vehicle;
 import com.drivique.api.model.VehicleImage;
 import com.drivique.api.repository.PromotionRepository;
 import com.drivique.api.repository.ReservationRepository;
+import com.drivique.api.repository.UserCouponUsageRepository;
 import com.drivique.api.repository.UserRepository;
 import com.drivique.api.repository.VehicleCategoryRepository;
 import com.drivique.api.repository.VehicleImageRepository;
@@ -65,6 +66,9 @@ public class PromotionAdminService {
     @Autowired(required = false)
     private BranchUserRepository branchUserRepository;
 
+    @Autowired(required = false)
+    private UserCouponUsageRepository couponUsages;
+
     @Transactional(readOnly = true)
     public List<PromotionResponseDTO> listAll() {
         return promotions.findAll().stream()
@@ -111,15 +115,23 @@ public class PromotionAdminService {
                 .toList();
     }
 
-    /** Promociones vigentes para el cliente; la audiencia (nuevos / frecuentes) se evalúa con sus reservas completadas. */
+    /**
+     * Promociones vigentes para el cliente; la audiencia (nuevos / frecuentes) se evalúa con sus reservas completadas.
+     * Solo salen las que la persona realmente puede usar: un cupón ya redimido por ella o con el cupo agotado no se ofrece.
+     */
     @Transactional(readOnly = true)
     public List<PromotionResponseDTO> listPublished(String email) {
         Instant now = Instant.now();
         long completed = completedReservations(email);
+        User customer = email != null && couponUsages != null
+                ? users.findByEmailIgnoreCaseAndDeletedAtIsNull(email).orElse(null)
+                : null;
         return promotions.findAll().stream()
                 .filter(Promotion::isActive)
                 .filter(p -> !now.isBefore(p.getStartsAt()) && now.isBefore(p.getEndsAt()))
                 .filter(p -> audienceAllows(p.getAudience(), email, completed))
+                .filter(p -> p.getMaxUsesLimit() == null || p.getCurrentUsesCount() < p.getMaxUsesLimit())
+                .filter(p -> customer == null || !couponUsages.existsByPromotionAndUser(p, customer))
                 .sorted(Comparator.comparing(Promotion::isFeatured).reversed().thenComparing(Promotion::getEndsAt))
                 .map(this::toDto)
                 .toList();
