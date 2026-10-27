@@ -21,6 +21,8 @@ import java.util.UUID;
 @Service
 public class WompiPaymentService {
 
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
     private final RentalContractRepository contracts;
     private final PaymentRepository payments;
     private final PaymentMethodRepository methods;
@@ -132,7 +134,9 @@ public class WompiPaymentService {
 
         JsonNode root;
         try {
-            root = restTemplate.getForObject(endpoint, JsonNode.class);
+            // Se lee como texto y se interpreta aparte: el cliente HTTP de Spring no sabe convertir esta clase de JsonNode
+            String body = restTemplate.getForObject(endpoint, String.class);
+            root = body == null || body.isBlank() ? null : MAPPER.readTree(body);
         } catch (Exception ex) {
             throw new ConflictException("No se pudo consultar la transacción con la pasarela Wompi: " + ex.getMessage());
         }
