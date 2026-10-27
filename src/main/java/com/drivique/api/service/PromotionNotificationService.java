@@ -35,7 +35,9 @@ public class PromotionNotificationService {
         this.notifications = notifications;
     }
 
+    // La transacción va en el método programado: las llamadas internas (this.notifyPending()) no pasan por el proxy
     @Scheduled(cron = "${app.jobs.promotion-notifications.cron:0 */30 * * * *}")
+    @Transactional
     public void scheduled() {
         try {
             int sent = notifyPending();
