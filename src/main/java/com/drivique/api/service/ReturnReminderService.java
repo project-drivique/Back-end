@@ -46,7 +46,9 @@ public class ReturnReminderService {
         this.notifications = notifications;
     }
 
+    // La transacción va en el método programado: las llamadas internas (this.sendReminders()) no pasan por el proxy
     @Scheduled(cron = "${app.jobs.return-reminders.cron:0 0 9 * * *}", zone = "America/Bogota")
+    @Transactional
     public void scheduled() {
         try {
             LOG.info("Avisos de devolución enviados: {}", sendReminders());
@@ -57,6 +59,7 @@ public class ReturnReminderService {
 
     /** Avisa en el minuto en que cada reserva en curso llega a su hora de devolución. */
     @Scheduled(cron = "${app.jobs.return-overdue.cron:0 * * * * *}", zone = "America/Bogota")
+    @Transactional
     public void scheduledOverdue() {
         try {
             int sent = sendOverdueNotices();
