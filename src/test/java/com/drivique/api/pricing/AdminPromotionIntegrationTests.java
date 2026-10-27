@@ -27,8 +27,15 @@ class AdminPromotionIntegrationTests extends DatabaseHealthTestSupport {
     @Autowired
     private PromotionRepository promotions;
 
+    @Autowired
+    private com.drivique.api.repository.UserRepository users;
+
+    @Autowired
+    private com.drivique.api.repository.UserCouponUsageRepository couponUsages;
+
     @BeforeEach
     void setup() {
+        couponUsages.deleteAll();
         promotions.deleteAll();
     }
 
@@ -105,5 +112,34 @@ class AdminPromotionIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].code").value("VIGENTE"));
+    }
+
+    @Test
+    void couponWithNoUsesLeftIsNotOffered() throws Exception {
+        promotions.save(new com.drivique.api.model.Promotion("LIBRE", "COUPON", "PERCENTAGE", new java.math.BigDecimal("10"),
+                java.time.Instant.now().minusSeconds(3600), java.time.Instant.now().plusSeconds(86400), 1, 5, 2));
+        promotions.save(new com.drivique.api.model.Promotion("AGOTADO", "COUPON", "PERCENTAGE", new java.math.BigDecimal("10"),
+                java.time.Instant.now().minusSeconds(3600), java.time.Instant.now().plusSeconds(86400), 1, 5, 5));
+
+        mvc.perform(get("/v1/promotions/published"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].code").value("LIBRE"));
+    }
+
+    @Test
+    @WithMockUser(username = "cupon@drivique.com", roles = "CUSTOMER")
+    void couponAlreadyUsedByThePersonIsNotOfferedAgain() throws Exception {
+        com.drivique.api.model.User customer = users.saveAndFlush(new com.drivique.api.model.User("Ana", "Cupon", "cupon@drivique.com", "x"));
+        com.drivique.api.model.Promotion used = promotions.save(new com.drivique.api.model.Promotion("USADO", "COUPON", "PERCENTAGE",
+                new java.math.BigDecimal("10"), java.time.Instant.now().minusSeconds(3600), java.time.Instant.now().plusSeconds(86400), 1, null, 1));
+        promotions.save(new com.drivique.api.model.Promotion("NUEVO", "COUPON", "PERCENTAGE", new java.math.BigDecimal("10"),
+                java.time.Instant.now().minusSeconds(3600), java.time.Instant.now().plusSeconds(86400), 1, null, 0));
+        couponUsages.saveAndFlush(new com.drivique.api.model.UserCouponUsage(used, customer, new java.math.BigDecimal("5000")));
+
+        mvc.perform(get("/v1/promotions/published"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].code").value("NUEVO"));
     }
 }
