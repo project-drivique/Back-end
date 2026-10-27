@@ -20,9 +20,15 @@ public class WebMvcConfig implements WebMvcConfigurer {
     @Autowired(required = false)
     private CaptchaService captchaService;
 
+    @Autowired(required = false)
+    private com.drivique.api.service.email.EmailLanguage emailLanguage;
+
     /** El captcha se valida en el servidor antes de crear la retención de una reserva. */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        if (emailLanguage != null) {
+            registry.addInterceptor(new LanguageHeaderInterceptor(emailLanguage)).addPathPatterns("/v1/**");
+        }
         if (captchaService == null) {
             return;
         }
