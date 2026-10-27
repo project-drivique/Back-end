@@ -1,5 +1,7 @@
 package com.drivique.api.service.notification;
 
+import com.drivique.api.service.email.EmailLanguage;
+import com.drivique.api.service.email.EmailTexts;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -11,12 +13,21 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.UUID;
 
 @Component
 public class EmailNotificationProvider implements NotificationChannelProvider {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailLanguage emailLanguage;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailTexts emailTexts;
+
+    private static final EmailTexts DEFAULT_TEXTS = new EmailTexts();
 
     private String brand(String html) {
         return brandTheme == null ? html : brandTheme.apply(html);
@@ -68,11 +79,15 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                 MimeMessage mimeMessage = mailSender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
-                helper.setFrom(new InternetAddress(fromAddress, "Drivique"));
-                helper.setTo(recipient);
-                helper.setSubject(subject != null ? subject : "Notificación Drivique");
+                EmailTexts texts = emailTexts != null ? emailTexts : DEFAULT_TEXTS;
+                Locale locale = emailLanguage != null ? emailLanguage.forEmail(recipient) : EmailLanguage.DEFAULT;
+                String defaultSubject = texts.get(locale, "common.defaultSubject");
 
-                String safeSubject = subject != null ? subject : "Notificación Drivique";
+                helper.setFrom(new InternetAddress(fromAddress, texts.brandName()));
+                helper.setTo(recipient);
+                helper.setSubject(subject != null ? subject : defaultSubject);
+
+                String safeSubject = subject != null ? subject : defaultSubject;
                 String safeMessage = message != null ? message : "";
 
                 String actionLabel = null;
@@ -88,7 +103,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     try {
                         com.fasterxml.jackson.databind.JsonNode root = MAPPER.readTree(metadata);
                         if (root.hasNonNull("actionLabel")) {
-                            actionLabel = root.get("actionLabel").asText();
+                            actionLabel = texts.actionLabel(locale, root.get("actionLabel").asText());
                         }
                         if (root.hasNonNull("actionUrl")) {
                             actionUrl = root.get("actionUrl").asText();
@@ -147,15 +162,15 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                 String base = (frontendUrl != null ? frontendUrl : "http://localhost:5173").replaceAll("/+$", "");
                 if (actionUrl == null && isPaymentReminder(safeSubject)) {
                     actionUrl = base + "/reservas";
-                    actionLabel = "Pagar mi reserva";
+                    actionLabel = texts.get(locale, "notif.payAction");
                 } else if (actionUrl == null && paymentStatus != null) {
                     boolean isApproved = !"DECLINED".equalsIgnoreCase(paymentStatus);
                     if (isApproved) {
                         actionUrl = base + "/reservas";
-                        actionLabel = "Continuar y Firmar Contrato";
+                        actionLabel = texts.actionLabel(locale, "Continuar y Firmar Contrato");
                     } else {
                         actionUrl = base + "/reservas";
-                        actionLabel = "Reintentar Pago en Mis Reservas";
+                        actionLabel = texts.actionLabel(locale, "Reintentar Pago en Mis Reservas");
                     }
                 }
 
@@ -165,8 +180,8 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     String badgeBg = isApproved ? "#ecfdf5" : "#fef2f2";
                     String badgeBorder = isApproved ? "#10b981" : "#ef4444";
                     String badgeColor = isApproved ? "#047857" : "#b91c1c";
-                    String badgeText = isApproved ? "✓ TRANSACCIÓN APROBADA · PAGO EXITOSO" : "✕ TRANSACCIÓN DECLINADA · PAGO RECHAZADO";
-                    String statusText = isApproved ? "APROBADO" : "DECLINADO / RECHAZADO";
+                    String badgeText = texts.get(locale, isApproved ? "notif.approvedBadge" : "notif.declinedBadge");
+                    String statusText = texts.get(locale, isApproved ? "notif.approvedStatus" : "notif.declinedStatus");
                     String statusColor = isApproved ? "#047857" : "#dc2626";
 
                     String formattedAmount = amount != null ? amount : "";
@@ -180,9 +195,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     String curr = currency != null ? currency : "COP";
                     String fechaStr = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(java.time.ZoneId.of("America/Bogota")).format(java.time.Instant.now());
 
-                    String explNote = isApproved
-                        ? "Tu pago ha sido procesado exitosamente. Para continuar con la entrega de tu vehículo, por favor ingresa a la plataforma para firmar digitalmente tu contrato de alquiler."
-                        : "Tu entidad bancaria no autorizó la transacción. No se ha realizado ningún cobro a tu cuenta. Puedes reintentar el pago con otra tarjeta o medio disponible para no perder tu reserva.";
+                    String explNote = texts.get(locale, isApproved ? "notif.approvedNote" : "notif.declinedNote");
 
                     receiptCardHtml = String.format("""
                         <div style="margin: 20px 0;">
@@ -191,26 +204,26 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                           </div>
                           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin-top: 14px;">
                             <div style="border-bottom: 1px dashed #cbd5e1; padding-bottom: 12px; margin-bottom: 12px;">
-                              <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; display: block;">Monto de la Transacción</span>
+                              <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; display: block;">%s</span>
                               <span style="font-size: 24px; font-weight: 800; color: #0f172a; margin-top: 2px; display: block;">$ %s %s</span>
                             </div>
                             <table style="width: 100%%; border-collapse: collapse; font-size: 13px;">
                               %s
                               <tr>
-                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Estado de la Transacción:</td>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">%s</td>
                                 <td style="color: %s; padding: 5px 0; font-weight: 800; text-align: right;">%s</td>
                               </tr>
                               <tr>
-                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Pasarela de Pago:</td>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">%s</td>
                                 <td style="color: #0f172a; padding: 5px 0; font-weight: 600; text-align: right;">%s</td>
                               </tr>
                               <tr>
-                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Fecha y Hora:</td>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">%s</td>
                                 <td style="color: #0f172a; padding: 5px 0; font-weight: 500; text-align: right;">%s</td>
                               </tr>
                               <tr>
-                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">Comercio:</td>
-                                <td style="color: #0f172a; padding: 5px 0; font-weight: 500; text-align: right;">Drivique S.A.S.</td>
+                                <td style="color: #64748b; padding: 5px 0; font-weight: 500;">%s</td>
+                                <td style="color: #0f172a; padding: 5px 0; font-weight: 500; text-align: right;">%s</td>
                               </tr>
                             </table>
                             <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #475569; line-height: 1.5;">
@@ -220,11 +233,17 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                         </div>
                         """,
                         badgeBg, badgeBorder, badgeColor, badgeText,
+                        texts.get(locale, "notif.amountLabel"),
                         formattedAmount, curr,
-                        bookingCode != null && !bookingCode.isBlank() ? "<tr><td style=\"color: #64748b; padding: 5px 0; font-weight: 500;\">Código de Reserva:</td><td style=\"color: #0f172a; padding: 5px 0; font-weight: 700; text-align: right;\">" + bookingCode + "</td></tr>" : "",
+                        bookingCode != null && !bookingCode.isBlank() ? "<tr><td style=\"color: #64748b; padding: 5px 0; font-weight: 500;\">" + texts.get(locale, "notif.bookingLabel") + "</td><td style=\"color: #0f172a; padding: 5px 0; font-weight: 700; text-align: right;\">" + bookingCode + "</td></tr>" : "",
+                        texts.get(locale, "notif.statusLabel"),
                         statusColor, statusText,
-                        ("EFECTIVO".equalsIgnoreCase(paymentMethod) || (safeMessage + " " + safeSubject).toLowerCase().contains("efectivo")) ? "Efectivo en sucursal" : "Wompi Colombia (Segura)",
+                        texts.get(locale, "notif.gatewayLabel"),
+                        ("EFECTIVO".equalsIgnoreCase(paymentMethod) || (safeMessage + " " + safeSubject).toLowerCase().contains("efectivo")) ? texts.get(locale, "notif.cash") : texts.get(locale, "notif.wompi"),
+                        texts.get(locale, "notif.dateLabel"),
                         fechaStr,
+                        texts.get(locale, "notif.merchantLabel"),
+                        texts.get(locale, "notif.merchantValue"),
                         explNote
                     );
                 }
@@ -233,16 +252,17 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     receiptCardHtml = receiptCardHtml + """
                         <div style="margin: 18px 0 4px; padding: 20px; text-align: center; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 14px;">
                           <div style="font-size: 34px; letter-spacing: 6px; color: #f59e0b; line-height: 1;">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-                          <p style="margin: 10px 0 0; font-size: 15px; font-weight: 800; color: #92400e;">¿Cómo estuvo tu viaje?</p>
-                          <p style="margin: 6px 0 0; font-size: 13px; color: #a16207; line-height: 1.5;">Califica el vehículo, deja tu reseña y cuéntanos tu experiencia con la sucursal.</p>
+                          <p style="margin: 10px 0 0; font-size: 15px; font-weight: 800; color: #92400e;">{{REVIEW_TITLE}}</p>
+                          <p style="margin: 6px 0 0; font-size: 13px; color: #a16207; line-height: 1.5;">{{REVIEW_TEXT}}</p>
                         </div>
-                        """;
+                        """.replace("{{REVIEW_TITLE}}", texts.get(locale, "notif.reviewTitle"))
+                           .replace("{{REVIEW_TEXT}}", texts.get(locale, "notif.reviewText"));
                 }
 
                 String actionButtonHtml = "";
                 String textMessage = safeMessage;
                 if (actionUrl != null && !actionUrl.isBlank()) {
-                    String label = (actionLabel != null && !actionLabel.isBlank()) ? actionLabel : "Continuar";
+                    String label = (actionLabel != null && !actionLabel.isBlank()) ? actionLabel : texts.get(locale, "common.continue");
                     actionButtonHtml = """
                         <div style="text-align: center; margin: 26px 0 20px;">
                           <a href="{{ACTION_URL}}" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 13px 26px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">{{ACTION_LABEL}}</a>
@@ -255,13 +275,13 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
 
                 String html = """
                     <!DOCTYPE html>
-                    <html>
+                    <html lang="{{LANG}}">
                     <head><meta charset="UTF-8"></head>
                     <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px;">
                       <div style="max-width: 540px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
                         <div style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); padding: 28px 32px; text-align: center;">
                           <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px;">DRIVIQUE</h1>
-                          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">Tu libertad sobre ruedas comienza aquí</p>
+                          <p style="color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;">{{TAGLINE}}</p>
                         </div>
                         <div style="padding: 28px 30px 24px;">
                           <h2 style="color: #0f172a; margin: 0 0 14px; font-size: 17px; font-weight: 700;">{{SUBJECT}}</h2>
@@ -272,7 +292,7 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                           {{ACTION_BUTTON}}
                           <div style="border-top: 1px solid #e2e8f0; padding-top: 18px; margin-top: 20px;">
                             <p style="color: #94a3b8; font-size: 12px; margin: 0;">
-                              Este es un mensaje automático del sistema de notificaciones de Drivique. Puedes gestionar tus canales desde tu perfil.
+                              {{FOOTER}}
                             </p>
                           </div>
                         </div>
@@ -280,6 +300,9 @@ public class EmailNotificationProvider implements NotificationChannelProvider {
                     </body>
                     </html>
                     """
+                        .replace("{{LANG}}", locale.toLanguageTag())
+                        .replace("{{TAGLINE}}", texts.get(locale, "common.tagline"))
+                        .replace("{{FOOTER}}", texts.get(locale, "common.autoNotice"))
                         .replace("{{SUBJECT}}", safeSubject)
                         .replace("{{MESSAGE}}", safeMessage)
                         .replace("{{RECEIPT_CARD}}", receiptCardHtml)

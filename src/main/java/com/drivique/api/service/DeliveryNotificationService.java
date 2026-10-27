@@ -7,6 +7,8 @@ import com.drivique.api.model.Reservation;
 import com.drivique.api.model.ReservationDeliveryPoint;
 import com.drivique.api.model.User;
 import com.drivique.api.repository.BranchUserRepository;
+import com.drivique.api.service.email.EmailLanguage;
+import com.drivique.api.service.email.EmailTexts;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.time.Duration;
@@ -27,6 +29,15 @@ import org.springframework.stereotype.Service;
 public class DeliveryNotificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.drivique.api.service.BrandEmailTheme brandTheme;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailLanguage emailLanguage;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailTexts emailTexts;
+
+    private static final EmailTexts DEFAULT_TEXTS = new EmailTexts();
+    private static final String NO_ADDRESS = "la dirección indicada en la reserva";
 
     private String brand(String html) {
         return brandTheme == null ? html : brandTheme.apply(html);
@@ -85,9 +96,10 @@ public class DeliveryNotificationService {
         }
 
         // Envío asíncrono para que la API responda inmediatamente a la interfaz sin bloquear al usuario
+        java.util.Locale driverLocale = emailLanguage != null ? emailLanguage.forEmail(driver.getEmail()) : EmailLanguage.DEFAULT;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                sendDriverEmail(point, driver, pin, type, where);
+                sendDriverEmail(point, driver, pin, type, where, driverLocale);
             } catch (Exception ex) {
                 LOG.error("Error en envío asíncrono de correo a {}: {}", driver.getEmail(), ex.getMessage());
             }
@@ -151,7 +163,7 @@ public class DeliveryNotificationService {
         }
     }
 
-    private void sendDriverEmail(ReservationDeliveryPoint point, DeliveryDriver driver, String pin, String type, String where) {
+    private void sendDriverEmail(ReservationDeliveryPoint point, DeliveryDriver driver, String pin, String type, String where, java.util.Locale locale) {
         JavaMailSender sender = mailSender.getIfAvailable();
         if (sender == null || driver.getEmail() == null || driver.getEmail().isBlank()) {
             LOG.warn("No se envió el correo al conductor {}: falta el servidor de correo o su correo", driver.getFullName());
@@ -171,52 +183,55 @@ public class DeliveryNotificationService {
             java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").withZone(java.time.ZoneId.of("America/Bogota"));
             String dayStr = fmt.format(eventZdt);
 
+            EmailTexts texts = emailTexts != null ? emailTexts : DEFAULT_TEXTS;
+            String kind = "RETURN".equals(point.getPointType()) ? "RETURN" : "DELIVERY";
+            String shownWhere = NO_ADDRESS.equals(where) ? texts.get(locale, "driver.noAddress") : where;
             String confirm = link(reservation, point, "CONFIRM", expires);
             String reject = link(reservation, point, "REJECT", expires);
             User customer = reservation.getCustomer();
             String vehicle = reservation.getVehicle() != null ? reservation.getVehicle().getModel() + " (" + reservation.getVehicle().getPlate() + ")" : "";
             String mapsUrl = "https://www.google.com/maps/search/?api=1&query=" + java.net.URLEncoder.encode(where, java.nio.charset.StandardCharsets.UTF_8);
-            String html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>"
+            String html = "<!DOCTYPE html><html lang=\"" + locale.toLanguageTag() + "\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head>"
                     + "<body style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px;\">"
                     + "<div style=\"max-width: 520px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);\">"
                     + "  <div style=\"background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); padding: 28px 32px; text-align: center;\">"
                     + "    <h1 style=\"color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px;\">DRIVIQUE</h1>"
-                    + "    <p style=\"color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;\">Tu libertad sobre ruedas comienza aquí</p>"
+                    + "    <p style=\"color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 13px;\">" + texts.get(locale, "common.tagline") + "</p>"
                     + "  </div>"
                     + "  <div style=\"padding: 30px 32px 24px;\">"
-                    + "    <h2 style=\"color: #0f172a; margin: 0 0 10px; font-size: 18px; font-weight: 700;\">Nueva " + type + " a domicilio</h2>"
+                    + "    <h2 style=\"color: #0f172a; margin: 0 0 10px; font-size: 18px; font-weight: 700;\">" + texts.get(locale, "driver.title." + kind) + "</h2>"
                     + "    <p style=\"color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 18px;\">"
-                    + "      Hola <strong>" + esc(driver.getFullName()) + "</strong>, se te asignó la " + type + " de la reserva <strong>#" + esc(reservation.getCode()) + "</strong>."
+                    + "      " + texts.get(locale, "driver.intro." + kind, "name", esc(driver.getFullName()), "code", esc(reservation.getCode()))
                     + "    </p>"
                     + "    <div style=\"background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; margin: 0 0 20px;\">"
                     + "      <table style=\"width: 100%; border-collapse: collapse; font-size: 13.5px;\">"
-                    + "        <tr><td style=\"padding: 5px 0; color: #64748b; width: 32%;\">Vehículo:</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(vehicle) + "</td></tr>"
-                    + "        <tr><td style=\"padding: 5px 0; color: #64748b;\">Dirección:</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(where) + "</td></tr>"
-                    + "        <tr><td style=\"padding: 5px 0; color: #64748b;\">Cliente:</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(customer != null ? customer.getFullName() : "—") + (customer != null && customer.getPhone() != null ? " (" + esc(customer.getPhone()) + ")" : "") + "</td></tr>"
+                    + "        <tr><td style=\"padding: 5px 0; color: #64748b; width: 32%;\">" + texts.get(locale, "driver.vehicle") + "</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(vehicle) + "</td></tr>"
+                    + "        <tr><td style=\"padding: 5px 0; color: #64748b;\">" + texts.get(locale, "driver.address") + "</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(shownWhere) + "</td></tr>"
+                    + "        <tr><td style=\"padding: 5px 0; color: #64748b;\">" + texts.get(locale, "driver.customer") + "</td><td style=\"padding: 5px 0; color: #0f172a; font-weight: 600;\">" + esc(customer != null ? customer.getFullName() : "—") + (customer != null && customer.getPhone() != null ? " (" + esc(customer.getPhone()) + ")" : "") + "</td></tr>"
                     + "      </table>"
                     + "    </div>"
-                    + "    <p style=\"color: #475569; font-size: 13.5px; font-weight: 600; margin: 0 0 8px; text-align: center;\">Código de confirmación (el cliente debe dártelo al recibir):</p>"
+                    + "    <p style=\"color: #475569; font-size: 13.5px; font-weight: 600; margin: 0 0 8px; text-align: center;\">" + texts.get(locale, "driver.codeHint") + "</p>"
                     + "    <div style=\"background-color: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 16px; text-align: center; margin: 0 0 16px;\">"
                     + "      <span style=\"font-family: 'Courier New', Courier, monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #1e3a8a;\">" + esc(pin) + "</span>"
                     + "    </div>"
                     + "    <div style=\"margin: 0 0 12px;\">"
-                    + "      <a href=\"" + confirm + "\" style=\"display: block; box-sizing: border-box; background: #16a34a; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 20px; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(22, 163, 74, 0.28);\">✓ Confirmar " + type + "</a>"
+                    + "      <a href=\"" + confirm + "\" style=\"display: block; box-sizing: border-box; background: #16a34a; color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 20px; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(22, 163, 74, 0.28);\">" + texts.get(locale, "driver.confirm." + kind) + "</a>"
                     + "    </div>"
                     + "    <div style=\"text-align: center; margin-bottom: 20px;\">"
-                    + "      <a href=\"" + reject + "\" style=\"color: #dc2626; font-size: 12.5px; text-decoration: none; font-weight: 600;\">¿El código no coincide? Reportar rechazo</a>"
+                    + "      <a href=\"" + reject + "\" style=\"color: #dc2626; font-size: 12.5px; text-decoration: none; font-weight: 600;\">" + texts.get(locale, "driver.reject") + "</a>"
                     + "    </div>"
-                    + "    <p style=\"color: #64748b; font-size: 12px; line-height: 1.5; margin: 0 0 18px; text-align: center;\">⏱️ Código válido únicamente para el día de la " + type + " (" + dayStr + ") hasta las 23:59. Por seguridad de la flota, no entregues las llaves sin verificar el código.</p>"
+                    + "    <p style=\"color: #64748b; font-size: 12px; line-height: 1.5; margin: 0 0 18px; text-align: center;\">" + texts.get(locale, "driver.validity." + kind, "day", dayStr) + "</p>"
                     + "    <div style=\"border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center;\">"
-                    + "      <p style=\"color: #94a3b8; font-size: 11.5px; margin: 0;\">Este es un mensaje operativo automático de Drivique.</p>"
+                    + "      <p style=\"color: #94a3b8; font-size: 11.5px; margin: 0;\">" + texts.get(locale, "common.opsNotice") + "</p>"
                     + "    </div>"
                     + "  </div>"
                     + "</div></body></html>";
             MimeMessage message = sender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            helper.setFrom(new InternetAddress(fromAddress, "Drivique"));
+            helper.setFrom(new InternetAddress(fromAddress, texts.brandName()));
             helper.setTo(driver.getEmail());
-            helper.setSubject("Nueva " + type + " a domicilio - reserva #" + reservation.getCode());
-            helper.setText("Se te asignó una " + type + " a domicilio. Código: " + pin + ". Confirmar: " + confirm + " Rechazar: " + reject, brand(html));
+            helper.setSubject(texts.get(locale, "driver.subject." + kind, "code", reservation.getCode()));
+            helper.setText(texts.get(locale, "driver.text." + kind, "pin", pin, "confirm", confirm, "reject", reject), brand(html));
             sender.send(message);
             LOG.info("Correo de {} enviado al conductor {}", type, driver.getEmail());
         } catch (Exception e) {
