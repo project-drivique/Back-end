@@ -873,8 +873,21 @@ public class DeliveryDriverActionController {
             html = brandTheme.apply(html);
         }
 
-        return ResponseEntity.status(status).contentType(MediaType.TEXT_HTML).body(html);
+        return ResponseEntity.status(status).contentType(MediaType.TEXT_HTML)
+                .header("Content-Security-Policy", PAGE_POLICY)
+                .body(html);
     }
+
+    /**
+     * La política general de la API (solo recursos propios) bloquea los estilos y la tipografía de esta página, que es
+     * HTML con su propio diseño: sin esto el conductor la veía como texto plano. Se permite únicamente lo que usa.
+     */
+    private static final String PAGE_POLICY = "default-src 'self'; "
+            + "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            + "font-src https://fonts.gstatic.com; "
+            + "img-src 'self' data:; "
+            + "script-src 'self' 'unsafe-inline'; "
+            + "form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
 
     private static String escape(String value) {
         return value == null ? "" : value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
