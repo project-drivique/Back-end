@@ -40,6 +40,9 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ReportExportService {
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private BrandEmailTheme brandTheme;
+
     private static final ZoneId ZONE = ZoneId.of("America/Bogota");
     private static final Locale CO = Locale.forLanguageTag("es-CO");
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -69,7 +72,8 @@ public class ReportExportService {
         for (Metric metric : data.summary()) {
             kpis.add(Map.of("label", metric.label(), "value", display(metric.value(), metric.kind())));
         }
-        return new Document2(data.title(), "Sistema de gestión de alquiler de vehículos Drivique", headers, kinds, rows, raw, kpis, filters);
+        String brandName = brandTheme == null ? "Drivique" : brandTheme.companyName();
+        return new Document2(data.title(), "Sistema de gestión de alquiler de vehículos " + brandName, headers, kinds, rows, raw, kpis, filters);
     }
 
     @SuppressWarnings("unchecked")
@@ -150,7 +154,9 @@ public class ReportExportService {
             html.append("</tr>");
         }
         html.append("</table></body></html>");
-        return html.toString().getBytes(StandardCharsets.UTF_8);
+        // El encabezado de la tabla sigue los colores de la marca activa
+        String themed = brandTheme == null ? html.toString() : brandTheme.apply(html.toString());
+        return themed.getBytes(StandardCharsets.UTF_8);
     }
 
     private static String escape(String value) {
