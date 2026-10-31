@@ -15,7 +15,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Back-end
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout database migrations for Liquibase schema verification
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: project-drivique/database
+          path: ../database
+
+      - name: Scan repository for hardcoded secrets (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: true
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -32,7 +49,7 @@ jobs:
       - name: Pre-pull PostgreSQL 17 image
         run: docker pull postgres:17-alpine
 
-      - name: Verify against PostgreSQL 17 with Testcontainers
+      - name: Verify against PostgreSQL 17 with Liquibase and Testcontainers
         run: ./mvnw --batch-mode clean verify -DtrimStackTrace=false
 
       - name: Show full surefire failures
@@ -46,7 +63,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           for f in target/surefire-reports/*.txt; do
-            if grep -qE "FAILURE|ERROR" "$f"; then
+            if [ -f "$f" ] && grep -qE "FAILURE|ERROR" "$f"; then
               echo "::group::$(basename "$f")"
               cat "$f"
               echo "::endgroup::"

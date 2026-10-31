@@ -9,6 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.drivique.api.dto.WompiCheckoutResponseDTO;
+import com.drivique.api.dto.WompiInitiatePaymentRequestDTO;
 import com.drivique.api.exception.ConflictException;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
@@ -24,44 +26,65 @@ import org.springframework.web.client.RestTemplate;
 
 class WompiPaymentVerificationTests {
 
+    private final RentalContractRepository contracts = mock(RentalContractRepository.class);
     private final PaymentRepository payments = mock(PaymentRepository.class);
     private final PaymentStatusRepository statuses = mock(PaymentStatusRepository.class);
     private final PaymentMethodRepository methods = mock(PaymentMethodRepository.class);
     private final CurrencyRepository currencies = mock(CurrencyRepository.class);
+    private final UserRepository users = mock(UserRepository.class);
+    private final ReservationRepository reservations = mock(ReservationRepository.class);
+    private final WompiSignatureService signatures = new WompiSignatureService();
     private final PaymentReceiptService receipts = mock(PaymentReceiptService.class);
     private final RestTemplate restTemplate = mock(RestTemplate.class);
 
     private WompiPaymentService service;
     private RentalContract contract;
     private Reservation reservation;
+    private User customer;
     private final UUID reservationId = UUID.randomUUID();
     private final UUID contractId = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
         service = new WompiPaymentService(
-                mock(RentalContractRepository.class), payments, methods, statuses, currencies,
-                mock(UserRepository.class), mock(UserSavedPaymentMethodRepository.class),
+                contracts, payments, methods, statuses, currencies,
+                users, mock(UserSavedPaymentMethodRepository.class),
                 mock(ReservationStatusRepository.class), mock(ContractStatusRepository.class),
-                mock(WompiSignatureService.class), receipts, null,
+                signatures, receipts, null,
                 "pub", "integrity", "event", "https://checkout.wompi.co/p/", "https://sandbox.wompi.co/v1");
         ReflectionTestUtils.setField(service, "restTemplate", restTemplate);
+        ReflectionTestUtils.setField(service, "reservations", reservations);
+
+        customer = mock(User.class);
+        when(customer.getId()).thenReturn(UUID.randomUUID());
+        when(customer.getEmail()).thenReturn("a@b.com");
+        when(users.findByEmailIgnoreCaseAndDeletedAtIsNull("a@b.com")).thenReturn(Optional.of(customer));
 
         reservation = mock(Reservation.class);
         when(reservation.getId()).thenReturn(reservationId);
         when(reservation.getCode()).thenReturn("HLD-2026-0001");
         when(reservation.getTotalEstimated()).thenReturn(new BigDecimal("800000"));
+        when(reservation.getCustomer()).thenReturn(customer);
 
         contract = mock(RentalContract.class);
         when(contract.getId()).thenReturn(contractId);
         when(contract.getReservation()).thenReturn(reservation);
+        when(contract.getCustomer()).thenReturn(customer);
         when(contract.getBaseAmount()).thenReturn(new BigDecimal("800000"));
 
         PaymentStatus approved = approvedStatus();
+        PaymentStatus pending = mock(PaymentStatus.class);
+        when(pending.getCode()).thenReturn("PENDING");
         when(statuses.findByCodeIgnoreCase("APPROVED")).thenReturn(Optional.of(approved));
+        when(statuses.findByCodeIgnoreCase("PENDING")).thenReturn(Optional.of(pending));
         when(methods.findByCodeIgnoreCaseAndActiveTrue(anyString())).thenReturn(Optional.of(mock(PaymentMethod.class)));
         when(currencies.findByCodeIgnoreCaseAndActiveTrue("COP")).thenReturn(Optional.of(mock(Currency.class)));
         when(payments.findByGatewayProviderAndGatewayReference(anyString(), anyString())).thenReturn(Optional.empty());
+        when(payments.save(any(Payment.class))).thenAnswer(inv -> {
+            Payment p = inv.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", UUID.randomUUID());
+            return p;
+        });
     }
 
     private static PaymentStatus approvedStatus() {
@@ -77,6 +100,22 @@ class WompiPaymentVerificationTests {
     private String wompiBody(String status, String reference, long cents, String currency) {
         return "{\"data\":{\"status\":\"" + status + "\",\"reference\":\"" + reference
                 + "\",\"amount_in_cents\":" + cents + ",\"currency\":\"" + currency + "\",\"payment_method_type\":\"CARD\"}}";
+    }
+
+    @Test
+    void initiateCreatesPendingPaymentAndSignsWithIntegritySecretInBackend() {
+        when(reservations.findByCodeIgnoreCase("HLD-2026-0001")).thenReturn(Optional.of(reservation));
+        when(contracts.findByReservationId(reservationId)).thenReturn(Optional.of(contract));
+
+        WompiCheckoutResponseDTO checkout = service.initiate(
+                new WompiInitiatePaymentRequestDTO(null, "HLD-2026-0001_TX1730000000", "CARD"),
+                "a@b.com");
+
+        assertThat(checkout.reference()).startsWith("PAY-");
+        assertThat(checkout.amountInCents()).isEqualTo(80000000L);
+        assertThat(checkout.currency()).isEqualTo("COP");
+        assertThat(checkout.integritySignature()).hasSize(64);
+        verify(payments).saveAndFlush(any(Payment.class));
     }
 
     @Test
