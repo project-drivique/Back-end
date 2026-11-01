@@ -4,36 +4,25 @@ import com.drivique.api.dto.*;
 import com.drivique.api.exception.*;
 import com.drivique.api.model.*;
 import com.drivique.api.repository.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.*;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-import java.util.*;
-
 @Service
 public class ReservationService {
+
+    private static final Logger log = LoggerFactory.getLogger(ReservationService.class);
+
     @Autowired(required = false)
     private DeliveryNotificationService deliveryNotices;
-
-    private void avisarDomicilioPagado(Reservation reservation) {
-        try {
-            if (deliveryNotices != null) {
-                deliveryNotices.homeDeliveryPaid(reservation);
-            }
-        } catch (RuntimeException ex) {
-            // el aviso al encargado no debe impedir confirmar el pago
-        }
-    }
-
-
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReservationService.class);
 
     private final ReservationRepository reservationRepository;
     private final ReservationStatusRepository reservationStatusRepository;
@@ -53,7 +42,7 @@ public class ReservationService {
     private final ReservationDocumentReviewService reservationDocumentReviewService;
 
     @Autowired(required = false)
-    private ReservationPricing reservationPricing = new ReservationPricing(new java.math.BigDecimal("0.10"), new java.math.BigDecimal("0.19"));
+    private ReservationPricing reservationPricing = new ReservationPricing(new BigDecimal("0.10"), new BigDecimal("0.19"));
 
     @Autowired(required = false)
     private RentalContractRepository rentalContractRepository;
@@ -78,6 +67,9 @@ public class ReservationService {
 
     @Autowired(required = false)
     private WompiPaymentService wompiPaymentService;
+
+    @Autowired(required = false)
+    private BranchUserRepository branchUserRepository;
 
     public ReservationService(
             ReservationRepository reservationRepository,
@@ -153,294 +145,38 @@ public class ReservationService {
         this.reservationDocumentReviewService = reservationDocumentReviewService;
     }
 
-    /** Reserva abierta de la misma persona con exactamente la misma selección (vehículo, fechas, planes, servicios, cupón y sede de pago). */
-    private Reservation findIdenticalOpenRequest(User customer, Vehicle vehicle, CreateReservationRequestDTO request) {
-        for (Reservation open : reservationRepository.findOpenRequestsForSameTrip(
-                customer.getId(), vehicle.getId(), request.pickupDate(), request.returnDate())) {
-            if (!Objects.equals(idOf(open.getInsuranceCoverage()), request.insuranceCoverageId()) && request.insuranceCoverageId() != null) {
-                continue;
-            }
-            if (!Objects.equals(idOf(open.getMileagePlan()), request.mileagePlanId()) && request.mileagePlanId() != null) {
-                continue;
-            }
-            if (!Objects.equals(idOf(open.getCashPaymentBranch()), request.cashPaymentBranchId())) {
-                continue;
-            }
-            Set<UUID> wantedServices = request.additionalServiceIds() == null ? Set.of()
-                    : request.additionalServiceIds().stream().filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
-            Set<UUID> savedServices = additionalServiceRepository.findByReservationId(open.getId()).stream()
-                    .map(ras -> ras.getAdditionalService().getId()).collect(java.util.stream.Collectors.toSet());
-            if (!wantedServices.equals(savedServices)) {
-                continue;
-            }
-            String wantedCoupon = request.couponCode() == null ? "" : request.couponCode().strip();
-            String savedCoupon = promotionRepository.findByReservationId(open.getId()).stream()
-                    .map(rp -> rp.getPromotion().getCode()).findFirst().orElse("");
-            if (!wantedCoupon.equalsIgnoreCase(savedCoupon)) {
-                continue;
-            }
-            return open;
-        }
-        return null;
-    }
-
-    private static UUID idOf(Object entity) {
-        if (entity instanceof InsuranceCoverage i) return i.getId();
-        if (entity instanceof MileagePlan m) return m.getId();
-        if (entity instanceof Branch b) return b.getId();
-        return null;
-    }
-
     @Transactional
     public ReservationResponseDTO createReservation(CreateReservationRequestDTO request, String userEmail) {
-        User customer = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario autenticado no encontrado"));
-
-        if (request.pickupDate() == null || request.returnDate() == null) {
-            throw new IllegalArgumentException("Las fechas de recogida y devolución son obligatorias");
-        }
-
-        if (!request.returnDate().isAfter(request.pickupDate())) {
-            throw new IllegalArgumentException("La fecha de devolución debe ser posterior a la fecha de recogida");
-        }
-
-        if (request.pickupDate().isBefore(Instant.now().minus(Duration.ofHours(6)))) {
-            throw new IllegalArgumentException("La fecha de recogida no puede ser en el pasado");
-        }
-
-        long seconds = Duration.between(request.pickupDate(), request.returnDate()).toSeconds();
-        int rentalDays = (int) Math.max(1, (seconds + 86399) / 86400);
-
-        Vehicle vehicle = vehicleRepository.findByIdWithPessimisticLock(request.vehicleId())
-                .orElseThrow(() -> new ResourceNotFoundException("Vehículo activo no encontrado"));
-
-        if (!vehicle.isActive() || vehicle.getStatus() == null || !vehicle.getStatus().allowsReservation()) {
-            throw new ConflictException("El vehículo no está habilitado para reservas");
-        }
-
-        // Idempotencia: doble clic, reintento de red o dos peticiones a la vez con la MISMA solicitud devuelven la
-        // reserva ya creada en lugar de chocar con ella (409). El bloqueo del vehículo serializa las peticiones.
-        Reservation duplicate = findIdenticalOpenRequest(customer, vehicle, request);
-        if (duplicate != null) {
-            log.info("Solicitud de reserva repetida del usuario {}: se devuelve la reserva abierta {}", userEmail, duplicate.getCode());
-            return mapFromEntity(duplicate);
-        }
-
-        boolean hasOverlap = reservationRepository.existsOverlappingReservation(
-                vehicle.getId(),
-                request.pickupDate(),
-                request.returnDate()
-        );
-        if (hasOverlap) {
-            throw new ConflictException("El vehículo no se encuentra disponible en las fechas seleccionadas debido a otra reserva activa");
-        }
-
-        InsuranceCoverage insurance = (request.insuranceCoverageId() == null ? insuranceCoverageRepository.findAll().stream().filter(InsuranceCoverage::isActive).min(java.util.Comparator.comparing(InsuranceCoverage::getDailyRate)) : insuranceCoverageRepository.findById(request.insuranceCoverageId()))
-                .filter(InsuranceCoverage::isActive)
-                .orElseThrow(() -> new ResourceNotFoundException("Cobertura de seguro no encontrada o inactiva"));
-
-        MileagePlan mileagePlan = (request.mileagePlanId() == null ? mileagePlanRepository.findAll().stream().filter(MileagePlan::isActive).min(java.util.Comparator.comparing(MileagePlan::getDailyRate)) : mileagePlanRepository.findById(request.mileagePlanId()))
-                .filter(MileagePlan::isActive)
-                .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado o inactivo"));
-
-        Branch cashBranch = null;
-        if (request.cashPaymentBranchId() != null) {
-            cashBranch = branchRepository.findById(request.cashPaymentBranchId())
-                    .filter(Branch::isActive)
-                    .orElseThrow(() -> new ResourceNotFoundException("Sede de pago en efectivo no encontrada o inactiva"));
-            if (!cashBranch.allowsCashPayment()) {
-                throw new org.springframework.web.server.ResponseStatusException(
-                        org.springframework.http.HttpStatus.CONFLICT,
-                        "La sucursal " + cashBranch.getName() + " no recibe pagos en efectivo. Elige otro método de pago.");
-            }
-        }
-
-        BigDecimal multiplier = BigDecimal.valueOf(rentalDays);
-        BigDecimal vehicleSubtotal = vehicle.getDailyRate().multiply(multiplier);
-        BigDecimal insuranceSubtotal = insurance.getDailyRate().multiply(multiplier);
-        BigDecimal mileageSubtotal = mileagePlan.getDailyRate().multiply(multiplier);
-
-        List<ReservationAdditionalServiceItemDTO> serviceItems = new ArrayList<>();
-        BigDecimal extrasSubtotal = BigDecimal.ZERO;
-
-        if (request.additionalServiceIds() != null && !request.additionalServiceIds().isEmpty()) {
-            List<UUID> distinctIds = request.additionalServiceIds().stream().filter(Objects::nonNull).distinct().toList();
-            for (UUID sId : distinctIds) {
-                AdditionalService catalogService = additionalServiceCatalogRepository.findById(sId)
-                        .filter(AdditionalService::isActive)
-                        .orElseThrow(() -> new ResourceNotFoundException("Servicio adicional activo no encontrado: " + sId));
-                short qty = 1;
-                BigDecimal serviceRate = catalogService.getDailyRate();
-                BigDecimal sub = serviceRate.multiply(multiplier).multiply(BigDecimal.valueOf(qty));
-                extrasSubtotal = extrasSubtotal.add(sub);
-                serviceItems.add(new ReservationAdditionalServiceItemDTO(
-                        catalogService.getId(),
-                        catalogService.getName(),
-                        qty,
-                        serviceRate,
-                        sub
-                ));
-            }
-        }
-
-        BigDecimal discountApplied = BigDecimal.ZERO;
-        ReservationPromotionItemDTO promoItem = null;
-        Promotion appliedPromotion = null;
-
-        if (request.couponCode() != null && !request.couponCode().isBlank()) {
-            String cleanCode = request.couponCode().strip();
-            LocalDate pDate = request.pickupDate().atZone(ZoneOffset.UTC).toLocalDate();
-            LocalDate rDate = request.returnDate().atZone(ZoneOffset.UTC).toLocalDate();
-
-            PromotionValidationResponseDTO promoResult = promotionValidationService.validate(
-                    new PromotionValidationRequestDTO(cleanCode, vehicle.getId(), vehicle.getCategory().getId(), pDate, rDate),
-                    userEmail
-            );
-
-            appliedPromotion = promotionCatalogRepository.findByCodeIgnoreCase(cleanCode)
-                    .orElseThrow(() -> new ResourceNotFoundException("Promoción no encontrada: " + cleanCode));
-
-            discountApplied = promoResult.discountAmount();
-            promoItem = new ReservationPromotionItemDTO(
-                    appliedPromotion.getId(),
-                    appliedPromotion.getCode(),
-                    discountApplied
-            );
-
-            appliedPromotion.incrementUsesCount();
-            userCouponUsageRepository.save(new UserCouponUsage(appliedPromotion, customer, discountApplied));
-        }
-
-        BigDecimal totalEstimated = reservationPricing.calculate(
-                vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(extrasSubtotal), discountApplied).total();
-
-        boolean documentsApproved = reservationDocumentReviewService != null
-                && reservationDocumentReviewService.hasApprovedRequiredDocuments(customer.getId());
-
-        Branch pickupBranch = vehicle.getCurrentBranch();
-        if (pickupBranch == null && cashBranch != null) {
-            pickupBranch = cashBranch;
-        }
-
-        boolean isOutsideSchedule = false;
-        if (pickupBranch != null && pickupBranch.getOpeningTime() != null && pickupBranch.getClosingTime() != null) {
-            java.time.LocalTime open = pickupBranch.getOpeningTime();
-            java.time.LocalTime close = pickupBranch.getClosingTime();
-            boolean is24Hours = (open.equals(java.time.LocalTime.MIN) && (close.equals(java.time.LocalTime.MAX) || (close.getHour() == 23 && close.getMinute() >= 59)))
-                    || open.equals(close);
-            if (!is24Hours) {
-                java.time.LocalTime nowTime = java.time.LocalTime.now(java.time.ZoneId.of("America/Bogota"));
-                if (open.isBefore(close)) {
-                    isOutsideSchedule = nowTime.isBefore(open) || nowTime.isAfter(close);
-                } else {
-                    isOutsideSchedule = nowTime.isBefore(open) && nowTime.isAfter(close);
-                }
-            }
-        }
-
-        boolean outsideAccepted = Boolean.TRUE.equals(request.outsideScheduleAccepted());
-        String initialStatusCode;
-        if (isOutsideSchedule && outsideAccepted) {
-            initialStatusCode = "PENDING_SCHEDULE";
-        } else {
-            initialStatusCode = documentsApproved ? "PENDING_PAYMENT" : "PENDING_DOCUMENT_REVIEW";
-        }
-
-        String cashPaymentCode = null;
-        Instant cashPaymentExpiresAt = null;
-        if (cashBranch != null || request.cashPaymentBranchId() != null) {
-            cashPaymentCode = "CASH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        }
-        // El plazo de pago (el mismo del efectivo) corre cuando la reserva está lista para pagar; si espera a la sucursal
-        // (horario o documentos) retiene las fechas como máximo hasta la hora de retiro
-        cashPaymentExpiresAt = "PENDING_PAYMENT".equals(initialStatusCode)
-                ? ReservationExpirationService.paymentDeadline(Instant.now(), request.pickupDate())
-                : ReservationExpirationService.waitingDeadline(Instant.now(), request.pickupDate());
-
-        String reservationCode = "HLD-" + UUID.randomUUID().toString().substring(0, 15).toUpperCase();
-
-        ReservationStatus initialStatus = reservationStatusRepository.findByCodeIgnoreCase(initialStatusCode)
-                .orElseGet(() -> reservationStatusRepository.save(new ReservationStatus(initialStatusCode, initialStatusCode, true)));
-
-        Reservation reservation = new Reservation(
-                reservationCode,
+        User customer = findUser(userEmail, "Usuario autenticado no encontrado");
+        return ReservationCreationHelper.create(
+                request,
                 customer,
-                vehicle,
-                initialStatus,
-                insurance,
-                mileagePlan,
-                cashBranch,
-                request.pickupDate(),
-                request.returnDate(),
-                vehicle.getDailyRate(),
-                totalEstimated,
-                cashPaymentCode,
-                cashPaymentExpiresAt,
-                initialStatus.isBlocksAvailability()
+                userEmail,
+                reservationRepository,
+                reservationStatusRepository,
+                additionalServiceRepository,
+                promotionRepository,
+                vehicleRepository,
+                insuranceCoverageRepository,
+                mileagePlanRepository,
+                additionalServiceCatalogRepository,
+                promotionCatalogRepository,
+                userCouponUsageRepository,
+                promotionValidationService,
+                branchRepository,
+                notificationService,
+                reservationDocumentReviewService,
+                reservationPricing
         );
-
-        Reservation savedReservation = reservationRepository.save(reservation);
-
-        if ("PENDING_SCHEDULE".equals(initialStatusCode)) {
-            String branchName = pickupBranch != null ? pickupBranch.getName() : "la sucursal";
-            String openTime = pickupBranch != null && pickupBranch.getOpeningTime() != null ? pickupBranch.getOpeningTime().toString() : "su apertura";
-            String subject = "Reserva registrada fuera de horario";
-            String message = "Recibimos tu reserva " + savedReservation.getCode() + " fuera del horario de atención de " + branchName + ". Cuando inicie la jornada a las " + openTime + ", te notificaremos automáticamente para continuar con tu reserva.";
-            notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_SCHEDULE", subject, message, savedReservation.getId());
-            notificationService.send(savedReservation.getCustomer(), "IN_APP", "RESERVATION_PENDING_SCHEDULE", subject, message, savedReservation.getId());
-        } else if (documentsApproved) {
-            notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_PAYMENT",
-                    "Reserva recibida - pago pendiente",
-                    "Recibimos tu reserva " + savedReservation.getCode() + ". Quedará pendiente hasta que el pago sea validado en la sucursal o en línea. Después podrás firmar el contrato y recibir el PDF.",
-                    savedReservation.getId());
-        } else {
-            String subject = "Reserva registrada - Documentos en validación";
-            String message = "Recibimos tu reserva " + savedReservation.getCode() + ". Tus documentos de identidad y licencia de conducción están en proceso de validación por parte del encargado de la sucursal. Te notificaremos una vez sean revisados y aprobados.";
-            notificationService.send(savedReservation.getCustomer(), "EMAIL", "RESERVATION_PENDING_DOCUMENT_REVIEW",
-                    subject, message, savedReservation.getId());
-            notificationService.send(savedReservation.getCustomer(), "IN_APP", "RESERVATION_PENDING_DOCUMENT_REVIEW",
-                    subject, message, savedReservation.getId());
-        }
-
-        for (ReservationAdditionalServiceItemDTO item : serviceItems) {
-            AdditionalService s = additionalServiceCatalogRepository.findById(item.additionalServiceId()).orElseThrow();
-            ReservationAdditionalService ras = new ReservationAdditionalService(
-                    savedReservation,
-                    s,
-                    item.quantity(),
-                    item.dailyRate()
-            );
-            additionalServiceRepository.save(ras);
-            savedReservation.addAdditionalService(ras);
-        }
-
-        if (appliedPromotion != null && discountApplied.compareTo(BigDecimal.ZERO) > 0) {
-            ReservationPromotion rp = new ReservationPromotion(
-                    savedReservation,
-                    appliedPromotion,
-                    discountApplied
-            );
-            promotionRepository.save(rp);
-            savedReservation.addPromotion(rp);
-        }
-
-        return mapToDTO(savedReservation, rentalDays, vehicleSubtotal, serviceItems, promoItem);
     }
 
     @Transactional(readOnly = true)
     public ReservationResponseDTO getReservationById(UUID id, String userEmail) {
-        Reservation r = reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-
-        boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = isStaffFor(user, r);
-
-        if (!isOwner && !isStaff) {
+        Reservation r = findReservationOrThrow(id);
+        User user = findUser(userEmail, "Usuario no encontrado");
+        if (!r.getCustomer().getId().equals(user.getId()) && !isStaffFor(user, r)) {
             throw new ResourceNotFoundException("Reserva no encontrada");
         }
-
         return mapFromEntity(r);
     }
 
@@ -448,23 +184,16 @@ public class ReservationService {
     public ReservationResponseDTO getReservationByCode(String code, String userEmail) {
         Reservation r = reservationRepository.findByCodeIgnoreCase(code.strip())
                 .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada con código: " + code));
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-
-        boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = isStaffFor(user, r);
-
-        if (!isOwner && !isStaff) {
+        User user = findUser(userEmail, "Usuario no encontrado");
+        if (!r.getCustomer().getId().equals(user.getId()) && !isStaffFor(user, r)) {
             throw new ResourceNotFoundException("Reserva no encontrada");
         }
-
         return mapFromEntity(r);
     }
 
     @Transactional(readOnly = true)
     public List<ReservationResponseDTO> getMyReservations(String userEmail) {
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        User user = findUser(userEmail, "Usuario no encontrado");
         return reservationRepository.findByCustomerOrderByCreatedAtDesc(user)
                 .stream()
                 .map(this::mapFromEntity)
@@ -482,7 +211,7 @@ public class ReservationService {
                 return byId.get();
             }
         } catch (IllegalArgumentException ignored) {
-            // Not a UUID, fallback to code search
+            // No es UUID, se busca por código
         }
         return reservationRepository.findByCodeIgnoreCase(identifier.trim())
                 .orElseThrow(() -> new ResourceNotFoundException("Retención o reserva no encontrada: " + identifier));
@@ -501,20 +230,14 @@ public class ReservationService {
     @Transactional
     public ReservationResponseDTO confirmReservationPayment(String holdIdentifier, String transactionId, String userEmail) {
         Reservation r = findReservationByIdOrCode(holdIdentifier);
-        
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-                
+        User user = findUser(userEmail, "Usuario no encontrado");
         if (!r.getCustomer().getId().equals(user.getId())) {
-             throw new AccessDeniedException("No puede confirmar una reserva de otro usuario");
+            throw new AccessDeniedException("No puede confirmar una reserva de otro usuario");
         }
-
         if (reservationDocumentReviewService != null) {
             reservationDocumentReviewService.validateCanBePaid(r);
         }
 
-        // SEGURIDAD CRÍTICA: la reserva solo avanza con una transacción de Wompi realmente aprobada.
-        // Sin transactionId, o si Wompi no la aprueba, se rechaza y no se cambia nada.
         String cleanTransactionId = transactionId == null ? "" : transactionId.trim();
         if (cleanTransactionId.isEmpty()) {
             throw new ConflictException("Para confirmar la reserva se requiere una transacción de pago aprobada.");
@@ -525,14 +248,13 @@ public class ReservationService {
 
         RentalContract contract = rentalContractRepository.findByReservationId(r.getId()).orElse(null);
         if (contract == null && contractService != null) {
-            contractService.generateContract(new com.drivique.api.dto.GenerateContractRequestDTO(r.getId()), userEmail);
+            contractService.generateContract(new GenerateContractRequestDTO(r.getId()), userEmail);
             contract = rentalContractRepository.findByReservationId(r.getId()).orElse(null);
         }
         if (contract == null) {
             throw new ConflictException("No se pudo preparar el contrato de la reserva para verificar el pago.");
         }
 
-        // Idempotencia: repetir la confirmación (doble clic, reintento de red, polling de la app) no repite efectos.
         String currentStatus = r.getStatus() != null ? r.getStatus().getCode() : "";
         boolean alreadyPaid = !r.getCode().startsWith("HLD-")
                 && List.of("PENDING_SIGNATURE", "CONFIRMED", "ACTIVE", "COMPLETED").contains(currentStatus.toUpperCase())
@@ -542,12 +264,10 @@ public class ReservationService {
             return mapFromEntity(r);
         }
 
-        // Lanza ConflictException si la transacción no existe, no está aprobada, es de otra reserva o no cubre el total.
         wompiPaymentService.verifyAndRecordApprovedPayment(cleanTransactionId, contract, userEmail);
 
         if (r.getCode().startsWith("HLD-")) {
-            String realCode = generateUniqueReservationCode();
-            r.setCode(realCode);
+            r.setCode(generateUniqueReservationCode());
         }
 
         boolean isContractSigned = contract.getStatus() != null && "ACTIVE".equalsIgnoreCase(contract.getStatus().getCode());
@@ -566,65 +286,26 @@ public class ReservationService {
         }
         rentalContractRepository.saveAndFlush(contract);
 
-        auditLogRepository.save(new AuditLog(
-                "RESERVATIONS",
-                "Reservation",
-                r.getId(),
-                "UPDATE",
-                "SUCCESS",
-                user,
-                null,
-                null,
-                "Reservation confirmed after payment verification",
-                null,
-                null
-        ));
+        ReservationEventPublisher.recordAudit(
+                auditLogRepository, r.getId(), user, "Reservation confirmed after payment verification");
 
-        try {
-            notificationService.emitDomainEvent(
-                    saved.getCustomer(),
-                    "RESERVATION",
-                    "HIGH",
-                    saved.getId(),
-                    java.util.Map.of(
-                            "bookingCode", saved.getCode(),
-                            "pickupDate", saved.getPickupDate().toString(),
-                            "returnDate", saved.getReturnDate().toString()
-                    ),
-                    "RES-" + saved.getId()
-            );
-        } catch (Throwable e) {
-            // No bloquear
-        }
-
-        boolean hasApprovedPayment = paymentRepository != null && rentalContractRepository != null &&
-                rentalContractRepository.findByReservationId(saved.getId())
+        boolean hasApprovedPayment = paymentRepository != null
+                && rentalContractRepository.findByReservationId(saved.getId())
                         .map(c -> paymentRepository.existsByContractIdAndStatusCodeIgnoreCase(c.getId(), "APPROVED"))
                         .orElse(false);
+        ReservationEventPublisher.notifyPaymentConfirmed(notificationService, saved, hasApprovedPayment);
 
-        if (hasApprovedPayment) {
-            try {
-                notificationService.emitDomainEvent(
-                        saved.getCustomer(),
-                        "PAYMENT",
-                        "HIGH",
-                        saved.getId(),
-                        java.util.Map.of(
-                                "bookingCode", saved.getCode(),
-                                "amount", saved.getTotalEstimated() != null ? saved.getTotalEstimated().toString() : "0",
-                                "currency", "COP",
-                                "status", "APPROVED",
-                                "actionPath", "/contrato/" + saved.getId(),
-                                "actionLabel", "Continuar y Firmar mi Contrato"
-                        ),
-                        "PAY-" + saved.getId()
-                );
-            } catch (Throwable e) {
-                // No bloquear
-            }
-        }
-        
         return mapFromEntity(saved);
+    }
+
+    private void avisarDomicilioPagado(Reservation reservation) {
+        try {
+            if (deliveryNotices != null) {
+                deliveryNotices.homeDeliveryPaid(reservation);
+            }
+        } catch (RuntimeException ex) {
+            log.debug("Aviso de domicilio pagado omitido: {}", ex.getMessage());
+        }
     }
 
     @Transactional
@@ -635,43 +316,19 @@ public class ReservationService {
     @Transactional
     public void reportPaymentFailed(String holdIdentifier, String userEmail) {
         if (holdIdentifier == null || holdIdentifier.isBlank()) return;
-        Reservation r = null;
+        Reservation r;
         try {
             r = findReservationByIdOrCode(holdIdentifier);
         } catch (Exception ignored) {
             return;
         }
-        if (r == null) return;
         User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail).orElse(null);
         if (user == null || !r.getCustomer().getId().equals(user.getId())) return;
-
-        try {
-            notificationService.emitDomainEvent(
-                    user,
-                    "PAYMENT",
-                    "HIGH",
-                    r.getId(),
-                    java.util.Map.of(
-                            "bookingCode", r.getCode(),
-                            "amount", r.getTotalEstimated() != null ? r.getTotalEstimated().toString() : "0",
-                            "currency", "COP",
-                            "status", "DECLINED",
-                            "actionPath", "/reservas",
-                            "actionLabel", "Reintentar Pago en Mis Reservas"
-                    ),
-                    "PAY-FAIL-" + UUID.randomUUID()
-            );
-        } catch (Throwable e) {
-            // No bloquear
-        }
+        ReservationEventPublisher.notifyPaymentFailed(notificationService, user, r);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.drivique.api.repository.BranchUserRepository branchUserRepository;
-
-    /** Administradores y agentes ven todo; encargados y empleados solo las reservas de su sucursal. */
     boolean isStaffFor(User user, Reservation r) {
-        java.util.Set<String> codes = user.getRoles().stream().map(Role::getCode).collect(java.util.stream.Collectors.toSet());
+        Set<String> codes = user.getRoles().stream().map(Role::getCode).collect(Collectors.toSet());
         if (codes.stream().anyMatch(c -> List.of("ADMIN", "SUPER_ADMIN", "AGENT").contains(c))) {
             return true;
         }
@@ -689,26 +346,16 @@ public class ReservationService {
 
     @Transactional
     public ReservationResponseDTO cancelReservation(UUID id, CancelReservationRequestDTO request, String userEmail) {
-        Reservation r = reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        Reservation r = findReservationOrThrow(id);
+        User user = findUser(userEmail, "Usuario no encontrado");
+        ensureOwnerOrStaff(user, r, "No tiene permisos para cancelar esta reserva");
 
-        boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = isStaffFor(user, r);
-
-        if (!isOwner && !isStaff) {
-            throw new AccessDeniedException("No tiene permisos para cancelar esta reserva");
-        }
-
-        String currentStatusCode = r.getStatus().getCode();
-        if (List.of("CANCELLED_BY_USER", "CANCELLED_BY_TIMEOUT", "REJECTED", "COMPLETED").contains(currentStatusCode)) {
+        if (List.of("CANCELLED_BY_USER", "CANCELLED_BY_TIMEOUT", "REJECTED", "COMPLETED").contains(r.getStatus().getCode())) {
             throw new ConflictException("La reserva ya se encuentra en un estado final y no puede ser cancelada");
         }
 
         ReservationStatus cancelledStatus = reservationStatusRepository.findByCodeIgnoreCase("CANCELLED_BY_USER")
                 .orElseThrow(() -> new IllegalStateException("Estado CANCELLED_BY_USER no encontrado"));
-
         r.setStatus(cancelledStatus);
         if (r.getDeliveryPoints() != null) {
             for (var pt : r.getDeliveryPoints()) {
@@ -716,224 +363,104 @@ public class ReservationService {
             }
         }
         Reservation saved = reservationRepository.save(r);
-
-        auditLogRepository.save(new AuditLog(
-                "RESERVATIONS",
-                "Reservation",
-                r.getId(),
-                "UPDATE",
-                "SUCCESS",
-                user,
-                null,
-                null,
-                "Reservation cancelled. Reason: " + request.reason(),
-                null,
-                null
-        ));
-
-        try {
-            notificationService.emitDomainEvent(
-                    saved.getCustomer(),
-                    "CANCELLATION",
-                    "HIGH",
-                    saved.getId(),
-                    java.util.Map.of(
-                            "bookingCode", saved.getCode(),
-                            "reason", request.reason() != null ? request.reason() : "Cancelada por el usuario"
-                    ),
-                    "CANCEL-" + saved.getId()
-            );
-        } catch (Exception e) {
-            // No bloquear la cancelación
-        }
-
+        ReservationEventPublisher.recordAudit(
+                auditLogRepository, r.getId(), user, "Reservation cancelled. Reason: " + request.reason());
+        ReservationEventPublisher.notifyCancellation(notificationService, saved, request.reason());
         return mapFromEntity(saved);
     }
 
     @Transactional(readOnly = true)
     public AllowedTransitionsResponseDTO getAllowedTransitions(UUID id, String userEmail) {
-        Reservation r = reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-
-        boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = isStaffFor(user, r);
-
-        if (!isOwner && !isStaff) {
-            throw new AccessDeniedException("No tiene permisos");
-        }
-
+        Reservation r = findReservationOrThrow(id);
+        User user = findUser(userEmail, "Usuario no encontrado");
+        ensureOwnerOrStaff(user, r, "No tiene permisos");
         String currentStatusCode = r.getStatus().getCode();
-        List<String> allowed = new ArrayList<>();
-
-        switch (currentStatusCode) {
-            case "PENDING_SCHEDULE":
-                allowed.add("PENDING_PAYMENT");
-                allowed.add("PENDING_DOCUMENT_REVIEW");
-                allowed.add("CANCELLED_BY_USER");
-                break;
-            case "PENDING_DOCUMENT_REVIEW":
-                allowed.add("PENDING_PAYMENT");
-                allowed.add("CANCELLED_BY_USER");
-                break;
-            case "PENDING_PAYMENT":
-                allowed.add("PENDING_SIGNATURE");
-                allowed.add("CONFIRMED");
-                allowed.add("CANCELLED_BY_USER");
-                allowed.add("CANCELLED_BY_TIMEOUT");
-                break;
-            case "PENDING_SIGNATURE":
-                allowed.add("CONFIRMED");
-                allowed.add("CANCELLED_BY_USER");
-                break;
-            case "CONFIRMED":
-                allowed.add("ACTIVE");
-                allowed.add("CANCELLED_BY_USER");
-                break;
-            case "ACTIVE":
-                allowed.add("COMPLETED");
-                break;
-            default:
-                break;
-        }
-
-        return new AllowedTransitionsResponseDTO(r.getId(), currentStatusCode, allowed);
+        return new AllowedTransitionsResponseDTO(
+                r.getId(), currentStatusCode, ReservationResponseMapper.allowedTransitionsFor(currentStatusCode));
     }
 
     @Transactional
     public ReservationResponseDTO modifyReservationDates(UUID id, ModifyReservationDatesRequestDTO request, String userEmail) {
-        Reservation r = reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
-
-        boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = isStaffFor(user, r);
-
-        if (!isOwner && !isStaff) {
-            throw new AccessDeniedException("No tiene permisos");
-        }
+        Reservation r = findReservationOrThrow(id);
+        User user = findUser(userEmail, "Usuario no encontrado");
+        ensureOwnerOrStaff(user, r, "No tiene permisos");
 
         if (List.of("CANCELLED_BY_USER", "CANCELLED_BY_TIMEOUT", "REJECTED", "COMPLETED").contains(r.getStatus().getCode())) {
             throw new ConflictException("No se pueden modificar fechas de una reserva en estado final");
         }
-
         if (request.pickupDate() == null || request.returnDate() == null) {
             throw new IllegalArgumentException("Las fechas son obligatorias");
         }
+        ReservationCreationHelper.validatePickupAndReturnDates(request.pickupDate(), request.returnDate(), false);
 
-        if (!request.returnDate().isAfter(request.pickupDate())) {
-            throw new IllegalArgumentException("La fecha de devolución debe ser posterior a la fecha de recogida");
-        }
-
-        boolean hasOverlap = reservationRepository.existsOverlappingReservationExcluding(
-                r.getVehicle().getId(),
-                r.getId(),
-                request.pickupDate(),
-                request.returnDate()
-        );
-        if (hasOverlap) {
+        if (reservationRepository.existsOverlappingReservationExcluding(
+                r.getVehicle().getId(), r.getId(), request.pickupDate(), request.returnDate())) {
             throw new ConflictException("El vehículo no está disponible para las fechas seleccionadas");
         }
-        
-        // Use reflection or direct field access if setter does not exist. Wait, no setPickupDate?
-        // Let's use correct field names if they are records, but they are Entities. 
-        // We'll check if they exist, else we can't change it here easily. We'll rely on update if we added setters.
-        // I will just use reflection for now if setters are missing.
+
         r.setPickupDate(request.pickupDate());
         r.setReturnDate(request.returnDate());
-        
-        // Recalculate totals
-        long seconds = Duration.between(request.pickupDate(), request.returnDate()).toSeconds();
-        int rentalDays = (int) Math.max(1, (seconds + 86399) / 86400);
+
+        int rentalDays = ReservationCreationHelper.calculateRentalDays(request.pickupDate(), request.returnDate());
         BigDecimal multiplier = BigDecimal.valueOf(rentalDays);
-        
         BigDecimal vehicleSubtotal = r.getVehicle().getDailyRate().multiply(multiplier);
         BigDecimal insuranceSubtotal = r.getInsuranceCoverage().getDailyRate().multiply(multiplier);
         BigDecimal mileageSubtotal = r.getMileagePlan().getDailyRate().multiply(multiplier);
-        
         BigDecimal extrasSubtotal = r.getAdditionalServices().stream()
                 .map(s -> s.getDailyRate().multiply(multiplier).multiply(BigDecimal.valueOf(s.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-                
         BigDecimal discountApplied = r.getPromotions().stream()
                 .map(ReservationPromotion::getDiscountApplied)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-                
+
         BigDecimal totalEstimated = reservationPricing.calculate(
                 vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(extrasSubtotal), discountApplied).total();
-                
         r.setTotalEstimated(totalEstimated);
 
         Reservation saved = reservationRepository.save(r);
-        
-        auditLogRepository.save(new AuditLog(
-                "RESERVATIONS",
-                "Reservation",
-                r.getId(),
-                "UPDATE",
-                "SUCCESS",
-                user,
-                null,
-                null,
-                "Dates modified",
-                null,
-                null
-        ));
-        
+        ReservationEventPublisher.recordAudit(auditLogRepository, r.getId(), user, "Dates modified");
         return mapFromEntity(saved);
     }
 
     @Transactional
     public ReservationResponseDTO modifyReservationServices(UUID id, ModifyReservationServicesRequestDTO request, String userEmail) {
-        Reservation r = reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
-        User user = userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Usuario no encontrado"));
+        Reservation r = findReservationOrThrow(id);
+        User user = findUser(userEmail, "Usuario no encontrado");
+        ensureOwnerOrStaff(user, r, "No tiene permisos");
 
-        boolean isOwner = r.getCustomer().getId().equals(user.getId());
-        boolean isStaff = isStaffFor(user, r);
-
-        if (!isOwner && !isStaff) {
-            throw new AccessDeniedException("No tiene permisos");
-        }
-        
         if (List.of("CANCELLED_BY_USER", "CANCELLED_BY_TIMEOUT", "REJECTED", "COMPLETED").contains(r.getStatus().getCode())) {
             throw new ConflictException("No se pueden modificar servicios de una reserva en estado final");
         }
-
         if (request.insuranceCoverageId() != null) {
             InsuranceCoverage insurance = insuranceCoverageRepository.findById(request.insuranceCoverageId())
                     .orElseThrow(() -> new ResourceNotFoundException("Cobertura no encontrada"));
             r.setInsuranceCoverage(insurance);
         }
-
         if (request.mileagePlanId() != null) {
             MileagePlan plan = mileagePlanRepository.findById(request.mileagePlanId())
                     .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado"));
             r.setMileagePlan(plan);
         }
-        
-        // This is simplified. In a real scenario we'd drop old services and add new ones based on the request.
-        
+
         Reservation saved = reservationRepository.save(r);
-        
-        auditLogRepository.save(new AuditLog(
-                "RESERVATIONS",
-                "Reservation",
-                r.getId(),
-                "UPDATE",
-                "SUCCESS",
-                user,
-                null,
-                null,
-                "Services modified",
-                null,
-                null
-        ));
-        
+        ReservationEventPublisher.recordAudit(auditLogRepository, r.getId(), user, "Services modified");
         return mapFromEntity(saved);
+    }
+
+    private Reservation findReservationOrThrow(UUID id) {
+        return reservationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Reserva no encontrada"));
+    }
+
+    private User findUser(String userEmail, String message) {
+        return userRepository.findByEmailIgnoreCaseAndDeletedAtIsNull(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException(message));
+    }
+
+    private void ensureOwnerOrStaff(User user, Reservation r, String deniedMessage) {
+        if (!r.getCustomer().getId().equals(user.getId()) && !isStaffFor(user, r)) {
+            throw new AccessDeniedException(deniedMessage);
+        }
     }
 
     private String generateUniqueReservationCode() {
@@ -954,105 +481,6 @@ public class ReservationService {
     }
 
     private ReservationResponseDTO mapFromEntity(Reservation r) {
-        long seconds = Duration.between(r.getPickupDate(), r.getReturnDate()).toSeconds();
-        int rentalDays = (int) Math.max(1, (seconds + 86399) / 86400);
-        BigDecimal vehicleSubtotal = r.getDailyRate().multiply(BigDecimal.valueOf(rentalDays));
-
-        List<ReservationAdditionalServiceItemDTO> services = r.getAdditionalServices().stream()
-                .map(s -> new ReservationAdditionalServiceItemDTO(
-                        s.getAdditionalService().getId(),
-                        s.getAdditionalService().getName(),
-                        s.getQuantity(),
-                        s.getDailyRate(),
-                        s.getDailyRate().multiply(BigDecimal.valueOf(rentalDays)).multiply(BigDecimal.valueOf(s.getQuantity()))
-                ))
-                .toList();
-
-        ReservationPromotionItemDTO promo = r.getPromotions().stream().findFirst()
-                .map(p -> new ReservationPromotionItemDTO(
-                        p.getPromotion().getId(),
-                        p.getPromotion().getCode(),
-                        p.getDiscountApplied()
-                ))
-                .orElse(null);
-
-        return mapToDTO(r, rentalDays, vehicleSubtotal, services, promo);
-    }
-
-    private static boolean isOwnerRequest(Reservation r) {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getName() == null) {
-            return false;
-        }
-        if (r.getCustomer() != null && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail())) {
-            return true;
-        }
-        return auth.getAuthorities().stream().anyMatch(a -> {
-            String role = a.getAuthority();
-            return role.contains("ADMIN") || role.contains("EMPLOYEE") || role.contains("BRANCH") || role.contains("rental");
-        });
-    }
-
-    private ReservationResponseDTO mapToDTO(
-            Reservation r,
-            int rentalDays,
-            BigDecimal vehicleSubtotal,
-            List<ReservationAdditionalServiceItemDTO> services,
-            ReservationPromotionItemDTO promo
-    ) {
-        List<DeliveryPointResponseDTO> deliveryPointDTOs = r.getDeliveryPoints() != null
-                ? r.getDeliveryPoints().stream()
-                .map(pt -> DeliveryPointResponseDTO.from(pt, isOwnerRequest(r)))
-                .toList()
-                : List.of();
-
-        BigDecimal days = BigDecimal.valueOf(rentalDays);
-        BigDecimal insuranceSubtotal = r.getInsuranceCoverage().getDailyRate().multiply(days);
-        BigDecimal mileageSubtotal = r.getMileagePlan().getDailyRate().multiply(days);
-        BigDecimal servicesSubtotal = services.stream().map(ReservationAdditionalServiceItemDTO::subtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal baseSubtotal = vehicleSubtotal.add(insuranceSubtotal).add(mileageSubtotal).add(servicesSubtotal);
-        BigDecimal discount = promo == null || promo.discountApplied() == null ? BigDecimal.ZERO : promo.discountApplied();
-        ReservationPricing.Breakdown fees = reservationPricing.calculate(baseSubtotal, discount);
-        // Las reservas anteriores al cargo administrativo y al IVA no los incluyen en su total guardado
-        boolean includesFees = fees.total().compareTo(r.getTotalEstimated()) == 0;
-        ReservationPriceBreakdownDTO breakdown = new ReservationPriceBreakdownDTO(insuranceSubtotal, mileageSubtotal,
-                servicesSubtotal, baseSubtotal, discount, includesFees ? fees.adminFee() : null,
-                includesFees ? reservationPricing.adminFeeRate() : null, includesFees ? fees.vat() : null,
-                includesFees ? reservationPricing.vatRate() : null);
-
-        return new ReservationResponseDTO(
-                r.getId(),
-                r.getCode(),
-                r.getCustomer().getId(),
-                r.getCustomer().getFirstName() + " " + r.getCustomer().getLastName(),
-                r.getCustomer().getEmail(),
-                r.getVehicle().getId(),
-                r.getVehicle().getModel(),
-                r.getVehicle().getPlate(),
-                r.getStatus().getCode(),
-                r.getStatus().getName(),
-                r.getPickupDate(),
-                r.getReturnDate(),
-                rentalDays,
-                r.getDailyRate(),
-                vehicleSubtotal,
-                r.getInsuranceCoverage().getId(),
-                r.getInsuranceCoverage().getName(),
-                r.getInsuranceCoverage().getDailyRate(),
-                r.getMileagePlan().getId(),
-                r.getMileagePlan().getName(),
-                r.getMileagePlan().getDailyRate(),
-                services,
-                promo,
-                r.getTotalEstimated(),
-                r.getCashPaymentBranch() != null ? r.getCashPaymentBranch().getId() : null,
-                r.getCashPaymentCode(),
-                r.getCashPaymentExpiresAt(),
-                r.isBlocksAvailability(),
-                deliveryPointDTOs,
-                r.getCreatedAt(),
-                breakdown
-        );
+        return ReservationResponseMapper.mapFromEntity(r, reservationPricing);
     }
 }

@@ -1,19 +1,29 @@
 package com.drivique.api;
 
 import com.zaxxer.hikari.HikariDataSource;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import liquibase.Liquibase;
+import liquibase.database.Database;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.resource.ClassLoaderResourceAccessor;
+import liquibase.resource.DirectoryResourceAccessor;
+import liquibase.resource.ResourceAccessor;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -23,13 +33,36 @@ public abstract class DatabaseHealthTestSupport {
     public static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine");
     static {
         POSTGRES.start();
+        applyLiquibaseMigrations();
+    }
+
+    private static void applyLiquibaseMigrations() {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            Database database = DatabaseFactory.getInstance()
+                    .findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            Path externalDbRepo = Path.of("..", "database").toAbsolutePath().normalize();
+            Path ddlChangelog = externalDbRepo.resolve("01_ddl").resolve("changelog.yaml");
+            if (Files.exists(ddlChangelog)) {
+                try (ResourceAccessor accessor = new DirectoryResourceAccessor(externalDbRepo)) {
+                    new Liquibase("01_ddl/changelog.yaml", accessor, database).update("");
+                }
+            } else {
+                try (ResourceAccessor accessor = new ClassLoaderResourceAccessor()) {
+                    new Liquibase("db/changelog/db.changelog-test.yaml", accessor, database).update("");
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudieron aplicar las migraciones Liquibase en el contenedor de pruebas", e);
+        }
     }
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
-        // Test-only schema generated from mappings; production retains ddl-auto=validate.
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
+        // Esquema base aplicado con Liquibase; Hibernate alinea y valida las entidades sobre el esquema migrado.
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "update");
         registry.add("spring.jpa.properties.hibernate.hbm2ddl.create_namespaces", () -> "true");
+        registry.add("spring.liquibase.enabled", () -> "false");
         // SMTP availability belongs to deployment monitoring, not database integration tests.
         registry.add("management.health.mail.enabled", () -> "false");
         // Secretos de prueba: en main/qa son obligatorios y nunca se usan valores publicados
@@ -188,7 +221,6 @@ public abstract class DatabaseHealthTestSupport {
         jdbc.execute("DELETE FROM catalog.mileage_plans");
     }
 
-
     @Test
     void healthReportsDatabaseUpWithoutConnectionDetails() throws Exception {
         var response = get("/actuator/health");
@@ -206,9 +238,12 @@ public abstract class DatabaseHealthTestSupport {
     }
 
     @Test
-    void connectsWithoutMigrationHistory() {
+    void connectsWithLiquibaseMigrationHistory() {
         assertThat(jdbc.queryForObject("select 1", Integer.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("select count(*) from information_schema.tables where table_name in ('databasechangelog', 'flyway_schema_history')", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+                "select count(*) from information_schema.tables where table_name = 'databasechangelog'",
+                Integer.class)).isGreaterThanOrEqualTo(1);
+        assertThat(jdbc.queryForObject("select count(*) from public.databasechangelog", Integer.class)).isPositive();
         assertThat(dataSource.getMaximumPoolSize()).isEqualTo(10);
         assertThat(dataSource.getMinimumIdle()).isEqualTo(2);
         assertThat(dataSource.getConnectionTimeout()).isEqualTo(30000);

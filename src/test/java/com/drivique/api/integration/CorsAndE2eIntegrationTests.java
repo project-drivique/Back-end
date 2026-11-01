@@ -37,4 +37,23 @@ class CorsAndE2eIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
                 .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
     }
+
+    @Test
+    void optionsPreflightAllowedForProductionDriviqueDomain() throws Exception {
+        mvc.perform(options("/v1/vehicles")
+                        .header("Origin", "https://drivique.tech")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "https://drivique.tech"))
+                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+    }
+
+    @Test
+    void optionsPreflightRejectedForUnlistedOrigin() throws Exception {
+        mvc.perform(options("/v1/vehicles")
+                        .header("Origin", "https://evil-unlisted-origin.example.com")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+    }
 }
