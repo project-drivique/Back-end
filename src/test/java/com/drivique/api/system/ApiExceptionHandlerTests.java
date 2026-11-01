@@ -23,7 +23,10 @@ import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ApiExceptionHandlerTests.FailureController.class)
+@WebMvcTest(value = ApiExceptionHandlerTests.FailureController.class, properties = {
+        "jwt.secret=integration-test-signing-secret-0123456789-abcdefghij",
+        "app.security.document-encryption-key=integration-test-documents-key-0123456789-abcdefghij"
+})
 @Import({ApiExceptionHandlerTests.FailureController.class, ApiExceptionHandler.class,
         SecurityConfig.class, ProblemSecurityHandler.class, com.drivique.api.service.JwtService.class,
         com.drivique.api.security.JwtAuthenticationFilter.class})

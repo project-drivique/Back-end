@@ -1,7 +1,9 @@
 package com.drivique.api.system;
 
 import com.drivique.api.DatabaseHealthTestSupport;
-
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -19,7 +21,7 @@ class OpenApiIntegrationTests extends DatabaseHealthTestSupport {
 
     @Test
     void openApiContractIsPublicAndDocumentsErrorSchema() throws Exception {
-        mvc.perform(get("/api/v3/api-docs").contextPath("/api"))
+        String openApiJson = mvc.perform(get("/api/v3/api-docs").contextPath("/api"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi", startsWith("3.0.")))
                 .andExpect(jsonPath("$.info.title").value("Drivique API"))
@@ -27,7 +29,14 @@ class OpenApiIntegrationTests extends DatabaseHealthTestSupport {
                 .andExpect(jsonPath("$.components.schemas.ApiProblem.properties.errors").exists())
                 .andExpect(jsonPath("$.components.responses.Error400").exists())
                 .andExpect(jsonPath("$.components.responses.Error500").exists())
-                .andExpect(content().string(not(containsString("/test-errors"))));
+                .andExpect(content().string(not(containsString("/test-errors"))))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+
+        Path exportPath = Path.of("docs", "openapi.json");
+        Files.createDirectories(exportPath.getParent());
+        Files.writeString(exportPath, openApiJson, StandardCharsets.UTF_8);
     }
 
     @Test

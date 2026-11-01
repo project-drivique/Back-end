@@ -5,10 +5,15 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn -B -q clean package -DskipTests
 
-# Paso 2: imagen ligera para ejecutar la aplicación
+# Paso 2: imagen ligera endurecida con usuario no-root y verificación de salud
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/drivique-api-*.jar app.jar
+RUN addgroup -S drivique && adduser -S drivique -G drivique \
+    && mkdir -p /app/uploads && chown -R drivique:drivique /app
+COPY --from=build --chown=drivique:drivique /app/target/drivique-api-*.jar app.jar
 
+USER drivique
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD wget -qO- http://localhost:8080/api/actuator/health || exit 1
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
