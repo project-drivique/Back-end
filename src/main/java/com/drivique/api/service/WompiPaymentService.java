@@ -16,11 +16,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class WompiPaymentService {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(WompiPaymentService.class);
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final RentalContractRepository contracts;
@@ -41,6 +43,12 @@ public class WompiPaymentService {
     private final String checkoutUrl;
     private final String apiUrl;
     private final RestTemplate restTemplate;
+
+    @Autowired(required = false)
+    private ReservationRepository reservations;
+
+    @Autowired(required = false)
+    private ContractService contractService;
 
     public WompiPaymentService(
             RentalContractRepository contracts,
@@ -83,8 +91,7 @@ public class WompiPaymentService {
 
     @Transactional
     public WompiCheckoutResponseDTO initiate(WompiInitiatePaymentRequestDTO input, String email) {
-        RentalContract contract = contracts.findById(input.contractId())
-                .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
+        RentalContract contract = resolveContractForInitiation(input, email);
 
         if (contract.getReservation() != null && contract.getReservation().getStatus() != null
                 && "PENDING_DOCUMENT_REVIEW".equalsIgnoreCase(contract.getReservation().getStatus().getCode())) {
@@ -103,7 +110,15 @@ public class WompiPaymentService {
             throw new IllegalStateException("No está configurada la llave pública de Wompi.");
         }
 
-        PaymentMethod method = methods.findByCodeIgnoreCaseAndActiveTrue(input.paymentMethodCode())
+        String requestedMethod = input.paymentMethodCode() == null || input.paymentMethodCode().isBlank()
+                ? "CREDIT_CARD"
+                : input.paymentMethodCode().trim();
+        String normalizedMethod = ("CARD".equalsIgnoreCase(requestedMethod) || "WOMPI".equalsIgnoreCase(requestedMethod))
+                ? "CREDIT_CARD"
+                : requestedMethod;
+
+        PaymentMethod method = methods.findByCodeIgnoreCaseAndActiveTrue(normalizedMethod)
+                .or(() -> methods.findByCodeIgnoreCaseAndActiveTrue("CREDIT_CARD"))
                 .orElseThrow(() -> new ResourceNotFoundException("Método de pago no disponible"));
         PaymentStatus pending = statuses.findByCodeIgnoreCase("PENDING")
                 .orElseThrow(() -> new ResourceNotFoundException("Estado PENDING no encontrado"));
@@ -112,11 +127,70 @@ public class WompiPaymentService {
 
         String reference = "PAY-" + UUID.randomUUID().toString().replace("-", "");
         BigDecimal amount = contract.getBaseAmount();
+        if ((amount == null || amount.compareTo(BigDecimal.ZERO) <= 0)
+                && contract.getReservation() != null && contract.getReservation().getTotalEstimated() != null) {
+            amount = contract.getReservation().getTotalEstimated();
+        }
         payments.saveAndFlush(new Payment(contract, method, pending, reference, amount, currency));
 
-        long cents = amount.movePointRight(2).setScale(0, RoundingMode.UNNECESSARY).longValueExact();
+        long cents = amount.movePointRight(2).setScale(0, RoundingMode.HALF_UP).longValueExact();
         return new WompiCheckoutResponseDTO(checkoutUrl, publicKey, "COP", cents, reference,
                 signatures.integrity(reference, cents, "COP", integritySecret));
+    }
+
+    private RentalContract resolveContractForInitiation(WompiInitiatePaymentRequestDTO input, String email) {
+        if (input.contractId() != null) {
+            Optional<RentalContract> byContractId = contracts.findById(input.contractId());
+            if (byContractId.isPresent()) {
+                return byContractId.get();
+            }
+            Optional<RentalContract> byReservationId = contracts.findByReservationId(input.contractId());
+            if (byReservationId.isPresent()) {
+                return byReservationId.get();
+            }
+            if (reservations != null && contractService != null) {
+                Optional<Reservation> res = reservations.findById(input.contractId());
+                if (res.isPresent()) {
+                    contractService.generateContract(new GenerateContractRequestDTO(res.get().getId()), email);
+                    return contracts.findByReservationId(res.get().getId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
+                }
+            }
+        }
+        if (input.reservationReference() != null && !input.reservationReference().isBlank()) {
+            String rawRef = input.reservationReference().trim();
+            String cleanRef = rawRef.contains("_") ? rawRef.substring(0, rawRef.indexOf('_')) : rawRef;
+            if (reservations != null) {
+                Reservation reservation = null;
+                try {
+                    UUID resUuid = UUID.fromString(cleanRef);
+                    reservation = reservations.findById(resUuid).orElse(null);
+                    if (reservation == null) {
+                        Optional<RentalContract> existingById = contracts.findById(resUuid);
+                        if (existingById.isPresent()) {
+                            return existingById.get();
+                        }
+                    }
+                } catch (IllegalArgumentException ignored) {
+                    // No es UUID, se busca por código de reserva
+                }
+                if (reservation == null) {
+                    reservation = reservations.findByCodeIgnoreCase(cleanRef).orElse(null);
+                }
+                if (reservation != null) {
+                    final UUID resId = reservation.getId();
+                    return contracts.findByReservationId(resId).orElseGet(() -> {
+                        if (contractService == null) {
+                            throw new ResourceNotFoundException("Contrato no encontrado");
+                        }
+                        contractService.generateContract(new GenerateContractRequestDTO(resId), email);
+                        return contracts.findByReservationId(resId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Contrato no encontrado"));
+                    });
+                }
+            }
+        }
+        throw new ResourceNotFoundException("Contrato no encontrado");
     }
 
     /**
@@ -276,7 +350,8 @@ public class WompiPaymentService {
                 pMap.put("actionLabel", "APPROVED".equals(statusCode) ? "Continuar y Firmar mi Contrato" : "Reintentar Pago en Mis Reservas");
                 notificationService.emitDomainEvent(payment.getContract().getCustomer(), "PAYMENT", "HIGH",
                         payment.getId(), pMap, "PAY-WOMPI-" + payment.getId() + "-" + statusCode);
-            } catch (Exception ignored) {
+            } catch (Exception ex) {
+                LOG.warn("No se pudo emitir la notificación del evento de pago Wompi {}: {}", payment.getId(), ex.getMessage());
             }
         }
     }
