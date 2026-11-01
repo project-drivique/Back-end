@@ -7,10 +7,7 @@ import com.drivique.api.service.ReportQueryCatalog.Spec;
 import java.util.List;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 
-/**
- * Definiciones SQL para los reportes de usuarios, promociones, resumen ejecutivo y balance de mantenimiento.
- */
-final class ReportExecutiveQueryCatalog {
+public final class ReportExecutiveQueryCatalog {
 
     private ReportExecutiveQueryCatalog() {
     }
@@ -173,3 +170,4 @@ final class ReportExecutiveQueryCatalog {
                 new MetricDef("cost", "Costo de mantenimiento", "money", "coalesce(sum(cost), 0)")));
     }
 }
+
