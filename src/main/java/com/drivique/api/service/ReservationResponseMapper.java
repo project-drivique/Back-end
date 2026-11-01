@@ -27,10 +27,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-/**
- * Mapeo de entidades de reserva a DTOs, cálculo de transiciones permitidas y validaciones de horario/duplicados.
- */
-final class ReservationResponseMapper {
+public final class ReservationResponseMapper {
 
     private ReservationResponseMapper() {
     }
@@ -241,3 +238,4 @@ final class ReservationResponseMapper {
         });
     }
 }
+

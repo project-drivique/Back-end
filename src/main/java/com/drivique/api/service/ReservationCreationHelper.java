@@ -46,10 +46,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Orquestador auxiliar para la creación transaccional y cálculo de reservas.
- */
-final class ReservationCreationHelper {
+public final class ReservationCreationHelper {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReservationCreationHelper.class);
 

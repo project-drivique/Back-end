@@ -16,3 +16,4 @@ databaseChangeLog:
               CREATE SCHEMA IF NOT EXISTS billing;
               CREATE SCHEMA IF NOT EXISTS support;
               CREATE SCHEMA IF NOT EXISTS audit;
+

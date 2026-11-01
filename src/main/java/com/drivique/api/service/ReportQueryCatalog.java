@@ -13,10 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.web.server.ResponseStatusException;
 
-/**
- * Catálogo de definiciones SQL y métricas para los reportes administrativos de Drivique.
- */
-final class ReportQueryCatalog {
+public final class ReportQueryCatalog {
 
     static final ZoneId ZONE = ZoneId.of("America/Bogota");
 

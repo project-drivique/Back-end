@@ -10,10 +10,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Publicador auxiliar de notificaciones y auditoría para el ciclo de vida de reservas.
- */
-final class ReservationEventPublisher {
+public final class ReservationEventPublisher {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReservationEventPublisher.class);
 
@@ -158,3 +155,4 @@ final class ReservationEventPublisher {
         }
     }
 }
+
