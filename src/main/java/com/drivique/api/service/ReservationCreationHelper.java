@@ -185,20 +185,26 @@ public final class ReservationCreationHelper {
     }
 
     private static InsuranceCoverage resolveInsuranceCoverage(InsuranceCoverageRepository repo, UUID coverageId) {
-        return (coverageId == null
-                ? repo.findAll().stream().filter(InsuranceCoverage::isActive)
-                        .min(Comparator.comparing(InsuranceCoverage::getDailyRate))
-                : repo.findById(coverageId))
-                .filter(InsuranceCoverage::isActive)
+        if (coverageId == null) {
+            return repo.findAll().stream()
+                    .filter(c -> c != null && c.isActive())
+                    .min(Comparator.comparing(InsuranceCoverage::getDailyRate))
+                    .orElseThrow(() -> new ResourceNotFoundException("Cobertura de seguro no encontrada o inactiva"));
+        }
+        return repo.findById(coverageId)
+                .filter(c -> c != null && c.isActive())
                 .orElseThrow(() -> new ResourceNotFoundException("Cobertura de seguro no encontrada o inactiva"));
     }
 
     private static MileagePlan resolveMileagePlan(MileagePlanRepository repo, UUID planId) {
-        return (planId == null
-                ? repo.findAll().stream().filter(MileagePlan::isActive)
-                        .min(Comparator.comparing(MileagePlan::getDailyRate))
-                : repo.findById(planId))
-                .filter(MileagePlan::isActive)
+        if (planId == null) {
+            return repo.findAll().stream()
+                    .filter(p -> p != null && p.isActive())
+                    .min(Comparator.comparing(MileagePlan::getDailyRate))
+                    .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado o inactivo"));
+        }
+        return repo.findById(planId)
+                .filter(p -> p != null && p.isActive())
                 .orElseThrow(() -> new ResourceNotFoundException("Plan de kilometraje no encontrado o inactivo"));
     }
 
@@ -207,7 +213,7 @@ public final class ReservationCreationHelper {
             return null;
         }
         Branch cashBranch = repo.findById(cashBranchId)
-                .filter(Branch::isActive)
+                .filter(b -> b != null && b.isActive())
                 .orElseThrow(() -> new ResourceNotFoundException("Sede de pago en efectivo no encontrada o inactiva"));
         if (!cashBranch.allowsCashPayment()) {
             throw new ResponseStatusException(
