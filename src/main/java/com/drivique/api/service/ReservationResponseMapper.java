@@ -224,8 +224,14 @@ public final class ReservationResponseMapper {
         );
     }
 
-    private static final Set<String> UNPAID_STATUSES = Set.of(
-            "PENDING_PAYMENT", "PENDING_DOCUMENT_REVIEW", "PENDING_SCHEDULE");
+    /** Estados a los que una reserva solo llega después de un pago aprobado (en línea o en efectivo). */
+    private static final Set<String> PAID_STATUSES = Set.of(
+            "PENDING_SIGNATURE", "CONFIRMED", "IN_PROGRESS", "ACTIVE", "COMPLETED");
+
+    /** El cliente solo recibe el PIN de entrega en un estado posterior al pago; cualquier otro estado lo oculta. */
+    static boolean customerMaySeeDeliveryPin(String statusCode) {
+        return statusCode != null && PAID_STATUSES.contains(statusCode.toUpperCase());
+    }
 
     private static boolean isOwnerRequest(Reservation r) {
         var auth = SecurityContextHolder.getContext().getAuthentication();
@@ -239,9 +245,7 @@ public final class ReservationResponseMapper {
         if (staff) {
             return true;
         }
-        // The customer only gets the delivery PIN once the reservation is paid.
         boolean owner = r.getCustomer() != null && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail());
-        boolean unpaid = r.getStatus() != null && UNPAID_STATUSES.contains(r.getStatus().getCode().toUpperCase());
-        return owner && !unpaid;
+        return owner && r.getStatus() != null && customerMaySeeDeliveryPin(r.getStatus().getCode());
     }
 }
