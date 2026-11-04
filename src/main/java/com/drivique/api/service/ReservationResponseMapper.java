@@ -224,18 +224,28 @@ public final class ReservationResponseMapper {
         );
     }
 
+    /** Estados a los que una reserva solo llega después de un pago aprobado (en línea o en efectivo). */
+    private static final Set<String> PAID_STATUSES = Set.of(
+            "PENDING_SIGNATURE", "CONFIRMED", "IN_PROGRESS", "ACTIVE", "COMPLETED");
+
+    /** El cliente solo recibe el PIN de entrega en un estado posterior al pago; cualquier otro estado lo oculta. */
+    static boolean customerMaySeeDeliveryPin(String statusCode) {
+        return statusCode != null && PAID_STATUSES.contains(statusCode.toUpperCase());
+    }
+
     private static boolean isOwnerRequest(Reservation r) {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getName() == null) {
             return false;
         }
-        if (r.getCustomer() != null && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail())) {
-            return true;
-        }
-        return auth.getAuthorities().stream().anyMatch(a -> {
+        boolean staff = auth.getAuthorities().stream().anyMatch(a -> {
             String role = a.getAuthority();
             return role.contains("ADMIN") || role.contains("EMPLOYEE") || role.contains("BRANCH") || role.contains("rental");
         });
+        if (staff) {
+            return true;
+        }
+        boolean owner = r.getCustomer() != null && auth.getName().equalsIgnoreCase(r.getCustomer().getEmail());
+        return owner && r.getStatus() != null && customerMaySeeDeliveryPin(r.getStatus().getCode());
     }
 }
-
